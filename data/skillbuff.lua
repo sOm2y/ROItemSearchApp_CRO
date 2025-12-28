@@ -1,11 +1,55 @@
 
 	
+[2] = {
+	temp = GSklv(2)
+	temp_wp = GetWeaponClass(4)
+	if temp_wp == 2 then
+		WeaponMasteryATK(temp * 4)
+	end
+}
+[3] = {
+	temp = GSklv(3)
+	temp_wp = GetWeaponClass(4)
+	if temp_wp == 3 then
+		WeaponMasteryATK(temp * 4)
+	end
+}
+
 [43] = {
 	temp = GSklv(43)
 	AddExtParam(1, 107, temp)
 }
+[55] = {
+	temp = GSklv(55)
+	temp_2 = GSklv(63)
+	temp_3 = GSklv(2007)
+	temp_wp = GetWeaponClass(4)
+	if temp_wp == 4 or temp_wp == 5 then
+		WeaponMasteryATK(temp * 4)
+		if temp_2 > 0 or temp_3 > 0 then
+			WeaponMasteryATK(temp)
 
-	
+		end
+	end
+}
+
+[63] = {
+	temp = GSklv(63)
+	temp_wp = GetWeaponClass(4)
+	if temp_wp == 4 or temp_wp == 5 and temp > 0 then
+		PerfectDamage(1)
+	end
+}
+
+[65] = {
+	temp = GSklv(65)
+	temp_wp = GetWeaponClass(4)
+	if temp_wp == 8 then
+		WeaponMasteryATK(temp * 3)
+		AddExtParam(1, 52, temp)
+	end
+}
+
 [134] = {
 	temp = GSklv(134)
 	temp_wp = GetWeaponClass(4)
@@ -57,6 +101,21 @@
 		AddExtParam(1, 41, temp * 3)
 		AddExtParam(1, 112, temp)
 		AddExtParam(1, 167, temp)
+	end
+}
+
+[2007] = {
+	temp = GSklv(2007)
+	temp_wp = GetWeaponClass(4)
+
+}
+
+[2276] = {
+	temp = GSklv(2276)
+	temp_wp = GetWeaponClass(4)
+	if temp_wp == 6 or temp_wp == 7 then
+		WeaponMasteryATK(temp * 5)
+		AddExtParam(1, 49, temp * 3)
 	end
 }
 

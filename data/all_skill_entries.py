@@ -26,10 +26,10 @@ all_skill_entries = {#範例[    "": {"type": "技能/料理","code":["",""]},
     #"櫻花年糕": {"type": "料理","code":["AddMDamage_Property(1, 10, 10)"]},
     #"豐滿花樹枝": {"type": "料理","code":["AddSkillMDamage(10, 10)"]},
     #學術節料理
-    # "學術節米餅": {"type": "料理","code":["AddMDamage_Size(1, 0, 10)","AddMDamage_Size(1, 1, 10)","AddMDamage_Size(1, 2, 10)","AddDamage_Size(1, 0, 10)","AddDamage_Size(1, 1, 10)","AddDamage_Size(1, 2, 10)","AddExtParam(1, 239, 15)"]},
-    # "學術節餅乾": {"type": "料理","code":["AddMeleeAttackDamage(1, 12)","AddRangeAttackDamage(1,  12)","AddSkillMDamage(10, 12)","AddExtParam(1, 50, 30)"]},
-    # "學術節即溶咖啡": {"type": "料理","code":["AddExtParam(1, 207, 15)","AddExtParam(1, 140, 15)","SubSpellCastTime(10)"]},
-    # "祕密文件": {"type": "料理","code":["AddExtParam(1, 49, 0)","AddMDamage_Property(1, 10, 10)","AddDamage_Property(1, 10, 10)"]},
+    "學術節米餅": {"type": "料理","code":["AddMDamage_Size(1, 0, 10)","AddMDamage_Size(1, 1, 10)","AddMDamage_Size(1, 2, 10)","AddDamage_Size(1, 0, 10)","AddDamage_Size(1, 1, 10)","AddDamage_Size(1, 2, 10)","AddExtParam(1, 239, 15)"]},
+    "學術節餅乾": {"type": "料理","code":["AddMeleeAttackDamage(1, 12)","AddRangeAttackDamage(1,  12)","AddSkillMDamage(10, 12)","AddExtParam(1, 50, 30)"]},
+    "學術節即溶咖啡": {"type": "料理","code":["AddExtParam(1, 207, 15)","AddExtParam(1, 140, 15)","SubSpellCastTime(10)"]},
+    "祕密文件": {"type": "料理","code":["AddExtParam(1, 49, 0)","AddMDamage_Property(1, 10, 10)","AddDamage_Property(1, 10, 10)"]},
 
     "高級戰鬥藥": {"type": "料理","code":["AddExtParam(1, 140, 10)"]},
     "魔力藥水": {"type": "料理","code":["AddExtParam(1, 200, 50)"]},
@@ -37,6 +37,9 @@ all_skill_entries = {#範例[    "": {"type": "技能/料理","code":["",""]},
     "戰神蒂爾之祝福": {"type": "料理","code":["AddExtParam(1, 200, 20)"]},
 
     #====技能
+    #騎領
+    "怒爆": {"id": "RK","type": "技能","code":["UseSkill(7)"]},
+    "天龍光環": {"id": "RK","type": "技能","code":["UseSkill(5210)","temp = GetSkillLevel(5210)","AddDamage_SKID(1, 2008, temp * 10)","AddDamage_SKID(1, 5004, temp * 10)"]},
     #主教
     "慈悲術": {"id": "AB","type": "技能","code": ["temp = 70 / 10","AddExtParam(0,103,10 + math.floor(temp))","AddExtParam(0,106,10 + math.floor(temp)","AddExtParam(0,107,10 + math.floor(temp)","AddExtParam(0,49,20)"]},
     "純白百合花": {"id": "AB","type": "技能","code":["temp = 70 / 10","AddExtParam(0,104,12 + math.floor(temp))","AddExtParam(0,167,10 + math.floor(temp))"]},
@@ -46,6 +49,9 @@ all_skill_entries = {#範例[    "": {"type": "技能/料理","code":["",""]},
     "神聖防護/光耀天命": {"id": "AB","type": "技能","code":["AddIgnore_MRES_RacePercent(9999, 25)","AddIgnore_RES_RacePercent(9999, 25)"]},
     "爆裂聖光": {"id": "AB","type": "技能","code":["AddExtParam(1, 253, 10)"]},
     "贖罪": {"id": "AB","type": "技能","code":["SetIgnoreDefRace_Percent(9999, 25)","SetIgnoreMdefRace(9999, 25)"]},
+    #斬首
+    "致命塗毒": {"id": "GX","type": "技能","code":["UseSkill(378)"]},
+    
     #704
     "五行符": {"id": "SL","type": "技能","code":["AddMDamage_Property(1, 0, 20)","AddMDamage_Property(1, 1, 20)","AddMDamage_Property(1,2, 20)","AddMDamage_Property(1, 3, 20)","AddMDamage_Property(1, 4, 20)","AddDamage_Property(1, 0, 20)","AddDamage_Property(1, 1, 20)","AddDamage_Property(1,2, 20)","AddDamage_Property(1, 3, 20)","AddDamage_Property(1, 4, 20)"]},
     "武士符": {"id": "SL","type": "技能","code":["AddExtParam(1, 242, 10)"]},
@@ -75,11 +81,19 @@ all_skill_entries = {#範例[    "": {"type": "技能/料理","code":["",""]},
     "水之紋章LV3": {"id": "SO","type": "技能","code":["AddSkillMDamage(4, 25)"]},
     "地之紋章LV3": {"id": "SO","type": "技能","code":["AddSkillMDamage(4, 25)"]},
     "咒力賦予": {"id": "SO","type": "技能","code":["AddExtParam(1, 243, 20)"]},
+    #皇家
+    "抗性聖盾": {"id": "RG","type": "技能","code":["UseSkill(5262)","temp = GetSkillLevel(5262) ","AddSkillMDamage(6, temp * 3)"]},
 
     #基因
     "大聲吶喊": {"id": "GE","type": "技能","code":["AddExtParam(1, 103, 4)","AddExtParam(1, 41, 30)"]},
     "手推車加速": {"id": "GE","type": "技能","code":["WeaponMasteryATK(50)"]},
+    "研究報告": {"id": "GE","type": "技能","code":["UseSkill(5347)"]},
+    
     #禁咒
-    "魔力巔峰Lv4(毀滅颶風)": {"id": "WL","type": "技能","code":["AddSkillMDamage(4, 30)","AddExtParam(1, 200, 100)"],"exclusive": "CLIMAX"},
-    "魔力巔峰Lv3": {"id": "WL","type": "技能","code":["AddDamage_SKID(1, 5222, 300)","AddDamage_SKID(1, 5218, 200)","AddDamage_SKID(1, 5215, 150)"],"exclusive": "CLIMAX"},
+    "魔力增幅": {"id": "WL","type": "技能","code":["UseSkill(366)"]},
+    "魔力巔峰Lv4(毀滅颶風)": {"id": "WL","type": "技能","code":["UseSkill(5232)","AddSkillMDamage(4, 30)","AddExtParam(1, 200, 100)"],"exclusive": "CLIMAX"},
+    "魔力巔峰Lv3": {"id": "WL","type": "技能","code":["UseSkill(5232)","AddDamage_SKID(1, 5222, 300)","AddDamage_SKID(1, 5218, 200)","AddDamage_SKID(1, 5215, 150)"],"exclusive": "CLIMAX"},
+    #終初
+    #心神凝聚跟風鷹重複
+    "突破規矩": {"id": "SN","type": "技能","code":["UseSkill(5462)"]},
 }

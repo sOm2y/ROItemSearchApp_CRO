@@ -1,5 +1,5 @@
 #部分資料取自ROCalculator,搜尋 ROCalculator 可以知道哪些有使用
-Version = "v0.1.19-251223"
+Version = "v0.1.20-251228"
 
 import sys, builtins, time
 from PySide6.QtCore import QThread, Signal, Qt, QMetaObject, QTimer
@@ -121,6 +121,7 @@ from PySide6.QtWidgets import (
 from datetime import datetime
 
 enabled_skill_levels = {}  # 存放已啟用技能的等級
+Use_skill_levels = {}#已啟用的技能id
 global_weapon_level_map = {}#武器等級
 global_armor_level_map = {}#防具等級
 global_weapon_type_map = {}#武器類型
@@ -690,7 +691,7 @@ def get_total_tstat_points(level: int) -> int:
 
 skill_df = pd.DataFrame(columns=[#檔案不在使用硬編碼以防跳錯
     "ID","Code","Name","attack_type","Slv","Calculation","element","hits",
-    "Critical_hit","combo","combo_element","combo_hits","Special_Calculation",
+    "Critical_hit","combo","combo_element","combo_hits","Special_Calculation","combo_Special_Calculation",
     "monster_race","skill_buff","decay_hits","bonus_add","bonus_step"
 ])
 
@@ -976,22 +977,26 @@ class CSVEditor(QMainWindow):
             },
             "combo_element": {
                 "label": "連段技能攻擊屬性",
-                "tooltip": "連段技能的屬性。(無=0,水=1,地=2,火=3,風=4,毒=5,聖=6,暗=7,念=8,不死=9)"
+                "tooltip": "連段技能的屬性。"
             },
             "combo_hits": {
                 "label": "連段次數",
                 "tooltip": "連段技能的打擊次數。(負值為總傷害/次數)"
             },
+            "combo_Special_Calculation": {
+                "label": "特殊連段計算公式",
+                "tooltip": "觸發特殊條件下的技能公式，會覆蓋連段公式。"
+            },
             "Special_Calculation": {
                 "label": "特殊計算公式",
-                "tooltip": "特定條件下的技能公式，會覆蓋一般公式。"
+                "tooltip": "觸發特殊條件下的技能公式，會覆蓋一般公式。"
             },
             "monster_race": {
                 "label": "觸發特殊計算種族",
-                "tooltip": "怪物種族觸發特別公式。(無形=0,不死=1,動物=2,植物=3,昆蟲=4,魚貝=5,惡魔=6,人形=7,天使=8,龍族=9)"
+                "tooltip": "怪物種族觸發特別公式。"
             },
             "skill_buff": {
-                "label": "觸發特殊計算技能(ID)(未啟用)",
+                "label": "觸發特殊計算技能(ID)",
                 "tooltip": "目前技能觸發的特殊技能 ID（例如狀態技能）。"
             },
             "decay_hits": {
@@ -1665,23 +1670,30 @@ def parse_lua_effects_with_variables(
                 condition_met = False
                 results.append(f"⚠️ 無法解析條件: {expr}，錯誤: {e}")
 
+            
             block_stack.append({"active": condition_met, "branch_taken": condition_met})
+            condition_met = all(block['active'] for block in block_stack)
             continue
 
         # else 判斷
-        if line.startswith("else"):
+        else_match = re.match(r"\s*else\b", line)
+        if else_match:
             if not block_stack:
                 raise Exception("else without if")
             last = block_stack.pop()
             parent_active = all(block['active'] for block in block_stack)
+            
             if not parent_active or last["branch_taken"]:
                 block_stack.append({"active": False, "branch_taken": True})
             else:
                 block_stack.append({"active": True, "branch_taken": True})
+
+            condition_met = all(block['active'] for block in block_stack)
             continue
 
         # end 判斷
-        if line == "end":
+        end_match = re.match(r"\s*end\b", line)
+        if end_match:
             if block_stack:
                 block_stack.pop()
 
@@ -1838,6 +1850,18 @@ def parse_lua_effects_with_variables(
             results.append(f"可使用【{skill_name}】Lv.{level}")
             # ➕ 記錄技能等級
             enabled_skill_levels[skill_id] = level
+            continue
+
+        # UseSkill(skill_id)
+
+        use_skill = re.match(r"UseSkill\(\s*(\d+)\s*\)", line)
+
+        if use_skill and condition_met:
+            skill_id = int(use_skill.group(1))
+            skill_name = skill_map.get(skill_id, f"技能ID {skill_id}")
+            results.append(f"使用【{skill_name}】")  # 這裡不帶 Lv，也不紀錄等級
+            #紀錄使用
+            Use_skill_levels[skill_id] = True 
             continue
 
 
@@ -3037,19 +3061,13 @@ class ItemSearchApp(QWidget):
         globals()["target_monsterMDamage"] = sum(val for val, _ in effect_dict.get((f"特定魔物魔法增傷", "%"), []))
 
         
+        #========================以上魔法增傷===================
         
-        
+
         try:
             target_element_lv = int(self.element_lv_input.text() or 1)#目標屬性等級
         except ValueError:
             target_element_lv = 1
-        #print(f"目標屬性等級:{target_element_lv}")
-        '''指定魔物增傷ui
-        try:
-            target_monsterDamage = int(self.monsterDamage_input.text() or 0)
-        except ValueError:
-            target_monsterDamage = 0
-        '''
         try:
             target_def = int(self.def_input.text() or 0)
         except ValueError:
@@ -3075,74 +3093,22 @@ class ItemSearchApp(QWidget):
         except ValueError:
             target_mres = 0
 
-
-        #=================== 特殊增傷ui取得/處理區===================
-        #萬紫4
-        skill_wanzih4_buff = 100/100 if self.special_checkboxes["wanzih_checkbox"].isChecked() and User_attack_element == 3 else 0
-        #魔力中毒
-        magic_poison_buff = 50/100 if self.special_checkboxes["magic_poison_checkbox"].isChecked() else 0
-        #屬性紋章
-        attribute_seal_buff = 1+50/100 if self.special_checkboxes["attribute_seal_checkbox"].isChecked() and 1 <= User_attack_element <= 4 else 1
-        #潛擊
-        is_sneak_checked = self.special_checkboxes["sneak_attack_checkbox"].isChecked()
-        sneak_attack_buff = 1+30/100 if is_sneak_checked and target_class == 0 else 1+15/100 if is_sneak_checked else 0
-        sneak_MDattack_buff = 30/100 if is_sneak_checked and target_class == 0 else 15/100 if is_sneak_checked else 0
-        #致命塗毒
-        EDP_attack = 300 if self.special_checkboxes["EDP_attack_checkbox"].isChecked() else 0
-        #爪痕
-        is_DARKCROW_checked = self.special_checkboxes["DARKCROW_attack_checkbox"].isChecked()
-        DARKCROW_attack_buff = 1+150/100 if is_DARKCROW_checked and target_class == 0 else 1+75/100 if is_DARKCROW_checked else 0
-        #撼動
-        RUSH_attack_buff = 1+50/100 if self.special_checkboxes["RUSH_attack_checkbox"].isChecked() else 0
-        #孢子
-        SPORE_attack_buff = 1+5/100 if self.special_checkboxes["SPORE_attack_checkbox"].isChecked() else 0
-        #聖油
-        OLEUM_attack_buff = 1+20/100 if self.special_checkboxes["OLEUM_attack_checkbox"].isChecked() else 0
-        #魔力增幅
-        SKILL_HW_MAGICPOWER = 10 if self.special_checkboxes["SKILL_HW_MAGICPOWER_checkbox"].isChecked() else 0
-
-        
-        """
-        target_size       # 來自 體型 的數值
-        C    # 屬性編號
-        target_element_lv # 目標屬性等級
-        target_race       # 種族代碼C
-        target_class      # 階級代碼
-        target_mdef       # 數字輸入 MDEF前
-        target_mdefc      # 數字輸入 MDEF後
-        target_mres       # 數字輸入 MRES
-        User_attack_element #施展屬性
-        """
-        #=============參考動態變數自動抓技能%=(裝備段)==============
-        # 從 skill_box 取得目前選中的技能名稱（顯示文字）
-        selected_skill_name = self.skill_box.currentText()
-        globals()["Use_Skills"] = sum(val for val, _ in effect_dict.get((f"技能【{selected_skill_name}】傷害(裝備段)", "%"), []))
-        #=============參考動態變數自動抓技能%=(技能段)==============      
-        passive_skill_buff = sum(val for val, _ in effect_dict.get((f"技能【{selected_skill_name}】傷害(技能段)", "%"), []))
-        #=====================其他物理增傷========================
-        globals()["MeleeAttackDamage"] = sum(val for val, _ in effect_dict.get((f"近距離物理傷害", "%"), []))
-        globals()["RangeAttackDamage"] = sum(val for val, _ in effect_dict.get((f"遠距離物理傷害", "%"), []))
-        globals()["Damage_CRI"] = sum(val for val, _ in effect_dict.get((f"爆擊傷害", "%"), []))
-        globals()["CRATE"] = sum(val for val, _ in effect_dict.get((f"C.RATE", ""), []))   
-        Ignore_size = sum(val for val, _ in effect_dict.get((f"武器體型修正", "%"), []))   
-        
-
-        
-
-
-        #========================以上魔法增傷===================
-        
-
-
-
         #=======取得目前有的技能等級如果沒有回傳0        
         def GSklv(skill_id):
             return enabled_skill_levels.get(skill_id, 0)  # 若沒有這個技能，預設回傳 0
+        def GUSklv(skill_id):
+            v = Use_skill_levels.get(skill_id, 0)  # 沒有就 0
+            if isinstance(v, bool):
+                return int(v)  # True->1, False->0
+            return v
 
         #處理公式中的動態變數
         def replace_gsklv_calls(formula: str) -> str:
             pattern = r'GSklv\((\d+)\)'  # 找出 GSklv(數字)
             return re.sub(pattern, lambda m: str(GSklv(int(m.group(1)))), formula)
+        def replace_gusklv_calls(formula: str) -> str:
+            pattern = r'GUSklv\((\d+)\)'  # 找出 GUSklv(數字)
+            return re.sub(pattern, lambda m: str(GUSklv(int(m.group(1)))), formula)
 
         def replace_custom_calls(formula):#例如超自然波 書跟杖打擊
             import re
@@ -3206,6 +3172,59 @@ class ItemSearchApp(QWidget):
             return expanded_formula, result
 
 
+        #=================== 特殊增傷ui取得/處理區===================
+        #萬紫/震裂4
+        skill_wanzih4_buff = 100/100 if self.special_checkboxes["wanzih_checkbox"].isChecked() and 2 <= User_attack_element <= 3 else 0
+        #毒耐性弱化
+        skill_poison_weak_buff = 50/100 if self.special_checkboxes["poison_weak_checkbox"].isChecked() and User_attack_element == 5 else 0
+        #魔力中毒
+        magic_poison_buff = 50/100 if self.special_checkboxes["magic_poison_checkbox"].isChecked() else 0
+        #屬性紋章
+        attribute_seal_buff = 1+50/100 if self.special_checkboxes["attribute_seal_checkbox"].isChecked() and 1 <= User_attack_element <= 4 else 1
+        #潛擊
+        is_sneak_checked = self.special_checkboxes["sneak_attack_checkbox"].isChecked()
+        sneak_attack_buff = 1+30/100 if is_sneak_checked and target_class == 0 else 1+15/100 if is_sneak_checked else 0
+        sneak_MDattack_buff = 30/100 if is_sneak_checked and target_class == 0 else 15/100 if is_sneak_checked else 0
+        #致命塗毒
+        EDP_attack = 300 if int(GUSklv(378)) == 1 else 0 #378
+        #爪痕
+        is_DARKCROW_checked = self.special_checkboxes["DARKCROW_attack_checkbox"].isChecked()
+        DARKCROW_attack_buff = 1+150/100 if is_DARKCROW_checked and target_class == 0 else 1+75/100 if is_DARKCROW_checked else 0
+        #撼動
+        RUSH_attack_buff = 1+50/100 if self.special_checkboxes["RUSH_attack_checkbox"].isChecked() else 0
+        #孢子
+        SPORE_attack_buff = 1+5/100 if self.special_checkboxes["SPORE_attack_checkbox"].isChecked() else 0
+        #聖油
+        OLEUM_attack_buff = 1+20/100 if self.special_checkboxes["OLEUM_attack_checkbox"].isChecked() else 0
+        #魔力增幅
+        SKILL_HW_MAGICPOWER = 10 if int(GUSklv(366)) == 1 else 0  # 366
+
+        
+        """
+        target_size       # 來自 體型 的數值
+        C    # 屬性編號
+        target_element_lv # 目標屬性等級
+        target_race       # 種族代碼C
+        target_class      # 階級代碼
+        target_mdef       # 數字輸入 MDEF前
+        target_mdefc      # 數字輸入 MDEF後
+        target_mres       # 數字輸入 MRES
+        User_attack_element #施展屬性
+        """
+        #=============參考動態變數自動抓技能%=(裝備段)==============
+        # 從 skill_box 取得目前選中的技能名稱（顯示文字）
+        selected_skill_name = self.skill_box.currentText()
+        globals()["Use_Skills"] = sum(val for val, _ in effect_dict.get((f"技能【{selected_skill_name}】傷害(裝備段)", "%"), []))
+        #=============參考動態變數自動抓技能%=(技能段)==============      
+        passive_skill_buff = sum(val for val, _ in effect_dict.get((f"技能【{selected_skill_name}】傷害(技能段)", "%"), []))
+        #=====================其他物理增傷========================
+        globals()["MeleeAttackDamage"] = sum(val for val, _ in effect_dict.get((f"近距離物理傷害", "%"), []))
+        globals()["RangeAttackDamage"] = sum(val for val, _ in effect_dict.get((f"遠距離物理傷害", "%"), []))
+        globals()["Damage_CRI"] = sum(val for val, _ in effect_dict.get((f"爆擊傷害", "%"), []))
+        globals()["CRATE"] = sum(val for val, _ in effect_dict.get((f"C.RATE", ""), []))   
+        Ignore_size = sum(val for val, _ in effect_dict.get((f"武器體型修正", "%"), []))   
+
+
 
         #=======================技能欄公式====================
         #====================DEF計算==================
@@ -3257,41 +3276,23 @@ class ItemSearchApp(QWidget):
             
 
         #物理破防
-        #mdef m33=破防 l37=敵人mdef
-        #=IF(M33>0.99,1,(1000+(L37-(L37*M33)-M33))/(1000+(L37-(L37*M33)-M33)*10))
         def_reduction = ((get_effect_multiplier('D_Race_def', target_race))+(get_effect_multiplier('D_class_def', target_class)))
-        damage_nodef = calc_final_def_damage(target_def, def_reduction)      
-        
+        damage_nodef = calc_final_def_damage(target_def, def_reduction)             
 
         #魔法破防
-        #mdef m33=破防 l37=敵人mdef
-        #=IF(M33>0.99,1,(1000+(L37-(L37*M33)-M33))/(1000+(L37-(L37*M33)-M33)*10))
         mdef_reduction = ((get_effect_multiplier('MD_Race_def', target_race))+(get_effect_multiplier('MD_class_def', target_class)))
-        Mdamage_nomdef = calc_final_mdef_damage(target_mdef, mdef_reduction)
-       
+        Mdamage_nomdef = calc_final_mdef_damage(target_mdef, mdef_reduction)       
 
-        #res
-        
+        #res        
         res_reduction = ((get_effect_multiplier('D_Race_res', target_race))+(get_effect_multiplier('D_Race_res', 9999)))
         res_reduction = min(res_reduction, 50)#破抗性最大50%
         damage_nores = calc_final_res_damage(target_res, res_reduction)
-
-        #print(f"抗性最終傷害比例：{Mdamage_nomres:.4f} → {Mdamage_nomres * 100:.2f}%")
-        #mres
-        #=IF(M34>0.99,1,(2000+(L39-(L39*M34)-M34))/(2000+(L39-(L39*M34)-M34)*5))
+        
+        #MRES
         mres_reduction = ((get_effect_multiplier('MD_Race_res', target_race))+(get_effect_multiplier('MD_Race_res', 9999)))
         mres_reduction = min(mres_reduction, 50)#破抗性最大50%
         Mdamage_nomres = calc_final_res_damage(target_mres, mres_reduction)
-        #print(f"抗性最終傷害比例：{Mdamage_nomres:.4f} → {Mdamage_nomres * 100:.2f}%")
 
-        
-
-        
-        #result.append(f"體型編號: {target_size}")
-        #result.append(f"屬性編號: {target_element}")
-        #result.append(f"種族編號: {target_race}")
-        #result.append(f"階級編號: {target_class}")
-        #result.append(f"施展屬性: {User_attack_element}")
         
         # 查詢屬性倍率函數
         def get_damage_multiplier(attacker_element: int, defender_element: int, level: int) -> int:
@@ -3407,7 +3408,7 @@ class ItemSearchApp(QWidget):
         #print(f"refineWeaponATK:{refineWeaponATK}")
 
         #武器體型修正
-        Weaponpunish = 1 if Ignore_size == 100 else get_size_penalty(weapon_class, target_size)
+        Weaponpunish = 1 if Ignore_size >= 100 else get_size_penalty(weapon_class, target_size)
         #取得武器小中大體型懲罰
         globals()["weapon_weapon_size0"] = get_size_penalty(weapon_class, 0)*100
         globals()["weapon_weapon_size1"] = get_size_penalty(weapon_class, 1)*100
@@ -3420,9 +3421,9 @@ class ItemSearchApp(QWidget):
         
         #怒爆或致命塗毒 1+(怒爆20%/致命塗毒25%)*屬性倍率 
         #致命塗毒
-        EDP = 1 + 0.25 * (get_damage_multiplier(5, target_element, target_element_lv)/100) if self.special_checkboxes["EDP_attack_checkbox"].isChecked() else 1
+        EDP = 1 + 0.25 * (get_damage_multiplier(5, target_element, target_element_lv)/100) if int(GUSklv(378)) == 1 else 1
         #怒爆
-        MAGNUM = 1 + 0.2 * (get_damage_multiplier(3, target_element, target_element_lv)/100) if self.special_checkboxes["MAGNUM_attack_checkbox"].isChecked() else 1
+        MAGNUM = 1 + 0.2 * (get_damage_multiplier(3, target_element, target_element_lv)/100) if int(GUSklv(7)) == 1 else 1
         #print(f"EDP:{EDP},MAGNUM:{MAGNUM}")
         specialATK = int(refineammoATK * EDP * MAGNUM)
 
@@ -3460,7 +3461,22 @@ class ItemSearchApp(QWidget):
         #selected_skill_name = self.skill_box.currentText()#上面已經做過了
         #武器次數依照武器類型判斷
         skill_hits = self.skill_hits_input.text()#攻擊次數
-        skill_hits = int(replace_custom_calls(skill_hits))
+        
+        skill_hits = (replace_gusklv_calls(skill_hits))#替換使用技能參數
+        expr = (replace_custom_calls(skill_hits))#替換武器類型
+
+        def eval_hits(expr: str) -> int:
+            expr = expr.strip()
+
+            # 只允許數字、四則、括號、小數點、空白、%（需要就留，不需要可拿掉）
+            if not re.fullmatch(r"[0-9+\-*/().\s%]*", expr):
+                raise ValueError(f"公式含不允許字元：{expr}")
+
+            val = eval(expr, {"__builtins__": None}, {})  # 關掉 builtins
+            return int(val)  # 需要整數就轉 int（會截掉小數）
+
+       
+        skill_hits = eval_hits(expr)#計算最終次數
 
         #print(f"技能攻擊次數: {skill_hits}")
         # === [1] 取得技能 row
@@ -3474,21 +3490,38 @@ class ItemSearchApp(QWidget):
         # [2] 根據種族選擇正確的公式，並同步 UI
         default_formula = str(skill_row["Calculation"]).strip()
         final_formula = default_formula
-        #(轉roc用) 從選擇的技能拿出code設定全域以備轉換
         globals()["SkillCode"] = str(skill_row["Code"]).strip()
 
-        if pd.notna(skill_row.get("Special_Calculation")) and pd.notna(skill_row.get("monster_race")):
-            #print(f"[DEBUG]比對的的種族: {skill_row.get('monster_race')}")
-            allowed_races = set(r.strip() for r in skill_row["monster_race"].split(","))
-            #print(f"[DEBUG]輸入的種族: {target_race}")
+        special_formula_ok = pd.notna(skill_row.get("Special_Calculation"))
+        trigger_special = False
+
+        # 先：種族判斷
+        if special_formula_ok and pd.notna(skill_row.get("monster_race")):
+            allowed_races = {r.strip() for r in str(skill_row["monster_race"]).split(",") if r.strip()}
             if str(target_race).strip() in allowed_races:
-                final_formula = str(skill_row["Special_Calculation"]).strip()
-                #print("[DEBUG]觸發更改技能欄為 Special_Calculation")
+                trigger_special = True
+
+        # 再：skill_buff 判斷（Use_skill_levels 裡有用到 buff 技能就觸發）
+        if (not trigger_special) and special_formula_ok and pd.notna(skill_row.get("skill_buff")):
+            buff_ids = []
+            for x in str(skill_row["skill_buff"]).split(","):
+                x = x.strip()
+                if x.isdigit():
+                    buff_ids.append(int(x))
+
+            # ✅ 只要其中一個 buff 技能被使用過 (True) 就觸發
+            if any(Use_skill_levels.get(bid, False) for bid in buff_ids):
+                trigger_special = True
+
+        # 套用特殊公式
+        if trigger_special and special_formula_ok:
+            final_formula = str(skill_row["Special_Calculation"]).strip()
+
 
         # 同步更新 UI
         self.skill_formula_input.setText(final_formula)
 
-        # [3] 最終使用使用者輸入（如果手動改了）
+        # [3] 最終使用使用者輸入
         user_input_formula = self.skill_formula_input.text().strip()
         if user_input_formula and user_input_formula != final_formula:
             formula_str = user_input_formula
@@ -3597,6 +3630,7 @@ class ItemSearchApp(QWidget):
 
                 # === 套用替換函式 ===
                 full_formula = replace_gsklv_calls(full_formula)#替換gsklv
+                full_formula = replace_gusklv_calls(full_formula)#替換gusklv
                 full_formula = replace_custom_calls(full_formula)#替換wpon(0)2:1
                 full_formula_show,full_formula = eval_formula_with_vars(full_formula, allowed_vars)# 手動變數替換後的字串公式 支援捨去計算               
                 skill_SpecialATK_show , skill_SpecialATK = eval_formula_with_vars(str(skill_row["skill_SpecialATK"]).strip() if pd.notna(skill_row.get("skill_SpecialATK")) else "0", allowed_vars) #技能隱藏段
@@ -3638,7 +3672,7 @@ class ItemSearchApp(QWidget):
                             #屬性敵人
                             (get_effect_multiplier('MD_element', target_element) + get_effect_multiplier('MD_element', 10),1),
                             #敵人屬性耐性(1+萬紫+毒弱+彗星)
-                            (1 + (skill_wanzih4_buff + magic_poison_buff),"raw"),
+                            ((1 + skill_wanzih4_buff + skill_poison_weak_buff + magic_poison_buff),"raw"),
                             #屬性魔法
                             (get_effect_multiplier('MD_Damage', User_attack_element) +get_effect_multiplier('MD_Damage', 10),1),
                             #種族
@@ -3691,7 +3725,7 @@ class ItemSearchApp(QWidget):
                             #後總ATK
                             (ATK_percent_sign,"+"),
                             #敵人屬性耐性(1+萬紫+毒弱+彗星)
-                            ((1 + skill_wanzih4_buff + magic_poison_buff),"raw"),
+                            ((1 + skill_wanzih4_buff + skill_poison_weak_buff + magic_poison_buff),"raw"),
                         )
                         
                         #print(f"屬性倍率計算前: {final_damage_1}")
@@ -3875,12 +3909,39 @@ class ItemSearchApp(QWidget):
         
         
         # === [5] combo 計算（如果有）
-        # Combo 技能
         if pd.notna(skill_row.get("combo")) and pd.notna(skill_row.get("combo_hits")):
-            
-            combo_formula = str(skill_row["combo"]).strip()
-            raw_combo_hits = parse_hits(skill_row["combo_hits"], Sklv)
 
+            # --- 先算：是否觸發「特殊替換」（種族 OR buff技能有被使用）---
+            trigger_combo_special = False
+
+            # 1) 種族觸發
+            if pd.notna(skill_row.get("monster_race")):
+                allowed_races = {r.strip() for r in str(skill_row["monster_race"]).split(",") if r.strip()}
+                if str(target_race).strip() in allowed_races:
+                    trigger_combo_special = True
+
+            # 2) buff技能觸發（Use_skill_levels[skill_id] = True 代表使用過）
+            if (not trigger_combo_special) and pd.notna(skill_row.get("skill_buff")):
+                buff_ids = []
+                for x in str(skill_row["skill_buff"]).split(","):
+                    x = x.strip()
+                    if x.isdigit():
+                        buff_ids.append(int(x))
+
+                if any(Use_skill_levels.get(bid, False) for bid in buff_ids):
+                    trigger_combo_special = True
+
+            # --- 決定 combo 公式：符合條件才用 combo_Special_Calculation ---
+            combo_formula = str(skill_row["combo"]).strip()
+
+            if (
+                trigger_combo_special
+                and pd.notna(skill_row.get("combo_Special_Calculation"))
+                and str(skill_row.get("combo_Special_Calculation")).strip()
+            ):
+                combo_formula = str(skill_row["combo_Special_Calculation"]).strip()
+
+            raw_combo_hits = parse_hits(skill_row["combo_hits"], Sklv)
 
             if raw_combo_hits < 0:
                 combo_hits = abs(raw_combo_hits)
@@ -3888,16 +3949,16 @@ class ItemSearchApp(QWidget):
             else:
                 combo_hits = raw_combo_hits
                 label = "combo"
-            # === ✅ 套用 combo_element 若存在，暫時覆蓋 User_attack_element
-            
-            if pd.notna(skill_row.get("combo_element")):
+
+            # ✅ 套用 combo_element 若存在，暫時覆蓋 user_attack_element
+            combo_element_val = User_attack_element
+            if pd.notna(skill_row.get("combo_element")) and str(skill_row.get("combo_element")).strip():
                 try:
-                    User_attack_element = int(skill_row["combo_element"])
-                    print(f"⚡ combo_element 套用屬性：{element_map.get(User_attack_element, User_attack_element)}")
-                    
+                    combo_element_val = int(skill_row["combo_element"])
+                    print(f"⚡ combo_element 套用屬性：{element_map.get(combo_element_val, combo_element_val)}")
                 except Exception as e:
                     print(f"combo_element 解析錯誤：{e}")
-            
+                    combo_element_val = User_attack_element
 
             results.extend(compute_and_record_damage(
                 formula=combo_formula,
@@ -3905,9 +3966,10 @@ class ItemSearchApp(QWidget):
                 bonus_add=0,
                 bonus_step=0,
                 label=label,
-                skill_hits=raw_combo_hits,  # 注意！保留原始值讓內部處理是否均分
-                user_attack_element=combo_element
+                skill_hits=raw_combo_hits,
+                user_attack_element=combo_element_val
             ))
+
 
 
 
@@ -4539,6 +4601,7 @@ class ItemSearchApp(QWidget):
         
         
         enabled_skill_levels.clear()
+        Use_skill_levels.clear()
        # 你目前已知使用的 slot ID 範圍
         slot_ids = [10, 11, 12, 2, 4, 3, 5, 6, 7, 8,
                     30, 31, 32, 33, 34, 35, 41, 42, 43, 44]
@@ -4604,6 +4667,7 @@ class ItemSearchApp(QWidget):
         hidden = self.hide_unrecognized_checkbox.isChecked()
         self.equip_text.setVisible(not hidden)
         self.equip_text_label.setVisible(not hidden)
+        self.combi_raw_text.setVisible(not hidden)
         
     def filter_effects(self, effects: list[str]) -> list[str]:
         hide_keywords = []
@@ -4972,6 +5036,9 @@ class ItemSearchApp(QWidget):
         
     #被動技能給予的狀態
     def apply_skill_buffs_into_effect_dict(self, skillbuff_path, enabled_skill_levels, refine_inputs, get_values, grade):
+        def GSklv(skill_id):
+            return enabled_skill_levels.get(skill_id, 0)  # 若沒有這個技能，預設回傳 0
+
         try:
             with open(skillbuff_path, "r", encoding="utf-8") as f:
                 content = f.read()
@@ -4987,7 +5054,13 @@ class ItemSearchApp(QWidget):
                 continue
 
             block = match.group(1)
-            block = re.sub(rf"GSklv\({skill_id}\)", str(level), block)
+            #block = re.sub(rf"GSklv\({skill_id}\)", str(level), block)
+            block = re.sub(
+                r"GSklv\(\s*(\d+)\s*\)",
+                lambda m: str(GSklv(int(m.group(1)))),
+                block,
+                flags=re.IGNORECASE
+            )
 
             parsed_lines = parse_lua_effects_with_variables(
                 block,
@@ -4999,17 +5072,22 @@ class ItemSearchApp(QWidget):
                 effect_map,
                 hide_unrecognized=True
             )
+            #print("DEBUG parsed_lines:", parsed_lines)
 
             skill_name = skill_map.get(skill_id, f"技能ID {skill_id}")
             source_str = f"技能：{skill_name} Lv.{level}"
 
             for line in parsed_lines:
+                # 濾掉 parser 的 debug 行
+                if line.startswith(("📌", "✅", "❌")):
+                    continue
                 # 嘗試匹配格式："S.MATK +5"、"固定詠唱時間 -1.0 秒"
-                match = re.match(r"(.+?) ([+-]\d+(?:\.\d+)?)([%秒]?)$", line)
+                match = re.match(r"(.+?)\s*([+-]?\d+(?:\.\d+)?)(?:\s*([^\d\s]+))?$", line)
                 if not match:
                     continue
 
                 key, val_str, unit = match.groups()
+                unit = unit or ""   # ✅ 關鍵：None -> ""
                 try:
                     value = float(val_str)
                 except:
@@ -6489,13 +6567,20 @@ class ItemSearchApp(QWidget):
         self.desc_text = QTextEdit()
         self.desc_text.setReadOnly(True)
 
+        self.Combi_text = QTextEdit()
+        self.Combi_text.setReadOnly(True)
+
+        self.combi_raw_text = QTextEdit()
+        self.desc_text.setReadOnly(True)
+
         self.equip_text = QTextEdit()
         self.equip_text.setReadOnly(True)
 
         self.sim_effect_label = QLabel("效果解析")
         #self.sim_effect_text = QTextEdit()
         #self.sim_effect_text.setReadOnly(True)
-        
+
+
 
 
 
@@ -7360,6 +7445,9 @@ class ItemSearchApp(QWidget):
         #add_labeled_row(middle_layout, "鑲嵌孔數", self.slot_field)
         #middle_layout.addWidget(QLabel("物品說明"))
         middle_layout.addWidget(self.desc_text)
+        middle_layout.addWidget(QLabel("套裝清單："))
+        self.Combi_text.setFixedHeight(160)
+        middle_layout.addWidget(self.Combi_text)
         self.btn_recompile = QPushButton("重新取得物品列表")
         self.btn_recompile.clicked.connect(self.recompile)
         middle_layout.addWidget(self.btn_recompile)
@@ -7465,7 +7553,11 @@ class ItemSearchApp(QWidget):
         self.equip_text_label = QLabel("裝備屬性原始內容")
         right_layout.addWidget(self.equip_text_label)
         right_layout.addWidget(self.equip_text)
+        self.equip_text.setFixedHeight(160)
+        right_layout.addWidget(self.combi_raw_text)
+        self.combi_raw_text.setFixedHeight(160)
         right_layout.addWidget(self.sim_effect_label)
+        
         #right_layout.addWidget(self.sim_effect_text)
         # === 效果解析分頁（兩個頁籤） ===
         self.sim_tabs = QTabWidget()
@@ -7764,7 +7856,7 @@ class ItemSearchApp(QWidget):
         self.skill_hits_input.setPlaceholderText("次數")
         self.skill_hits_input.setText("1")
         self.skill_hits_input.setReadOnly(True)
-        self.skill_hits_input.setFixedWidth(80)
+        self.skill_hits_input.setFixedWidth(120)
         skill_select_layout_top.addWidget(self.skill_hits_input)
 
 
@@ -7834,17 +7926,15 @@ class ItemSearchApp(QWidget):
         
         # 特殊效果增傷處理區
         self.special_checkboxes = {
-            "wanzih_checkbox": QCheckBox("萬紫千紅(巔峰4)"),
+            "wanzih_checkbox": QCheckBox("萬紫/震裂(巔峰4)"),
+            "poison_weak_checkbox": QCheckBox("毒耐性弱化"),
             "magic_poison_checkbox": QCheckBox("魔力中毒"),
-            "attribute_seal_checkbox": QCheckBox("屬性紋章(水地火風)"),            
-            "MAGNUM_attack_checkbox": QCheckBox("怒爆"),
-            "EDP_attack_checkbox": QCheckBox("致命塗毒"),
+            "attribute_seal_checkbox": QCheckBox("屬性紋章(水地火風)"),
             "sneak_attack_checkbox": QCheckBox("潛擊(近遠魔)"),
             "SPORE_attack_checkbox": QCheckBox("爆炸孢子(遠)"),            
             "DARKCROW_attack_checkbox": QCheckBox("致命爪痕(近)"),
             "RUSH_attack_checkbox": QCheckBox("衝擊撼動(近遠)"),            
             "OLEUM_attack_checkbox": QCheckBox("聖油洗禮(遠)"),
-            "SKILL_HW_MAGICPOWER_checkbox": QCheckBox("魔力增幅"),
 
 
 
@@ -8167,6 +8257,8 @@ class ItemSearchApp(QWidget):
         for var_name, effect_id in equipid_mapping.items():
             if var_name in context:
                 value = context[var_name]
+                if value == 0:
+                    continue  # value 是 0 就略過，不輸出也不新增
                 new_effect = {
                     "EffectNumber": value,
                     "EffectType": {"id": effect_id},
@@ -8553,6 +8645,73 @@ class ItemSearchApp(QWidget):
         # 顯示裝備原始資料區塊（若有）
         if item_id in self.equipment_data:
             block_text = self.equipment_data[item_id]
+            # === Combiitem → 顯示套裝需求（裝備名稱） ===
+            # 需求：使用 Combiitem 裡的「套裝ID」去找對應套裝區塊，並解析其中 Item={...} 的需求裝備。
+            def _extract_combi_ids(_block_text: str) -> list[int]:
+                m = re.search(r"Combiitem\s*=\s*\{([^}]*)\}", _block_text)
+                if not m:
+                    return []
+                ids: list[int] = []
+                for x in m.group(1).split(','):
+                    x = x.strip()
+                    if x.isdigit():
+                        ids.append(int(x))
+                return ids
+
+            def _extract_combo_items(_combo_text: str) -> list[int]:
+                m = re.search(r"Item\s*=\s*\{([^}]*)\}", _combo_text)
+                if not m:
+                    return []
+                out: list[int] = []
+                for x in m.group(1).split(','):
+                    x = x.strip()
+                    if x.isdigit():
+                        out.append(int(x))
+                # 去重但保留順序
+                seen = set()
+                uniq = []
+                for i in out:
+                    if i not in seen:
+                        seen.add(i)
+                        uniq.append(i)
+                return uniq
+
+            combi_ids = _extract_combi_ids(block_text)
+            combi_lines: list[str] = []
+            if combi_ids:
+                #combi_lines.append("========= Combiitem 套裝需求 =========")
+                for combi_id in combi_ids:
+                    combo_block = self.equipment_data.get(combi_id, "")
+                    need_ids = _extract_combo_items(combo_block)
+
+                    combo_name = self.parsed_items.get(combi_id, {}).get("name", f"套裝ID {combi_id}")
+                    if not need_ids:
+                        #combi_lines.append(f"🧩 {combo_name}（{combi_id}）：（找不到 Item={{...}}）")
+                        combi_lines.append(f"🧩 {combo_name}：（找不到 Item={{...}}）")
+                        continue
+
+                    need_names = [self.parsed_items.get(iid, {}).get("name", f"ID:{iid}") for iid in need_ids]
+                    #combi_lines.append(f"🧩 {combo_name}（{combi_id}）")
+                    combi_lines.append(f"🧩 {combo_name}")
+                    combi_lines.append("↳  需求：" + "、".join(need_names))
+            if not combi_ids:
+                self.combi_raw_text.clear()
+            else:
+                raw_blocks = []
+                for cid in combi_ids:
+                    combo_block = self.equipment_data.get(cid, "")
+                    if combo_block:
+                        raw_blocks.append(f"[{cid}] = {{\n{combo_block}\n}}")
+                    else:
+                        raw_blocks.append(f"[{cid}] 找不到資料")
+
+                self.combi_raw_text.setPlainText("\n\n".join(raw_blocks))
+
+
+            fullCombi_text = ("\n".join(combi_lines) if combi_lines else "")
+            self.Combi_text.setPlainText(fullCombi_text)
+
+
             full_text = f"[{item_id}] = {{\n{block_text}\n}}"
             self.equip_text.setPlainText(full_text)
         else:
@@ -8706,7 +8865,7 @@ if __name__ == "__main__":
         window.parsed_items = data or {}
         window.update_combobox()
 
-        window.resize(1620, 800)
+        window.resize(1650, 800)
         window.show()
 
         QTimer.singleShot(1000, loading.close)
