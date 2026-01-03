@@ -325,15 +325,15 @@ class_map = {
 stat_name_sets  = {#裝備基礎編碼
     "armor": [
         "DEF", "STR", "AGI", "VIT", "INT", "DEX", "LUK", "未知7", "未知8",
-        "MDEF", "防具等級", "POW", "STA", "WIS", "SPL", "CON", "CRT"
+        "MDEF", "防具等級", "POW", "SPL", "STA", "WIS", "CON", "CRT"
     ],
     "Mweapon": [
         "武器屬性", "武器類型", "武器ATK", "武器MATK", "STR", "INT", "VIT", "DEX", "AGI",
-        "LUK", "武器等級", "未知11", "未知12", "未知13", "未知14", "未知15", "未知16"
+        "LUK", "武器等級", "POW", "SPL", "STA", "WIS", "CON", "CRT"
     ],
     "Rweapon": [
         "武器類型", "武器ATK", "STR", "INT", "VIT", "DEX", "AGI", "LUK", "武器等級",
-        "未知9", "未知10", "未知11", "未知12", "未知13", "未知14"
+         "POW", "SPL", "STA", "WIS", "CON", "CRT"
     ],
     "ammo": [
         "屬性", "箭矢/彈藥ATK"
