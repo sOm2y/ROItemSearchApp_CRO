@@ -1,5 +1,6 @@
 # 額外參數對照表
 all_skill_entries = {#範例[    "": {"type": "技能/料理","code":["",""]},
+
      #10料
     "力量料理": {"type": "料理","code":["AddExtParam(0,103,10)"],"exclusive": "food_str"},
     "敏捷料理": {"type": "料理","code":["AddExtParam(0,104,10)"],"exclusive": "food_agi"},
@@ -21,20 +22,31 @@ all_skill_entries = {#範例[    "": {"type": "技能/料理","code":["",""]},
     "狼血雞尾酒": {"type": "料理","code":["AddExtParam(0,106,20)"]},
     "小雪獸冰茶": {"type": "料理","code":["AddExtParam(0,107,20)"]},
     "畢帝特龍尾麵": {"type": "料理","code":["AddExtParam(0,108,20)"]},
-    #櫻花
-    #"蒙布朗蛋糕": {"type": "料理","code":["AddMDamage_Size(1, 0, 15)","AddMDamage_Size(1, 1, 15)","AddMDamage_Size(1, 2, 15)"]},
-    #"櫻花年糕": {"type": "料理","code":["AddMDamage_Property(1, 10, 10)"]},
-    #"豐滿花樹枝": {"type": "料理","code":["AddSkillMDamage(10, 10)"]},
-    #學術節料理
-    "學術節米餅": {"type": "料理","code":["AddMDamage_Size(1, 0, 10)","AddMDamage_Size(1, 1, 10)","AddMDamage_Size(1, 2, 10)","AddDamage_Size(1, 0, 10)","AddDamage_Size(1, 1, 10)","AddDamage_Size(1, 2, 10)","AddExtParam(1, 239, 15)"]},
-    "學術節餅乾": {"type": "料理","code":["AddMeleeAttackDamage(1, 12)","AddRangeAttackDamage(1,  12)","AddSkillMDamage(10, 12)","AddExtParam(1, 50, 30)"]},
-    "學術節即溶咖啡": {"type": "料理","code":["AddExtParam(1, 207, 15)","AddExtParam(1, 140, 15)","SubSpellCastTime(10)"]},
-    "祕密文件": {"type": "料理","code":["AddExtParam(1, 49, 0)","AddMDamage_Property(1, 10, 10)","AddDamage_Property(1, 10, 10)"]},
 
-    "高級戰鬥藥": {"type": "料理","code":["AddExtParam(1, 140, 10)"]},
+    "特性增強藥劑": {"type": "料理","code":["AddExtParam(1, 234, 5)","AddExtParam(1, 235, 5)","AddExtParam(1, 236, 5)","AddExtParam(1, 238, 5)","AddExtParam(1, 237, 5)","AddExtParam(1, 239, 5)","AddExtParam(1, 242, 10)","AddExtParam(1, 243, 10)"]},
+    #櫻花
+    # "蒙布朗蛋糕": {"type": "料理","code":["AddMDamage_Size(1, 0, 15)","AddMDamage_Size(1, 1, 15)","AddMDamage_Size(1, 2, 15)"]},
+    # "櫻花年糕": {"type": "料理","code":["AddMDamage_Property(1, 10, 10)"]},
+    # "豐滿花樹枝": {"type": "料理","code":["AddSkillMDamage(10, 10)"]},
+    #學術節料理
+    # "學術節米餅": {"type": "料理","code":["AddMDamage_Size(1, 0, 10)","AddMDamage_Size(1, 1, 10)","AddMDamage_Size(1, 2, 10)","AddDamage_Size(1, 0, 10)","AddDamage_Size(1, 1, 10)","AddDamage_Size(1, 2, 10)","AddExtParam(1, 239, 15)"]},
+    # "學術節餅乾": {"type": "料理","code":["AddMeleeAttackDamage(1, 12)","AddRangeAttackDamage(1,  12)","AddSkillMDamage(10, 12)","AddExtParam(1, 50, 30)"]},
+    # "學術節即溶咖啡": {"type": "料理","code":["AddExtParam(1, 207, 15)","AddExtParam(1, 140, 15)","SubSpellCastTime(10)"]},
+    # "祕密文件": {"type": "料理","code":["AddExtParam(1, 49, 0)","AddMDamage_Property(1, 10, 10)","AddDamage_Property(1, 10, 10)"]},
+    #冬季狩獵
+    "肉量加倍三明治": {"type": "料理","code":["AddMDamage_Size(1, 0, 15)","AddMDamage_Size(1, 1, 15)","AddMDamage_Size(1, 2, 15)","AddMDamage_Property(1, 10, 10)","AddDamage_Size(1, 0, 15)","AddDamage_Size(1, 1, 15)","AddDamage_Size(1, 2, 15)","AddDamage_Property(1, 10, 10)"]},
+    "暖胃香料紅酒": {"type": "料理","code":["AddExtParam(1, 207, 10)","AddExtParam(1, 140, 10)","AddMeleeAttackDamage(1, 10)","AddRangeAttackDamage(1, 10)","AddSkillMDamage(10, 10)"]},
+    "暖心蛋酒": {"type": "料理","code":["AddExtParam(1, 111, 10)","AddExtParam(1, 112, 10)","SubSpellCastTime(10)"]},
+
+    "高級戰鬥藥": {"type": "料理","code":["ClassAddDamage(0, 1, 10)","ClassAddDamage(1, 1, 10)","AddExtParam(1, 140, 10)","SubExtParam(1, 111, 5)","SubExtParam(1, 112, 5)"]},
     "魔力藥水": {"type": "料理","code":["AddExtParam(1, 200, 50)"]},
+    "紅色藥草活化液": {"type": "料理","code":["AddSkillMDamage(10, 10)","AddMeleeAttackDamage(1, 15)","AddRangeAttackDamage(1, 15)"]},
     "藍色藥草活化液": {"type": "料理","code":["AddSkillMDamage(10, 10)"]},
-    "戰神蒂爾之祝福": {"type": "料理","code":["AddExtParam(1, 200, 20)"]},
+    "戰神蒂爾之祝福": {"type": "料理","code":["AddExtParam(1, 41, 20)","AddExtParam(1, 200, 20)"]},
+    "魔幻香水": {"type": "料理","code":["AddExtParam(1, 41, 30)","AddExtParam(1, 200, 30)","AddExtParam(1, 207, 1)","AddExtParam(1, 140, 1)","AddExtParam(1, 54, 1)","AddExtParam(1, 49, 30)","AddExtParam(1, 50, 30)"]},
+    "極限藥水": {"type": "料理","code":["AddExtParam(1, 111, 5)","AddExtParam(1, 112, 5)","AddRangeAttackDamage(1, 5)","AddDamage_CRI(1, 5)","AddSkillMDamage(10, 5)"]},
+    "研磨劑": {"type": "料理","code":["AddExtParam(1, 52, 30)"]},
+    "紅色狂暴藥水": {"type": "料理","code":["AddExtParam(1, 41, 30)","AddExtParam(1, 200, 30)","AddExtParam(1, 167, 5)","SubSpellCastTime(5)","SubExtParam(1, 111, 10)","SubExtParam(1, 112, 10)"]},
 
     #====技能
     #騎領

@@ -1,5 +1,5 @@
 #部分資料取自ROCalculator,搜尋 ROCalculator 可以知道哪些有使用
-Version = "v0.1.20-251228"
+Version = "v0.1.21-260105"
 
 import sys, builtins, time
 from PySide6.QtCore import QThread, Signal, Qt, QMetaObject, QTimer
@@ -690,7 +690,7 @@ def get_total_tstat_points(level: int) -> int:
 
 
 skill_df = pd.DataFrame(columns=[#檔案不在使用硬編碼以防跳錯
-    "ID","Code","Name","attack_type","Slv","Calculation","element","hits",
+    "ID","Code","Name","attack_type","Rangedamage","Special_WPRange","Slv","Calculation","element","hits",
     "Critical_hit","combo","combo_element","combo_hits","Special_Calculation","combo_Special_Calculation",
     "monster_race","skill_buff","decay_hits","bonus_add","bonus_step"
 ])
@@ -1015,6 +1015,10 @@ class CSVEditor(QMainWindow):
                 "label": "技能遠距傷害",
                 "tooltip": "技能套用遠距傷害計算。"
             },
+            "special_wprange": {
+                "label": "裝備武器套用遠距計算",
+                "tooltip": "裝備該類型的武器自動轉換遠傷。"
+            },
             "skill_SpecialATK": {
                 "label": "技能特殊段加算傷害",
                 "tooltip": "綠光減傷前加算。"
@@ -1062,6 +1066,17 @@ class CSVEditor(QMainWindow):
                     ("魚貝", 5), ("惡魔", 6), ("人形", 7), ("天使", 8), ("龍族", 9),
                 ]
                 edit_field = MultiComboField(race_options)
+
+            elif header.lower() == "special_wprange":
+                WPClass_options = [
+                    ("", None),  # 空白
+                    ("短劍", 1), ("單手劍", 2), ("雙手劍", 3), ("單手矛", 4),("雙手矛", 5),
+                    ("單手斧", 6), ("雙手斧", 7), ("鈍器", 8), ("單手仗", 10), ("拳套", 12),
+                    ("樂器", 13), ("鞭子", 14), ("書", 15),("拳刃", 16), ("雙手仗", 23),
+                    ("弓", 11), ("左輪手槍", 17), ("來福槍", 18), ("格林機關槍", 19), ("霰彈槍", 20), ("榴彈槍", 21), ("風魔飛鏢", 22),
+                ]
+                edit_field = MultiComboField(WPClass_options)
+
             # ★★★ 新增：Rangedamage 用勾選框 ★★★
             elif header.lower() == "rangedamage":
                 edit_field = QCheckBox()
@@ -1105,7 +1120,8 @@ class CSVEditor(QMainWindow):
                 widget = self.field_edits[header]
 
                 # monster_race（MultiComboField，多值）
-                if isinstance(widget, MultiComboField) and key == "monster_race":
+                #if isinstance(widget, MultiComboField) and key == "monster_race":
+                if isinstance(widget, MultiComboField) and key in ("monster_race","special_wprange"):
                     txt = str(value).strip()
                     if not txt:
                         widget.set_values([])  # 顯示 1 個空白下拉
@@ -1201,7 +1217,7 @@ class CSVEditor(QMainWindow):
                     data = widget.currentData()
                     new_value = "" if (data is None or str(data) == "") else str(int(data))
 
-                elif key == "monster_race" and hasattr(widget, "get_values"):
+                elif key in ("monster_race","special_wprange") and hasattr(widget, "get_values"):
                     vals = widget.get_values()  # e.g. [0,5,9] 或 []
                     # 過濾成純數字字串
                     nums = []
@@ -3575,6 +3591,57 @@ class ItemSearchApp(QWidget):
         #技能遠傷判斷
         skill_Rangedamage = int(skill_row["Rangedamage"]) if pd.notna(skill_row.get("Rangedamage")) else 0 
         #print(f"技能遠傷判斷: {skill_Rangedamage}")
+
+        wpclass_skill_Rangedamage = skill_row.get("special_wprange", 0)
+
+        # None / 空字串 / "nan" → 0
+        if wpclass_skill_Rangedamage is None:
+            wpclass_skill_Rangedamage = 0
+        elif isinstance(wpclass_skill_Rangedamage, str):
+            s = wpclass_skill_Rangedamage.strip()
+            if s == "" or s.lower() == "nan":
+                wpclass_skill_Rangedamage = 0
+        else:
+            # 數字型（含 numpy.float64）遇到 NaN → 0
+            try:
+                if math.isnan(float(wpclass_skill_Rangedamage)):
+                    wpclass_skill_Rangedamage = 0
+            except (TypeError, ValueError):
+                pass
+
+        print(f"武器類型遠傷判斷代號: {wpclass_skill_Rangedamage}")
+
+        allow = set()
+
+        # 1) 單一數字：int / float（此時 NaN 已經被清成 0）
+        if isinstance(wpclass_skill_Rangedamage, (int, float)):
+            n = int(float(wpclass_skill_Rangedamage))
+            if n != 0:
+                allow.add(n)
+        else:
+            # 2) 多個數字字串： "1,5,6" / "8.0"
+            for part in str(wpclass_skill_Rangedamage).split(","):
+                part = part.strip()
+                if not part:
+                    continue
+                try:
+                    f = float(part)
+                except ValueError:
+                    continue
+                if math.isnan(f):
+                    continue
+                if f.is_integer():
+                    n = int(f)
+                    if n != 0:
+                        allow.add(n)
+
+
+        # 最終判斷
+        if weapon_class != 0 and weapon_class in allow:
+            skill_Rangedamage = 1
+
+
+
         #技能爆傷判斷
         Critical_hit = float(skill_row["Critical_hit"]) if pd.notna(skill_row.get("Critical_hit")) else 0
         
