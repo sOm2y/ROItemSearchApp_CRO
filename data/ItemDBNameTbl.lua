@@ -4844,7 +4844,12 @@ ItemDBNameTbl = {
   Cel_Design_Pendant_LT = 490867,
   Cel_Design_Pendant = 490482,
   Rotten_Rope = 7218,
-  Snow_Flower = 12739
+  Snow_Flower = 12739,
+  GaleClaw_Furious = 560067,
+  Exterminate_Furious = 560068,
+  FuriousCirclet_IQ = 400695,
+  Dimension_Ring_AAS = 490892,
+  Dimension_Ring_ABC = 490893
 }
 
 function ItemDB_To_ItemID(in_ItemDB)
