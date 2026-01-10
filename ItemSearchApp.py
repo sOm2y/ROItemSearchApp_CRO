@@ -1,5 +1,5 @@
 #部分資料取自ROCalculator,搜尋 ROCalculator 可以知道哪些有使用
-Version = "v0.1.21-260105"
+Version = "v0.1.22-260110"
 
 import sys, builtins, time
 from PySide6.QtCore import QThread, Signal, Qt, QMetaObject, QTimer
@@ -572,6 +572,7 @@ equipid_mapping = {#主程式equip to ROCalculator 轉換
     "MeleeAttackDamage": "MeleeDamagePercent",
     "RangeAttackDamage": "RangedDamagePercent",
     "target_monsterDamage": "MonsterAtkPercent",
+    "Damage_HIT": "HitAtkDamagePercent",
 }
 
 status_mapping = {#主程式status to ROCalculator 轉換
@@ -2274,6 +2275,19 @@ def parse_lua_effects_with_variables(
             results.append(f"誘導攻擊機率 +{value_expr}%")
             continue
 
+        # AddDamage_HIT(1, value)
+        
+        register_function("AddDamage_HIT", "物理命中傷害", [
+            {"name": "目標", "map": "unit_map"},
+            {"name": "數值%", "type": "value"}
+        ])
+        melee_hit = re.match(r"AddDamage_HIT\(\s*1\s*,\s*(.+)\)", line)
+        if melee_hit and condition_met:
+            value_expr = melee_hit.group(1)
+            value_expr = safe_eval_expr(value_expr, variables, get_values, refine_inputs, grade)
+            results.append(f"物理命中傷害 +{value_expr}%")
+            continue
+
         # AddMeleeAttackDamage(1, value)
         
         register_function("AddMeleeAttackDamage", "近距離物理傷害", [
@@ -3237,6 +3251,7 @@ class ItemSearchApp(QWidget):
         globals()["MeleeAttackDamage"] = sum(val for val, _ in effect_dict.get((f"近距離物理傷害", "%"), []))
         globals()["RangeAttackDamage"] = sum(val for val, _ in effect_dict.get((f"遠距離物理傷害", "%"), []))
         globals()["Damage_CRI"] = sum(val for val, _ in effect_dict.get((f"爆擊傷害", "%"), []))
+        globals()["Damage_HIT"] = sum(val for val, _ in effect_dict.get((f"物理命中傷害", "%"), []))
         globals()["CRATE"] = sum(val for val, _ in effect_dict.get((f"C.RATE", ""), []))   
         Ignore_size = sum(val for val, _ in effect_dict.get((f"武器體型修正", "%"), []))   
 
@@ -3820,8 +3835,11 @@ class ItemSearchApp(QWidget):
                         #是否技能爆擊
                         if Critical_hit == 0:
                             Critical_hitmag = -40#不吃crate
+                            excel_Damage_HIT = Damage_HIT
+
                         else:
                             Critical_hitmag = total_CRATE
+                            excel_Damage_HIT = 0#技能爆擊不吃命中增傷
                         
                         #print(f"special_away_BUFF:{special_away_BUFF}")
                         #print(f"special_melee_BUFF:{special_melee_BUFF}")
@@ -3831,6 +3849,8 @@ class ItemSearchApp(QWidget):
                                 final_damage_1,
                                 #P.ATK
                                 (total_PATK,1),
+                                #物理命中傷害
+                                (excel_Damage_HIT,1),
                                 #爆傷
                                 (CRI_Critical_hit,1),
                                 #遠傷% 技能判斷
@@ -3863,6 +3883,8 @@ class ItemSearchApp(QWidget):
                                 (total_PATK,1),
                                 #武器修煉ATK
                                 (WeaponMasteryATK,"+"),
+                                #物理命中傷害
+                                (excel_Damage_HIT,1),
                                 #爆傷
                                 (CRI_Critical_hit,1),
                                 #近傷% 技能判斷
@@ -4192,6 +4214,7 @@ class ItemSearchApp(QWidget):
             result.append(f"{pad_label('魔物增傷:')}{round(target_monsterDamage)}%")
             result.append(f"{pad_label('P.ATK:')}{round(total_PATK)}")
             result.append(f"{pad_label('物理屬性敵人:')}{round(get_effect_multiplier('D_element', target_element) + get_effect_multiplier('D_element', 10))}%")
+            result.append(f"{pad_label('物理命中:')}{round(Damage_HIT)}%")
             result.append(f"{pad_label('爆傷:')}{round(Damage_CRI)}%")
             if skill_Rangedamage == 1:#DEX系
                 result.append(f"{pad_label('遠傷:')}{round(RangeAttackDamage)}%")

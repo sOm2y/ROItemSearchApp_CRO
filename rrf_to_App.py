@@ -662,6 +662,9 @@ def extract_equip_chunk(filepath, json_data, get_itemname,
 
     g = 0
     group_number = 1
+    equip_map = {}  # {equip_id: [(chunk_name, group_number, group_name), ...]}
+
+
 
     # === 核心：動態延伸 group ===
     while g < len(group_starts) - 1:
@@ -826,33 +829,48 @@ def extract_equip_chunk(filepath, json_data, get_itemname,
 
         if group_has_data:
             print(f'==== {chunk_name} Group {group_number}（{group_name}）====')
+
+            # 原本在 for line 裡面做 weapon/shield 指派，這裡就不用了
             for line in group_lines:
-                if group_number == 2:
-                    weapon_id = equip_id
-                elif group_number == 6:
-                    shield_id = equip_id
                 print(line)
             print()
+
+            # ✅ 收集這一組的 equip_id（假設 equip_id 在這裡已經算出來了）
+            # 只收有效 ID
+            if isinstance(equip_id, int) and equip_id > 0:
+                equip_map.setdefault(equip_id, []).append((chunk_name, group_number, group_name, equip_name))
+
 
         group_number += 1
         g = end_idx
 
-    # ===== 雙手武器偵測 =====
-    if (
-        isinstance(weapon_id, int) and isinstance(shield_id, int)
-        and weapon_id > 0
-        and shield_id > 0
-        and weapon_id == shield_id
-    ):
-        print(f"[警告] 偵測到武器/盾牌欄位相同 (ID: {weapon_id})，可能為雙手武器")
+    # ===== 全部部位重複偵測（放在該 chunk 解析完之後）=====
+    duplicates = {eid: places for eid, places in equip_map.items() if len(places) > 1}
 
+    if duplicates:
+        # 印在 console
+        for eid, places in duplicates.items():
+            place_text = "、".join([f"{cn} G{gn}（{gname} - {ename}）" for cn, gn, gname, ename in places])
+
+            print(f"[警告] 偵測到裝備 ID 重複 (ID: {eid})：{place_text}")
+
+        # 跳視窗（把全部重複整理成文字）
         try:
             from tkinter import messagebox
-            messagebox.showwarning(
-                "雙手武器偵測",
-                "偵測到武器與盾牌欄位為相同資料，\n"
-                "如果是雙手武器，請將盾牌欄位的武器清空！"
+            lines = []
+            for eid, places in duplicates.items():
+                #place_text = "\n".join([f" - {cn} G{gn}（{gname}）" for cn, gn, gname in places])
+                #place_text = "\n".join([f" - {cn} G{gn}（{gname} - {ename}）" for cn, gn, gname, ename in places])
+                place_text = "\n".join([f" - {gname}：{ename}" for cn, gn, gname, ename in places])
+                lines.append(f"ID: {eid}\n{place_text}")
+            msg = (
+                "偵測到以下裝備 ID 在多個部位重複：\n\n"
+                + "\n\n".join(lines)
+                + "\n\n為避免重複運算裝備能力，需手動將重複裝備清空到剩餘一個部位。"
+                + "\n若為可雙持武器職業，需自行判斷是否為雙刀/雙手武器。"
             )
+
+            messagebox.showwarning("裝備重複偵測", msg)
         except Exception:
             pass
 

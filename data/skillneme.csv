@@ -594,7 +594,7 @@
 1018,SA_ELEMENTFIRE,元素更換(火),,,,,,0,0,,,,,,,,,,,,
 1019,SA_ELEMENTWIND,元素更換(風),,,,,,0,0,,,,,,,,,,,,
 2001,RK_ENCHANTBLADE,魔力劍,,,,,,0,0,,,,,,,,,,,,
-2002,RK_SONICWAVE,音速衝擊波,physical,1,,10,(550+Sklv*200)*BaseLv/100,0,-3,1,,,,,,,,,,,
+2002,RK_SONICWAVE,音速衝擊波,physical,1,,10,(550+Sklv*200)*BaseLv/100,0,-3,0.5,,,,,,,,,,,
 2003,RK_DEATHBOUND,死亡反彈,,,,,,0,0,,,,,,,,,,,,
 2004,RK_HUNDREDSPEAR,百矛穿刺,physical,1,,10,(600+Sklv*200)*BaseLv/100+GSklv(8218)*50,0,-5,,,,,,5210,(700+Sklv*350)*BaseLv/100+GSklv(8218)*50,,,,,
 2005,RK_WINDCUTTER,風壓飛刃,,,,,,0,0,,,,,,,,,,,,
