@@ -4849,7 +4849,9 @@ ItemDBNameTbl = {
   Exterminate_Furious = 560068,
   FuriousCirclet_IQ = 400695,
   Dimension_Ring_AAS = 490892,
-  Dimension_Ring_ABC = 490893
+  Dimension_Ring_ABC = 490893,
+  Dimension_Ring_SH = 490896,
+  Dimension_Ring_HN = 490897
 }
 
 function ItemDB_To_ItemID(in_ItemDB)
