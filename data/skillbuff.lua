@@ -149,6 +149,22 @@
 	end
 }
 
+[5270] = {
+	temp = GSklv(5270)
+	temp_wp = GetWeaponClass(4)
+	if temp_wp == 8 or temp_wp == 15 and temp > 0 then
+		AddDamage_Size(1, 0, temp)
+		AddDamage_Size(1, 1, temp * 1.45 + 1)
+		AddDamage_Size(1, 2, temp * 1.68 + 2)
+		if temp == 4 then
+			AddDamage_Size(1, 2, 1)
+		end
+		if temp == 9 then
+			SubDamage_Size(1, 2, 1)
+		end
+	end
+}
+
 [5349] = {
 	temp = GSklv(5349)
 	temp_wp = GetWeaponClass(4)

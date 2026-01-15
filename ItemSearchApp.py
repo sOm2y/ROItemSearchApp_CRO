@@ -1,5 +1,5 @@
 #部分資料取自ROCalculator,搜尋 ROCalculator 可以知道哪些有使用
-Version = "v0.1.22-260110"
+Version = "v0.1.23-260115"
 
 import sys, builtins, time
 from PySide6.QtCore import QThread, Signal, Qt, QMetaObject, QTimer
@@ -243,22 +243,6 @@ DataRegistry.reload_all()#先讀取所有外部py並設定預設
 all_skill_entries = DataRegistry.loaded_data["skills"]# 載入技能效果資料
 job_dict  = DataRegistry.loaded_data["jobs"]#職業job_id
 job_4th_hpsp = DataRegistry.loaded_data["jobHPSP"]#HPSP
-
-
-
-
-
-
-
-
-
-
-
-#all_skill_entries = load_python_dict("data/all_skill_entries.py", "all_skill_entries")# 載入技能效果資料
-#job_dict = load_python_dict("data/job_dict.py", "job_dict")#職業job_id
-
-
-
 
 
 effect_map = {
@@ -969,8 +953,8 @@ class CSVEditor(QMainWindow):
                 "tooltip": "技能打擊次數。(負值為總傷害/次數)"
             },
             "Critical_hit": {
-                "label": "爆擊判定",
-                "tooltip": "設定爆擊倍率，例如 0.5 代表半爆擊。"
+                "label": "技能爆擊/命中增傷判定",
+                "tooltip": "設定爆擊倍率，例如 0.5 代表半爆擊；設定命中增傷設定負值。"
             },
             "combo": {
                 "label": "連段技能公式",
@@ -2180,6 +2164,10 @@ def parse_lua_effects_with_variables(
             {"name": "階級", "map": "class_map"},
             {"name": "數值%", "type": "value"}
         ])
+        register_function("SubMdamage_Class", "減少階級魔法傷害", [
+            {"name": "階級", "map": "class_map"},
+            {"name": "數值%", "type": "value"}
+        ])
 
         # AddMdamage_Class / SubMdamage_Class 合併處理
         mdamage_class = re.match(r"(Add|Sub)Mdamage_Class\(\s*(\d+)\s*,\s*(.+?)\s*\)", line)
@@ -2290,65 +2278,69 @@ def parse_lua_effects_with_variables(
 
         # AddMeleeAttackDamage(1, value)
         
-        register_function("AddMeleeAttackDamage", "近距離物理傷害", [
+        register_function("AddMeleeAttackDamage", "增加近距離物理傷害", [
             {"name": "目標", "map": "unit_map"},
             {"name": "數值%", "type": "value"}
         ])
-        melee_dmg = re.match(r"AddMeleeAttackDamage\(\s*1\s*,\s*(.+)\)", line)
+        register_function("SubMeleeAttackDamage", "減少近距離物理傷害", [
+            {"name": "目標", "map": "unit_map"},
+            {"name": "數值%", "type": "value"}
+        ])
+        melee_dmg = re.match(r"(Add|Sub)MeleeAttackDamage\(\s*1\s*,\s*(.+)\)", line)
         if melee_dmg and condition_met:
-            value_expr = melee_dmg.group(1)
+            op, value_expr = melee_dmg.group(1,2)
             value_expr = safe_eval_expr(value_expr, variables, get_values, refine_inputs, grade)
-            results.append(f"近距離物理傷害 +{value_expr}%")
+            sign = "+" if op == "Add" else "-"
+            results.append(f"近距離物理傷害 {sign}{value_expr}%")
             continue
 
         # AddRangeAttackDamage(1, value)
         
-        register_function("AddRangeAttackDamage", "遠距離物理傷害", [
+        register_function("AddRangeAttackDamage", "增加遠距離物理傷害", [
             {"name": "目標", "map": "unit_map"},
             {"name": "數值%", "type": "value"}
         ])
-        range_dmg = re.match(r"AddRangeAttackDamage\(\s*1\s*,\s*(.+)\)", line)
+        register_function("SubRangeAttackDamage", "減少遠距離物理傷害", [
+            {"name": "目標", "map": "unit_map"},
+            {"name": "數值%", "type": "value"}
+        ])
+        range_dmg = re.match(r"(Add|Sub)RangeAttackDamage\(\s*1\s*,\s*(.+)\)", line)
 
         if range_dmg and condition_met:
-            value_expr = range_dmg.group(1)
+            op, value_expr = range_dmg.group(1,2)
             value_expr = safe_eval_expr(value_expr, variables, get_values, refine_inputs, grade)
-            results.append(f"遠距離物理傷害 +{value_expr}%")
+            sign = "+" if op == "Add" else "-"
+            results.append(f"遠距離物理傷害 {sign}{value_expr}%")
             continue
             
-        # AddBowAttackDamage(1, value)#弓攻擊力轉換遠傷。 實際上要裝備弓才能加進遠傷內。目前無判斷!
+        # AddBowAttackDamage(1, value)#弓攻擊力
         range_dmg = re.match(r"AddBowAttackDamage\(\s*1\s*,\s*(.+)\)", line)
         
         if range_dmg and condition_met:
             value_expr = range_dmg.group(1)
             value_expr = safe_eval_expr(value_expr, variables, get_values, refine_inputs, grade)
-            results.append(f"遠距離物理傷害 +{value_expr}%")
+            #results.append(f"遠距離物理傷害 +{value_expr}%")
+            results.append(f"弓攻擊力 +{value_expr}%")
             continue
 
         # AddDamage_CRI(1, value)
         
-        register_function("AddDamage_CRI", "爆擊傷害", [
+        register_function("AddDamage_CRI", "增加爆擊傷害", [
             {"name": "目標", "map": "unit_map"},
             {"name": "數值%", "type": "value"}
         ])
-        cri_dmg = re.match(r"AddDamage_CRI\(\s*1\s*,\s*(.+)\)", line)
+        register_function("SubDamage_CRI", "減少爆擊傷害", [
+            {"name": "目標", "map": "unit_map"},
+            {"name": "數值%", "type": "value"}
+        ])
+        cri_dmg = re.match(r"(Add|Sub)Damage_CRI\(\s*1\s*,\s*(.+)\)", line)
         if cri_dmg and condition_met:
-            value_expr = cri_dmg.group(1)
+            op, value_expr = cri_dmg.group(1,2)
             value_expr = safe_eval_expr(value_expr, variables, get_values, refine_inputs, grade)
-            results.append(f"爆擊傷害 +{value_expr}%")
+            sign = "+" if op == "Add" else "-"
+            results.append(f"爆擊傷害 {sign}{value_expr}%")
             continue
 
-        # SubDamage_CRI(1, value)
-        
-        # register_function("SubDamage_CRI", "減少爆擊傷害", [
-        #     {"name": "目標", "map": "unit_map"},
-        #     {"name": "數值%", "type": "value"}
-        # ])
-        cri_dmg = re.match(r"SubDamage_CRI\(\s*1\s*,\s*(.+)\)", line)
-        if cri_dmg and condition_met:
-            value_expr = cri_dmg.group(1)
-            value_expr = safe_eval_expr(value_expr, variables, get_values, refine_inputs, grade)
-            results.append(f"爆擊傷害 -{value_expr}%")
-            continue
 
         # AddDamage_Size(1, size_id, value)
         
@@ -2357,13 +2349,19 @@ def parse_lua_effects_with_variables(
             {"name": "體型", "map": "size_map"},
             {"name": "數值%", "type": "value"}
         ])
-        size_dmg = re.match(r"AddDamage_Size\(\s*1\s*,\s*(\d+),\s*(.+?)\)", line)
+        register_function("SubDamage_Size", "減少體型物理傷害", [
+            {"name": "目標", "map": "unit_map"},
+            {"name": "體型", "map": "size_map"},
+            {"name": "數值%", "type": "value"}
+        ])
+        size_dmg = re.match(r"(Add|Sub)Damage_Size\(\s*1\s*,\s*(\d+)\s*,\s*(.+)\s*\)", line)
         if size_dmg and condition_met:
             
-            size_id, value_expr = size_dmg.groups()
+            op, size_id, value_expr = size_dmg.groups()
             size_str = size_map.get(int(size_id), f"體型{size_id}")
             value_expr = safe_eval_expr(value_expr, variables, get_values, refine_inputs, grade)
-            results.append(f"對 {size_str} 敵人的物理傷害 +{value_expr}%")
+            sign = "+" if op == "Add" else "-"
+            results.append(f"對 {size_str} 敵人的物理傷害 {sign}{value_expr}%")
             continue
 
         # AddDamage_Property（對指定種族與屬性）
@@ -2373,13 +2371,18 @@ def parse_lua_effects_with_variables(
             {"name": "屬性", "map": "element_map"},
             {"name": "數值%", "type": "value"}
         ])
-        add_damage_prop = re.match(r"AddDamage_Property\(\s*1\s*,\s*(\d+),\s*(.+?)\)", line)
+        register_function("SubDamage_Property", "減少屬性敵人物理傷害", [
+            {"name": "目標", "map": "unit_map"},
+            {"name": "屬性", "map": "element_map"},
+            {"name": "數值%", "type": "value"}
+        ])
+        add_damage_prop = re.match(r"(Add|Sub)Damage_Property\(\s*1\s*,\s*(\d+)\s*,\s*(.+)\s*\)", line)
         if add_damage_prop and condition_met:
-            elem_id, value_expr = add_damage_prop.groups()
-            
+            op, elem_id, value_expr = add_damage_prop.groups()
             elem_name = element_map.get(int(elem_id), f"屬性{elem_id}")
             val = safe_eval_expr(value_expr, variables, get_values, refine_inputs, grade)
-            results.append(f"對 {elem_name} 對象的物理傷害 +{val}%")
+            sign = "+" if op == "Add" else "-"
+            results.append(f"對 {elem_name} 對象的物理傷害 {sign}{val}%")
             continue
 
         # SetIgnoreDEFRace(race_id)
@@ -2434,12 +2437,17 @@ def parse_lua_effects_with_variables(
             {"name": "種族", "map": "race_map"},
             {"name": "數值%", "type": "value"}
         ])
-        race_dmg = re.match(r"RaceAddDamage\((\d+),\s*(.+?)\)", line)
+        register_function("RaceSubDamage", "減少種族物理傷害", [
+            {"name": "種族", "map": "race_map"},
+            {"name": "數值%", "type": "value"}
+        ])
+        race_dmg = re.match(r"Race(Add|Sub)Damage\((\d+),\s*(.+?)\)", line)
         if race_dmg and condition_met:
-            race_id, value_expr = race_dmg.groups()
+            op, race_id, value_expr = race_dmg.groups()
             race_name = race_map.get(int(race_id), f"種族{race_id}")
             value_expr = safe_eval_expr(value_expr, variables, get_values, refine_inputs, grade)
-            results.append(f"對 {race_name} 型怪的物理傷害 +{value_expr}%")
+            sign = "+" if op == "Add" else "-"
+            results.append(f"對 {race_name} 型怪的物理傷害 {sign}{value_expr}%")
             continue
                 
         # AddIgnore_RES_RacePercent(race_id, value)
@@ -2501,9 +2509,9 @@ def parse_lua_effects_with_variables(
 #==============以上物理判斷
 
 #待處理判斷
-#通用(恢復效果、誘導攻擊、SP消耗
+#通用(恢復效果、SP消耗
 #自身(對某種族減傷、對某種族抗性、
-#物理(物理反射%、對屬性減少傷害、對某種族的CRI+% 弓攻擊力轉換成遠傷(實際要裝備弓才能算進遠傷)
+#物理(物理反射%、對屬性減少傷害、對某種族的CRI+%
 #魔法(魔法反射
 #================以下判斷失敗或不成立區塊
         if not hide_unrecognized:
@@ -2916,42 +2924,42 @@ class ItemSearchApp(QWidget):
     
     def replace_custom_calc_content(self):
         # 特殊 CheckBox 狀態
-        # special_state = "|".join(
-        #     f"{key}:{checkbox.isChecked()}"
-        #     for key, checkbox in self.special_checkboxes.items()
-        # )
-        # current_text = self.custom_calc_box.toPlainText()
-        # skill_key = self.skill_box.currentData()
-        # skill_lv = self.skill_LV_input.text()
+        special_state = "|".join(
+            f"{key}:{checkbox.isChecked()}"
+            for key, checkbox in self.special_checkboxes.items()
+        )
+        current_text = self.custom_calc_box.toPlainText()
+        skill_key = self.skill_box.currentData()
+        skill_lv = self.skill_LV_input.text()
         
-        # # ✅ 裝備狀態（你可以根據實際來源換成 combo_effect_text.text() 之類的）
-        # equip_state = self.total_effect_text.toPlainText()
-        # # 目標設定選項
-        # size_key = self.size_box.currentData()
-        # element_key = self.element_box.currentData()
-        # race_key = self.race_box.currentData()
-        # class_key = self.class_box.currentData()
-        # element_lv_key = self.element_lv_input.text() or 1
-        # user_element_key = self.attack_element_box.currentData()
+        # ✅ 裝備狀態（你可以根據實際來源換成 combo_effect_text.text() 之類的）
+        equip_state = self.total_effect_text.toPlainText()
+        # 目標設定選項
+        size_key = self.size_box.currentData()
+        element_key = self.element_box.currentData()
+        race_key = self.race_box.currentData()
+        class_key = self.class_box.currentData()
+        element_lv_key = self.element_lv_input.text() or 1
+        user_element_key = self.attack_element_box.currentData()
 
-        # #monsterDamage_key = self.monsterDamage_input.text() or "0"#指定魔物增傷UI
-        # # 整數輸入值（注意空字串要預設為 0）
-        # d_ef = self.def_input.text() or "0"
-        # defc = self.defc_input.text() or "0"
-        # res = self.res_input.text() or "0"
-        # mdef = self.mdef_input.text() or "0"
-        # mdefc = self.mdefc_input.text() or "0"
-        # mres = self.mres_input.text() or "0"
-        # skill_formula = self.skill_formula_input.text()
-        # # 組合新的 state_key
-        # state_key = f"{skill_formula}|{skill_key}|{skill_lv}|{current_text}|{equip_state}|{special_state}|{size_key}|{element_key}|{race_key}|{class_key}|{d_ef}|{defc}|{res}|{mdef}|{mdefc}|{mres}|{element_lv_key}|{user_element_key}"
+        #monsterDamage_key = self.monsterDamage_input.text() or "0"#指定魔物增傷UI
+        # 整數輸入值（注意空字串要預設為 0）
+        d_ef = self.def_input.text() or "0"
+        defc = self.defc_input.text() or "0"
+        res = self.res_input.text() or "0"
+        mdef = self.mdef_input.text() or "0"
+        mdefc = self.mdefc_input.text() or "0"
+        mres = self.mres_input.text() or "0"
+        skill_formula = self.skill_formula_input.text()
+        # 組合新的 state_key
+        state_key = f"{skill_formula}|{skill_key}|{skill_lv}|{current_text}|{equip_state}|{special_state}|{size_key}|{element_key}|{race_key}|{class_key}|{d_ef}|{defc}|{res}|{mdef}|{mdefc}|{mres}|{element_lv_key}|{user_element_key}"
 
 
-        # if getattr(self, "_last_calc_state", None) == state_key:
-        #     print("【⛔ 裝備效果沒有更動，跳過運算。】")
-        #     return  # ⛔ 跳過重複運算
+        if getattr(self, "_last_calc_state", None) == state_key:
+            print("【⛔ 裝備效果沒有更動，跳過運算。】")
+            return  # ⛔ 跳過重複運算
 
-        # self._last_calc_state = state_key  # ✅ 更新狀態紀錄
+        self._last_calc_state = state_key  # ✅ 更新狀態紀錄
 
         print("【🧠 執行 replace_custom_calc_content()】")
         # 原本你的公式解析邏輯
@@ -3252,6 +3260,7 @@ class ItemSearchApp(QWidget):
         globals()["RangeAttackDamage"] = sum(val for val, _ in effect_dict.get((f"遠距離物理傷害", "%"), []))
         globals()["Damage_CRI"] = sum(val for val, _ in effect_dict.get((f"爆擊傷害", "%"), []))
         globals()["Damage_HIT"] = sum(val for val, _ in effect_dict.get((f"物理命中傷害", "%"), []))
+        globals()["BowAtk"] = sum(val for val, _ in effect_dict.get((f"弓攻擊力", "%"), []))
         globals()["CRATE"] = sum(val for val, _ in effect_dict.get((f"C.RATE", ""), []))   
         Ignore_size = sum(val for val, _ in effect_dict.get((f"武器體型修正", "%"), []))   
 
@@ -3756,7 +3765,7 @@ class ItemSearchApp(QWidget):
                             #敵人屬性耐性(1+萬紫+毒弱+彗星)
                             ((1 + skill_wanzih4_buff + skill_poison_weak_buff + magic_poison_buff),"raw"),
                             #屬性魔法
-                            (get_effect_multiplier('MD_Damage', User_attack_element) +get_effect_multiplier('MD_Damage', 10),1),
+                            (get_effect_multiplier('MD_Damage', User_attack_element) + get_effect_multiplier('MD_Damage', 10),1),
                             #種族
                             (get_effect_multiplier('MD_Race', target_race) + get_effect_multiplier('MD_Race', 9999),1),
                             #階級
@@ -3826,21 +3835,28 @@ class ItemSearchApp(QWidget):
 
                         #技能遠傷進傷
                         if skill_Rangedamage == 1:
-                            MR_AttackDamage = RangeAttackDamage
+                            MR_AttackDamage = RangeAttackDamage + BowAtk if weapon_class == 11 else RangeAttackDamage
                             specialatkbuff = special_away_BUFF
                         else:
                             MR_AttackDamage = MeleeAttackDamage
                             specialatkbuff = special_melee_BUFF
 
-                        #是否技能爆擊
-                        if Critical_hit == 0:
+                        #是否技能爆擊/命中增傷
+                        if Critical_hit == 0:#不吃爆傷命中增傷
                             Critical_hitmag = -40#不吃crate
+                            CRI_Critical_hit = 0
+                            excel_Damage_HIT = 0
+                        elif Critical_hit < 0:#負值吃命中增傷
+                            Critical_hitmag = -40
+                            CRI_Critical_hit = 0
                             excel_Damage_HIT = Damage_HIT
-
-                        else:
+                        elif Critical_hit > 0:#正值吃爆傷
                             Critical_hitmag = total_CRATE
                             excel_Damage_HIT = 0#技能爆擊不吃命中增傷
-                        
+                        else:#非數字
+                            Critical_hitmag = -40#不吃crate
+                            excel_Damage_HIT = 0
+                            CRI_Critical_hit = 0
                         #print(f"special_away_BUFF:{special_away_BUFF}")
                         #print(f"special_melee_BUFF:{special_melee_BUFF}")
                         if weapon_class in (11,13,14,17,18,19,20,21):#DEX系
@@ -3915,15 +3931,10 @@ class ItemSearchApp(QWidget):
                     elif attack_type == "d_b":
                         #技能遠傷進傷
                         if skill_Rangedamage == 1:
-                            MR_AttackDamage = RangeAttackDamage
+                            MR_AttackDamage = RangeAttackDamage + BowAtk if weapon_class == 11 else RangeAttackDamage
                         else:
                             MR_AttackDamage = MeleeAttackDamage
 
-                        #是否技能爆擊
-                        if Critical_hit == 0:
-                            Critical_hitmag = -40#不吃crate
-                        else:
-                            Critical_hitmag = total_CRATE/100
 
                         default = 0#龍火只吃技能倍率 給他個0做基礎
                         final_damage = apply_stepwise_percent_mode(
@@ -4217,7 +4228,11 @@ class ItemSearchApp(QWidget):
             result.append(f"{pad_label('物理命中:')}{round(Damage_HIT)}%")
             result.append(f"{pad_label('爆傷:')}{round(Damage_CRI)}%")
             if skill_Rangedamage == 1:#DEX系
-                result.append(f"{pad_label('遠傷:')}{round(RangeAttackDamage)}%")
+                if weapon_class == 11:
+                    result.append(f"{pad_label('遠傷:')}{round(RangeAttackDamage + BowAtk)}%")
+                else:
+                    result.append(f"{pad_label('遠傷:')}{round(RangeAttackDamage)}%")
+                
             else:#STR系
                 result.append(f"{pad_label('近傷:')}{round(MeleeAttackDamage)}%")
             result.append(f"{pad_label('CRATE:')}{round(total_CRATE)}")
@@ -4248,7 +4263,10 @@ class ItemSearchApp(QWidget):
             self.mres_input.setVisible(False)
             result.append(f"=========================以下各增傷數值===========================")
 
-            result.append(f"{pad_label('遠傷:')}{round(RangeAttackDamage)}%")
+            if weapon_class == 11:
+                result.append(f"{pad_label('遠傷:')}{round(RangeAttackDamage + BowAtk)}%")
+            else:
+                result.append(f"{pad_label('遠傷:')}{round(RangeAttackDamage)}%")
             #屬性耐性 龍之氣息 預設屬性火，可使用盧恩石轉屬，轉屬後一樣看火屬耐性(屬性*火耐性)
             #屬性耐性 龍之氣息-水 預設屬性水，可使用盧恩石轉屬，轉屬後一樣看水屬耐性(屬性*水耐性)
             result.append(f"{pad_label('技能倍率:')}{results[0]['skill_result']}%")
@@ -5632,6 +5650,7 @@ class ItemSearchApp(QWidget):
         self.update_total_effect_display()
         self.update_dex_int_half_note()
         self.display_all_effects()
+        self.display_item_info()
         self.jobsphp_display()
 
 
@@ -7416,7 +7435,7 @@ class ItemSearchApp(QWidget):
             checkbox = QCheckBox(f"{data['type']} {name}")
             self.skill_checkboxes[name] = checkbox
 
-            checkbox.stateChanged.connect(self.clear_global_state)
+            #checkbox.stateChanged.connect(self.clear_global_state)
             checkbox.stateChanged.connect(self.trigger_total_effect_update)
 
             # 判斷此技能是否有 exclusive 群組
@@ -7705,7 +7724,7 @@ class ItemSearchApp(QWidget):
         self.hide_unrecognized_checkbox.setChecked(True)  # 預設勾選
         
         self.hide_unrecognized_checkbox.stateChanged.connect(self.trigger_total_effect_update)
-        self.hide_unrecognized_checkbox.stateChanged.connect(self.display_item_info)
+        #self.hide_unrecognized_checkbox.stateChanged.connect(self.display_item_info)
         #不控制裝備屬性原始內容顯示就註解掉下面那行
         self.hide_unrecognized_checkbox.stateChanged.connect(self.toggle_equip_text_visibility)
         right_layout.addWidget(self.hide_unrecognized_checkbox)
@@ -7716,14 +7735,14 @@ class ItemSearchApp(QWidget):
         
         self.hide_physical_checkbox.stateChanged.connect(self.trigger_total_effect_update)
         self.hide_magical_checkbox.stateChanged.connect(self.trigger_total_effect_update)
-        self.hide_physical_checkbox.stateChanged.connect(self.display_item_info)
-        self.hide_magical_checkbox.stateChanged.connect(self.display_item_info)
+        #self.hide_physical_checkbox.stateChanged.connect(self.display_item_info)
+        #self.hide_magical_checkbox.stateChanged.connect(self.display_item_info)
         # ✅ 套裝來源顯示勾選框
         self.show_combo_source_checkbox = QCheckBox("顯示來源")
         self.show_combo_source_checkbox.setChecked(True)  # 預設勾選
         
         self.show_combo_source_checkbox.stateChanged.connect(self.trigger_total_effect_update)
-        self.show_combo_source_checkbox.stateChanged.connect(self.display_all_effects)
+        #self.show_combo_source_checkbox.stateChanged.connect(self.display_all_effects)
 
         # 減傷倍率下拉選單
         self.damage_reduction_label = QLabel("減傷倍率:")
