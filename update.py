@@ -84,7 +84,7 @@ class UpdateWorker(QThread):
         return data.getvalue()
 
     def wait_or_kill_process(self):
-        self.stage.emit(f"⏳ 等待 {self.target_exe} 關閉中...")
+        self.stage.emit(f"⏳ 等待手動 {self.target_exe} 關閉中...")
         self.detail.emit("")
         self.progress.emit(0)
 

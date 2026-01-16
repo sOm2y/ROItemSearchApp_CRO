@@ -795,7 +795,7 @@ class MultiComboField(QWidget):
                 uniq.append(v)
         return uniq
 
-
+import requests
 
 REMOTE_VERSION_URL = "https://z2911902.github.io/ROItemSearchApp/data/version.txt" 
 UPDATER_EXE = "update.exe"
@@ -6721,7 +6721,8 @@ class ItemSearchApp(QWidget):
         app_dir = os.getcwd()
 
         try:
-            local_ver = read_local_version(app_dir)
+            #local_ver = read_local_version(app_dir)
+            local_ver = Version
         except Exception as e:
             QMessageBox.critical(self, "更新檢查失敗", f"讀取本機 version.txt 失敗：\n{e}")
             return
