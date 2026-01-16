@@ -1,5 +1,5 @@
 #部分資料取自ROCalculator,搜尋 ROCalculator 可以知道哪些有使用
-Version = "v0.1.25-260116"
+Version = "v0.1.26-260117"
 
 import sys, builtins, time
 from PySide6.QtCore import QThread, Signal, Qt, QMetaObject, QTimer
@@ -3386,11 +3386,11 @@ class ItemSearchApp(QWidget):
             
 
         #物理破防
-        def_reduction = ((get_effect_multiplier('D_Race_def', target_race))+(get_effect_multiplier('D_class_def', target_class)))
+        def_reduction = ((get_effect_multiplier('D_Race_def', target_race))+(get_effect_multiplier('D_Race_def', 9999))+(get_effect_multiplier('D_class_def', target_class)))
         damage_nodef = calc_final_def_damage(target_def, def_reduction)             
 
         #魔法破防
-        mdef_reduction = ((get_effect_multiplier('MD_Race_def', target_race))+(get_effect_multiplier('MD_class_def', target_class)))
+        mdef_reduction = ((get_effect_multiplier('MD_Race_def', target_race))+(get_effect_multiplier('MD_Race_def', 9999))+(get_effect_multiplier('MD_class_def', target_class)))
         Mdamage_nomdef = calc_final_mdef_damage(target_mdef, mdef_reduction)       
 
         #res        
@@ -4261,7 +4261,7 @@ class ItemSearchApp(QWidget):
             result.append(f"{pad_label('屬性倍率:')}{get_damage_multiplier(User_attack_element, target_element, target_element_lv)}%")
             result.append(f"{pad_label('前MDEF:')}{target_mdef}")
             result.append(f"{pad_label('無視魔法階級防禦:')}{round(get_effect_multiplier('MD_class_def', target_class))}%")
-            result.append(f"{pad_label('無視魔法種族防禦:')}{round(get_effect_multiplier('MD_Race_def', target_race))}%")
+            result.append(f"{pad_label('無視魔法種族防禦:')}{round(get_effect_multiplier('MD_Race_def', target_race) + get_effect_multiplier('MD_Race_def', 9999))}%")
             result.append(f"{pad_label('魔法破防後傷害:')}{Mdamage_nomdef * 100:.2f}%")
             result.append(f"{pad_label('後MDEF:')}{target_mdefc}")
             result.append(f"{pad_label('MRES:')}{target_mres}")
@@ -4311,7 +4311,7 @@ class ItemSearchApp(QWidget):
             result.append(f"{pad_label('武器體型修正:')}{Weaponpunish*100}%")
             #result.append(f"{pad_label('前DEF:')}{target_def}")
             result.append(f"{pad_label('無視階級防禦:')}{round(get_effect_multiplier('D_class_def', target_class))}%")
-            result.append(f"{pad_label('無視種族防禦:')}{round(get_effect_multiplier('D_Race_def', target_race))}%")
+            result.append(f"{pad_label('無視種族防禦:')}{round(get_effect_multiplier('D_Race_def', target_race) + get_effect_multiplier('D_Race_def', 9999))}%")
             result.append(f"{pad_label('物理破防後傷害:')}{damage_nodef * 100:.2f}%")
             result.append(f"{pad_label('後DEF:')}{target_defc}")
             result.append(f"{pad_label('RES:')}{target_res}")
@@ -4809,7 +4809,7 @@ class ItemSearchApp(QWidget):
     def update_dex_int_half_note(self):
         raw_effects = getattr(self, "effect_dict_raw", {})
 
-        # 取得 base 值
+        # base
         try:
             base_dex = int(self.input_fields["DEX"].text())
         except:
@@ -4819,25 +4819,39 @@ class ItemSearchApp(QWidget):
         except:
             base_int = 0
 
-        # 取得 JOB 加成
+        # job bonus
         job_id = self.input_fields["JOB"].currentData()
         tjob_bonus = job_dict.get(job_id, {}).get("TJobMaxPoint", [])
-        dex_job = tjob_bonus[4] if len(tjob_bonus) > 4 else 0  # DEX index = 4
-        int_job = tjob_bonus[3] if len(tjob_bonus) > 3 else 0  # INT index = 3
+        dex_job = tjob_bonus[4] if len(tjob_bonus) > 4 else 0
+        int_job = tjob_bonus[3] if len(tjob_bonus) > 3 else 0
 
-        # 裝備加成從 effect_dict_raw 拿
+        # equip bonus
         dex_equip = sum(val for val, _ in raw_effects.get(("DEX", ""), []))
         int_equip = sum(val for val, _ in raw_effects.get(("INT", ""), []))
 
         dex_total = base_dex + dex_job + dex_equip
         int_total = base_int + int_job + int_equip
 
-        result = dex_total + int(int_total / 2)
-        status = "✅" if result >= 265 else "⚠️ 未達標"
+        dex_part = dex_total
+        int_part = int(int_total / 2)
+        result = dex_part + int_part
+
+        target = 265
+        gap = max(0, target - result)
+
+        status = "✅" if gap == 0 else "⚠️ 未達標"
+
+        if gap == 0:
+            diff_text = ""
+        else:
+            need_dex = gap
+            need_int = gap * 2
+            diff_text = f"（還差：DEX +{need_dex} 或 INT +{need_int}）"
 
         self.DEX_INT_265_label.setText(
-            f"※素質無詠 {dex_total} + {int(int_total/2)} = {result} {status}"
+            f"※素質無詠 {dex_part} + {int_part} = {result} {status}\n{diff_text}"
         )
+
     def safe_update_textbox(self, textbox, text):
         scrollbar = textbox.verticalScrollBar()
         scroll_pos = scrollbar.value()
