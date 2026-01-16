@@ -1,5 +1,5 @@
 #部分資料取自ROCalculator,搜尋 ROCalculator 可以知道哪些有使用
-Version = "v0.1.24-260116"
+Version = "v0.1.25-260116"
 
 import sys, builtins, time
 from PySide6.QtCore import QThread, Signal, Qt, QMetaObject, QTimer
@@ -795,6 +795,73 @@ class MultiComboField(QWidget):
                 uniq.append(v)
         return uniq
 
+
+
+REMOTE_VERSION_URL = "https://z2911902.github.io/ROItemSearchApp/data/version.txt" 
+UPDATER_EXE = "update.exe"
+TARGET_EXE = "ItemSearchApp.exe"
+
+# 你指定的 zip 下載 URL 格式
+ZIP_URL_TEMPLATE = "https://github.com/z2911902/ROItemSearchApp/releases/download/{ver}/ROItemSearchApp.zip"
+
+
+def read_local_version(app_dir: str) -> str:
+    path = os.path.join(app_dir,"data","version.txt")
+    with open(path, "r", encoding="utf-8") as f:
+        return f.read().strip()
+
+
+def read_remote_version(url: str) -> str:
+    r = requests.get(url, timeout=10)
+    r.raise_for_status()
+    return r.text.strip()
+
+
+def normalize_version(v: str) -> tuple[tuple[int, ...], int]:
+    """
+    'v0.1.22-260110' -> ((0, 1, 22), 260110)
+    'v0.1.22'        -> ((0, 1, 22), 0)
+    """
+    v = v.strip().lstrip("vV")
+
+    # 拆版本與日期（日期可有可無）
+    if "-" in v:
+        ver_part, date_part = v.split("-", 1)
+    else:
+        ver_part, date_part = v, "0"
+
+    # 版本段：0.1.22
+    ver_nums = tuple(int(x) for x in ver_part.split(".") if x.isdigit())
+
+    # 日期段：只取前面的數字（避免後面夾字）
+    m = re.match(r"(\d+)", date_part.strip())
+    date_num = int(m.group(1)) if m else 0
+
+    return ver_nums, date_num
+
+
+def compare_versions(a: str, b: str) -> int:
+    """
+    回傳:
+      1  表示 a > b
+      0  表示 a == b
+     -1  表示 a < b
+
+    規則：
+      先比主版本 (0,1,22)
+      若相同再比日期 260110
+    """
+    (va, da) = normalize_version(a)
+    (vb, db) = normalize_version(b)
+
+    n = max(len(va), len(vb))
+    va = va + (0,) * (n - len(va))
+    vb = vb + (0,) * (n - len(vb))
+
+    if va != vb:
+        return (va > vb) - (va < vb)
+
+    return (da > db) - (da < db)
 
 
 
@@ -6650,6 +6717,70 @@ class ItemSearchApp(QWidget):
         for name in other_skills:
             self.skill_checkbox_layout.addWidget(self.skill_checkboxes[name])
 
+    def check_update(self):
+        app_dir = os.getcwd()
+
+        try:
+            local_ver = read_local_version(app_dir)
+        except Exception as e:
+            QMessageBox.critical(self, "更新檢查失敗", f"讀取本機 version.txt 失敗：\n{e}")
+            return
+
+        try:
+            remote_ver = read_remote_version(REMOTE_VERSION_URL)
+        except Exception as e:
+            QMessageBox.critical(self, "更新檢查失敗", f"讀取遠端 version.txt 失敗：\n{e}")
+            return
+
+        self._remote_version = remote_ver
+
+        cmp_result = compare_versions(remote_ver, local_ver)
+
+        if cmp_result > 0:
+            self.action_do_update.setEnabled(True)
+            QMessageBox.information(
+                self,
+                "有新版本",
+                f"目前版本：{local_ver}\n最新版本：{remote_ver}\n\n已啟用『立即更新』。"
+            )
+        elif cmp_result == 0:
+            self.action_do_update.setEnabled(False)
+            QMessageBox.information(self, "已是最新版本", f"目前版本：{local_ver}\n最新版本：{remote_ver}")
+        else:
+            # 遠端版本比本地還小（可能你本機是測試版）
+            self.action_do_update.setEnabled(False)
+            QMessageBox.information(
+                self,
+                "版本較新",
+                f"目前版本：{local_ver}\n遠端版本：{remote_ver}\n\n你本機版本比遠端新。"
+            )
+
+
+    def do_update(self):
+        if not self._remote_version:
+            QMessageBox.warning(self, "提示", "請先點『檢查更新』。")
+            return
+
+        ver = self._remote_version.strip()
+        zip_url = ZIP_URL_TEMPLATE.format(ver=ver)
+
+        updater_path = os.path.join(os.getcwd(), UPDATER_EXE)
+        if not os.path.exists(updater_path):
+            QMessageBox.critical(self, "更新失敗", f"找不到更新程式：{UPDATER_EXE}")
+            return
+
+        # 你要呼叫的格式：
+        # update.exe  <zip_url>  ItemSearchApp.exe
+        try:
+            subprocess.Popen([updater_path, zip_url, TARGET_EXE], cwd=os.getcwd())
+        except Exception as e:
+            QMessageBox.critical(self, "更新失敗", f"啟動更新程式失敗：\n{e}")
+            return
+
+        # 更新器啟動後，主程式自己關掉比較乾淨（讓 updater 覆蓋檔案）
+        self.close()
+
+
 
     def __init__(self):
         
@@ -7664,7 +7795,7 @@ class ItemSearchApp(QWidget):
         self.function_tab_index = self.tab_widget.addTab(function_tab, "函數指令")
         main_layout.addWidget(self.tab_widget)
 
-  # 預先初始化一次
+        # 預先初始化一次
 
         
 
@@ -8347,6 +8478,20 @@ class ItemSearchApp(QWidget):
         settings_menu.addAction(preferences_action)
 
 
+        
+        menu_update = menubar.addMenu("更新")
+
+        self.action_check_update = QAction("檢查更新", self)
+        self.action_do_update = QAction("立即更新", self)
+        self.action_do_update.setEnabled(False)  # 預設不能按
+
+        menu_update.addAction(self.action_check_update)
+        menu_update.addAction(self.action_do_update)
+
+        self.action_check_update.triggered.connect(self.check_update)
+        self.action_do_update.triggered.connect(self.do_update)
+
+        self._remote_version = None  # 存檢查到的遠端版本
         # # === 說明選單 ===
         # help_menu = menubar.addMenu("說明")
 
