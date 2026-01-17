@@ -1,5 +1,5 @@
 #部分資料取自ROCalculator,搜尋 ROCalculator 可以知道哪些有使用
-Version = "v0.1.26-260117"
+Version = "v0.1.27-260117"
 
 import sys, builtins, time
 from PySide6.QtCore import QThread, Signal, Qt, QMetaObject, QTimer
@@ -4259,11 +4259,11 @@ class ItemSearchApp(QWidget):
             result.append(f"{pad_label('S.MATK:')}{round(total_SMATK)}")
             result.append(f"{pad_label('技能倍率:')}{results[0]['skill_result']}%")
             result.append(f"{pad_label('屬性倍率:')}{get_damage_multiplier(User_attack_element, target_element, target_element_lv)}%")
-            result.append(f"{pad_label('前MDEF:')}{target_mdef}")
+            result.append(f"{pad_label('後MDEF:')}{target_mdef}")
             result.append(f"{pad_label('無視魔法階級防禦:')}{round(get_effect_multiplier('MD_class_def', target_class))}%")
             result.append(f"{pad_label('無視魔法種族防禦:')}{round(get_effect_multiplier('MD_Race_def', target_race) + get_effect_multiplier('MD_Race_def', 9999))}%")
             result.append(f"{pad_label('魔法破防後傷害:')}{Mdamage_nomdef * 100:.2f}%")
-            result.append(f"{pad_label('後MDEF:')}{target_mdefc}")
+            result.append(f"{pad_label('前MDEF:')}{target_mdefc}")
             result.append(f"{pad_label('MRES:')}{target_mres}")
             result.append(f"{pad_label('無視魔法抗性%:')}{mres_reduction}%")
             result.append(f"{pad_label('魔法破抗性後傷害:')}{Mdamage_nomres * 100:.2f}%")
@@ -4309,11 +4309,11 @@ class ItemSearchApp(QWidget):
             result.append(f"{pad_label('技能倍率:')}{results[0]['skill_result']}%")
             result.append(f"{pad_label('屬性倍率:')}{get_damage_multiplier(User_attack_element, target_element, target_element_lv)}%")
             result.append(f"{pad_label('武器體型修正:')}{Weaponpunish*100}%")
-            #result.append(f"{pad_label('前DEF:')}{target_def}")
+            result.append(f"{pad_label('後DEF:')}{target_def}")
             result.append(f"{pad_label('無視階級防禦:')}{round(get_effect_multiplier('D_class_def', target_class))}%")
             result.append(f"{pad_label('無視種族防禦:')}{round(get_effect_multiplier('D_Race_def', target_race) + get_effect_multiplier('D_Race_def', 9999))}%")
             result.append(f"{pad_label('物理破防後傷害:')}{damage_nodef * 100:.2f}%")
-            result.append(f"{pad_label('後DEF:')}{target_defc}")
+            result.append(f"{pad_label('前DEF:')}{target_defc}")
             result.append(f"{pad_label('RES:')}{target_res}")
             result.append(f"{pad_label('無視物理抗性%:')}{res_reduction}%")
             result.append(f"{pad_label('物理破抗性後傷害:')}{damage_nores * 100:.2f}%")
@@ -7358,8 +7358,8 @@ class ItemSearchApp(QWidget):
             clear_equip_btn = QPushButton("清空")
             clear_equip_btn.setFixedWidth(40)
             clear_equip_btn.clicked.connect(self.clear_global_state)
-            clear_equip_btn.clicked.connect(lambda _, field=equip_input: [field.clear(), self.display_item_info()])
-
+            clear_equip_btn.clicked.connect(lambda _, field=equip_input: [field.clear(), self.trigger_total_effect_update()])
+            
 
             equip_row_layout.addWidget(equip_input)
             equip_row_layout.addWidget(clear_equip_btn)
@@ -7458,7 +7458,7 @@ class ItemSearchApp(QWidget):
                 clear_card_btn = QPushButton("清空")
                 clear_card_btn.setFixedWidth(40)
                 clear_card_btn.clicked.connect(self.clear_global_state)
-                clear_card_btn.clicked.connect(lambda _, field=card_input: [field.clear(), self.display_item_info()])
+                clear_card_btn.clicked.connect(lambda _, field=card_input: [field.clear(), self.trigger_total_effect_update()])
                 
                 card_row_layout.addWidget(card_input)
                 card_row_layout.addWidget(clear_card_btn)
@@ -7497,7 +7497,7 @@ class ItemSearchApp(QWidget):
             clear_note_btn = QPushButton("清空")
             clear_note_btn.setFixedWidth(40)
             clear_note_btn.clicked.connect(self.clear_global_state)
-            clear_note_btn.clicked.connect(lambda _, field=note_text: [field.clear() ,self.display_item_info()])
+            clear_note_btn.clicked.connect(lambda _, field=note_text: [field.clear() ,self.trigger_total_effect_update()])
             
             
             note_row_layout = QHBoxLayout()
@@ -7665,6 +7665,7 @@ class ItemSearchApp(QWidget):
         self.unsync_button.setVisible(False)
         self.unsync_button.clicked.connect(self.clear_global_state)
         self.unsync_button.clicked.connect(self.clear_current_edit)
+        self.unsync_button.clicked.connect(lambda: (setattr(self, "_last_calc_state", None), self.trigger_total_effect_update()))
         # ▶️ 套用按鈕
         self.apply_equip_button = QPushButton("套用")
         self.apply_equip_button.clicked.connect(self.clear_global_state)
@@ -7674,7 +7675,8 @@ class ItemSearchApp(QWidget):
         
         self.clear_field_button = QPushButton("清空")
         self.clear_field_button.clicked.connect(self.clear_global_state)
-        self.clear_field_button.clicked.connect(self.clear_selected_field)        
+        self.clear_field_button.clicked.connect(self.clear_selected_field)  
+        self.clear_field_button.clicked.connect(lambda: (setattr(self, "_last_calc_state", None), self.trigger_total_effect_update()))
         self.clear_field_button.setVisible(False)
 
 
@@ -7746,11 +7748,12 @@ class ItemSearchApp(QWidget):
         self.unsync_button2.setVisible(False)
         self.unsync_button2.clicked.connect(self.clear_global_state)
         self.unsync_button2.clicked.connect(self.clear_current_edit)
+        self.unsync_button2.clicked.connect(lambda: (setattr(self, "_last_calc_state", None), self.trigger_total_effect_update()))
         self.apply_to_note_button = QPushButton("套用到詞條")
         self.apply_to_note_button.setVisible(False)
         self.apply_to_note_button.clicked.connect(self.clear_global_state)
         self.apply_to_note_button.clicked.connect(self.apply_result_to_note)
-        self.apply_to_note_button.clicked.connect(lambda: QTimer.singleShot(0, self.replace_custom_calc_content))
+        self.apply_to_note_button.clicked.connect(lambda: (setattr(self, "_last_calc_state", None), self.trigger_total_effect_update()))
 
 
 
@@ -7758,6 +7761,7 @@ class ItemSearchApp(QWidget):
         self.clear_field_button2 = QPushButton("清空")
         self.clear_field_button2.clicked.connect(self.clear_global_state)
         self.clear_field_button2.clicked.connect(self.clear_selected_field)
+        self.clear_field_button2.clicked.connect(lambda: (setattr(self, "_last_calc_state", None), self.trigger_total_effect_update()))
         
         self.clear_field_button2.setVisible(False)
 
@@ -8300,28 +8304,14 @@ class ItemSearchApp(QWidget):
         target_layout.addLayout(class_layout)
 
         # MDEF / MRES 輸入欄
-        def_layout = QVBoxLayout()
-        self.def_label = QLabel("前DEF")
-        self.def_input = QLineEdit()
-        self.def_input.setFixedWidth(60)
-        self.def_input.setPlaceholderText("0")
-        self.mdef_label = QLabel("前MDEF")
-        self.mdef_input = QLineEdit()
-        self.mdef_input.setFixedWidth(60)
-        self.mdef_input.setPlaceholderText("0")
-        def_layout.addWidget(self.def_label)
-        def_layout.addWidget(self.def_input)        
-        def_layout.addWidget(self.mdef_label)
-        def_layout.addWidget(self.mdef_input)
-        target_layout.addLayout(def_layout)
 
         
         defc_layout = QVBoxLayout()
-        self.defc_label = QLabel("後DEF")
+        self.defc_label = QLabel("前DEF")
         self.defc_input = QLineEdit()
         self.defc_input.setFixedWidth(60)
         self.defc_input.setPlaceholderText("0")
-        self.mdefc_label = QLabel("後MDEF")
+        self.mdefc_label = QLabel("前MDEF")
         self.mdefc_input = QLineEdit()
         self.mdefc_input.setFixedWidth(60)
         self.mdefc_input.setPlaceholderText("0")
@@ -8330,6 +8320,21 @@ class ItemSearchApp(QWidget):
         defc_layout.addWidget(self.mdefc_label)
         defc_layout.addWidget(self.mdefc_input)
         target_layout.addLayout(defc_layout)
+
+        def_layout = QVBoxLayout()
+        self.def_label = QLabel("後DEF")
+        self.def_input = QLineEdit()
+        self.def_input.setFixedWidth(60)
+        self.def_input.setPlaceholderText("0")
+        self.mdef_label = QLabel("後MDEF")
+        self.mdef_input = QLineEdit()
+        self.mdef_input.setFixedWidth(60)
+        self.mdef_input.setPlaceholderText("0")
+        def_layout.addWidget(self.def_label)
+        def_layout.addWidget(self.def_input)        
+        def_layout.addWidget(self.mdef_label)
+        def_layout.addWidget(self.mdef_input)
+        target_layout.addLayout(def_layout)
 
 
         res_layout = QVBoxLayout()
