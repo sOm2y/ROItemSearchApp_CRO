@@ -1,5 +1,5 @@
 #部分資料取自ROCalculator,搜尋 ROCalculator 可以知道哪些有使用
-Version = "v0.1.27-260117"
+Version = "v0.1.28-260119"
 
 import sys, builtins, time
 from PySide6.QtCore import QThread, Signal, Qt, QMetaObject, QTimer
@@ -1021,7 +1021,7 @@ class CSVEditor(QMainWindow):
             },
             "Critical_hit": {
                 "label": "技能爆擊/命中增傷判定",
-                "tooltip": "設定爆擊倍率，例如 0.5 代表半爆擊；設定命中增傷設定負值。"
+                "tooltip": "設定爆擊倍率，例如 0.5 代表半爆擊；設定命中增傷設定0；負數代表兩者不啟用。"
             },
             "combo": {
                 "label": "連段技能公式",
@@ -3068,7 +3068,7 @@ class ItemSearchApp(QWidget):
         mres = self.mres_input.text() or "0"
         skill_formula = self.skill_formula_input.text()
         # 組合新的 state_key
-        state_key = f"{skill_formula}|{skill_key}|{skill_lv}|{equip_state}|{special_state}|{size_key}|{element_key}|{race_key}|{class_key}|{d_ef}|{defc}|{res}|{mdef}|{mdefc}|{mres}|{element_lv_key}|{user_element_key}|{total_STR}|{total_AGI}|{total_VIT}|{total_INT}|{total_DEX}|{total_LUK}|{total_POW}|{total_STA}|{total_WIS}|{total_SPL}|{total_CON}|{total_CRT}"
+        state_key = f"{Use_skill_levels}|{skill_formula}|{skill_key}|{skill_lv}|{equip_state}|{special_state}|{size_key}|{element_key}|{race_key}|{class_key}|{d_ef}|{defc}|{res}|{mdef}|{mdefc}|{mres}|{element_lv_key}|{user_element_key}|{total_STR}|{total_AGI}|{total_VIT}|{total_INT}|{total_DEX}|{total_LUK}|{total_POW}|{total_STA}|{total_WIS}|{total_SPL}|{total_CON}|{total_CRT}"
 
 
         if getattr(self, "_last_calc_state", None) == state_key:
@@ -3703,7 +3703,7 @@ class ItemSearchApp(QWidget):
             except (TypeError, ValueError):
                 pass
 
-        print(f"武器類型遠傷判斷代號: {wpclass_skill_Rangedamage}")
+        #print(f"武器類型遠傷判斷代號: {wpclass_skill_Rangedamage}")
 
         allow = set()
 
@@ -3739,7 +3739,7 @@ class ItemSearchApp(QWidget):
         #技能爆傷判斷
         Critical_hit = float(skill_row["Critical_hit"]) if pd.notna(skill_row.get("Critical_hit")) else 0
         
-        print(f"攻擊模式：{attack_type}")
+        #print(f"攻擊模式：{attack_type}")
         
 
         
@@ -3797,7 +3797,7 @@ class ItemSearchApp(QWidget):
                 skill_SpecialATK_show , skill_SpecialATK = eval_formula_with_vars(str(skill_row["skill_SpecialATK"]).strip() if pd.notna(skill_row.get("skill_SpecialATK")) else "0", allowed_vars) #技能隱藏段
                 
 
-                print(f"轉換後的公式：{full_formula_show}")
+                #print(f"轉換後的公式：{full_formula_show}")
                 bottom_result.append(f"{pad_label('技能公式:')}[{i+1}/{repeat_count}] {full_formula_show}")
                 #怪物減傷取得
                 def get_damage_reduction_value(self):
@@ -3912,11 +3912,11 @@ class ItemSearchApp(QWidget):
                             specialatkbuff = special_melee_BUFF
 
                         #是否技能爆擊/命中增傷
-                        if Critical_hit == 0:#不吃爆傷命中增傷
+                        if Critical_hit < 0:#負值兩者不吃
                             Critical_hitmag = -40#不吃crate
                             CRI_Critical_hit = 0
                             excel_Damage_HIT = 0
-                        elif Critical_hit < 0:#負值吃命中增傷
+                        elif Critical_hit == 0:#0值吃命中增傷
                             Critical_hitmag = -40
                             CRI_Critical_hit = 0
                             excel_Damage_HIT = Damage_HIT
@@ -4224,7 +4224,7 @@ class ItemSearchApp(QWidget):
 
         # ✅ 加上 decay_hits 顯示處理
         decay_hits = int(skill_row["decay_hits"]) if pd.notna(skill_row.get("decay_hits")) else 0
-        print(f"遞增/減次數：{decay_hits}")
+        #print(f"遞增/減次數：{decay_hits}")
         if decay_hits > 1:
             avg_damage = int(all_total_damage / decay_hits)
             result.append(f"遞增/減段數: {decay_hits} 段")
@@ -6731,45 +6731,6 @@ class ItemSearchApp(QWidget):
         for name in other_skills:
             self.skill_checkbox_layout.addWidget(self.skill_checkboxes[name])
 
-    def check_update(self):
-        app_dir = os.getcwd()
-
-        try:
-            #local_ver = read_local_version(app_dir)
-            local_ver = Version
-        except Exception as e:
-            QMessageBox.critical(self, "更新檢查失敗", f"讀取本機 version.txt 失敗：\n{e}")
-            return
-
-        try:
-            remote_ver = read_remote_version(REMOTE_VERSION_URL)
-        except Exception as e:
-            QMessageBox.critical(self, "更新檢查失敗", f"讀取遠端 version.txt 失敗：\n{e}")
-            return
-
-        self._remote_version = remote_ver
-
-        cmp_result = compare_versions(remote_ver, local_ver)
-
-        if cmp_result > 0:
-            self.action_do_update.setEnabled(True)
-            QMessageBox.information(
-                self,
-                "有新版本",
-                f"目前版本：{local_ver}\n最新版本：{remote_ver}\n\n已啟用『立即更新』。"
-            )
-        elif cmp_result == 0:
-            self.action_do_update.setEnabled(False)
-            QMessageBox.information(self, "已是最新版本", f"目前版本：{local_ver}\n最新版本：{remote_ver}")
-        else:
-            # 遠端版本比本地還小（可能你本機是測試版）
-            self.action_do_update.setEnabled(False)
-            QMessageBox.information(
-                self,
-                "版本較新",
-                f"目前版本：{local_ver}\n遠端版本：{remote_ver}\n\n你本機版本比遠端新。"
-            )
-
 
     def do_update(self):
         if not self._remote_version:
@@ -6794,6 +6755,60 @@ class ItemSearchApp(QWidget):
 
         # 更新器啟動後，主程式自己關掉比較乾淨（讓 updater 覆蓋檔案）
         self.close()
+
+    def check_update(self):
+        app_dir = os.getcwd()
+
+        try:
+            #local_ver = read_local_version(app_dir)
+            local_ver = Version
+        except Exception as e:
+            QMessageBox.critical(self, "更新檢查失敗", f"讀取本機 version.txt 失敗：\n{e}")
+            return
+
+        try:
+            remote_ver = read_remote_version(REMOTE_VERSION_URL)
+        except Exception as e:
+            QMessageBox.critical(self, "更新檢查失敗", f"讀取遠端 version.txt 失敗：\n{e}")
+            return
+
+        self._remote_version = remote_ver
+
+        cmp_result = compare_versions(remote_ver, local_ver)
+
+        if cmp_result > 0:
+            #self.action_do_update.setEnabled(True)
+
+            msg = QMessageBox(self)
+            msg.setWindowTitle("有新版本")
+            msg.setIcon(QMessageBox.Icon.Information)
+            msg.setText(
+                f"目前版本：{local_ver}\n"
+                f"最新版本：{remote_ver}\n\n"
+                "要不要立即更新？"
+            )
+
+            btn_update = msg.addButton("立即更新", QMessageBox.ButtonRole.AcceptRole)
+            msg.addButton("稍後再說", QMessageBox.ButtonRole.RejectRole)
+
+            msg.exec()
+
+            if msg.clickedButton() == btn_update:
+                self.do_update()  # 或 self.action_do_update.trigger()
+
+        elif cmp_result == 0:
+            #self.action_do_update.setEnabled(False)
+            QMessageBox.information(self, "已是最新版本", f"目前版本：{local_ver}\n最新版本：{remote_ver}")
+        else:
+            # 遠端版本比本地還小（可能你本機是測試版）
+            #self.action_do_update.setEnabled(False)
+            QMessageBox.information(
+                self,
+                "版本較新",
+                f"目前版本：{local_ver}\n遠端版本：{remote_ver}\n\n你本機版本比遠端新。"
+            )
+
+
 
 
 
@@ -7376,8 +7391,8 @@ class ItemSearchApp(QWidget):
             refine_input = QLineEdit()
             refine_input.setPlaceholderText("精煉")
             refine_input.setMaximumWidth(40)
-            refine_input.setText('0')
-            refine_input.textChanged.connect(self.display_item_info)
+            refine_input.setText('0')            
+            refine_input.textChanged.connect(self.trigger_total_effect_update)
             equip_row_layout.addWidget(refine_input)
             part_ui["refine"] = refine_input
             self.input_fields[part_name] = refine_input
@@ -7392,8 +7407,8 @@ class ItemSearchApp(QWidget):
                 grade_combo.setMaximumWidth(95)
             else:
                 grade_combo.addItems(["N", "D", "C", "B", "A"])
-                grade_combo.setMaximumWidth(50)
-            grade_combo.currentIndexChanged.connect(self.display_item_info)
+                grade_combo.setMaximumWidth(50)            
+            grade_combo.currentIndexChanged.connect(self.trigger_total_effect_update)
             equip_row_layout.addWidget(grade_combo)
             part_ui["grade"] = grade_combo
             self.input_fields[f"{part_name}_階級"] = grade_combo
@@ -7439,6 +7454,7 @@ class ItemSearchApp(QWidget):
                 grade_combo.currentIndexChanged.connect(sync_stone_slots)
                 refine_input.textChanged.connect(sync_stone_refine)
 
+            
 
             # ▶️ 將裝備行 layout 加進主 layout
             #equip_layout.addLayout(equip_row_layout)
@@ -8506,7 +8522,7 @@ class ItemSearchApp(QWidget):
         self.action_do_update.setEnabled(False)  # 預設不能按
 
         menu_update.addAction(self.action_check_update)
-        menu_update.addAction(self.action_do_update)
+        #menu_update.addAction(self.action_do_update)
 
         self.action_check_update.triggered.connect(self.check_update)
         self.action_do_update.triggered.connect(self.do_update)
