@@ -1,5 +1,5 @@
 #部分資料取自ROCalculator,搜尋 ROCalculator 可以知道哪些有使用
-Version = "v0.1.29-260120"
+Version = "v0.1.30-260120"
 
 import sys, builtins, time
 from PySide6.QtCore import QThread, Signal, Qt, QMetaObject, QTimer
@@ -1659,8 +1659,8 @@ def parse_lua_effects_with_variables(
                     if stat_name == "武器類型":
                         global_weapon_type_map[current_location_slot] = val
                         weapon_type_name = weapon_type_map.get(val, f"未知武器類型({val})")
-                        results.append(f"武器類型：{weapon_type_name}")
-                        #continue  # 若你不想再輸出 "武器類型 +x" 可跳過
+                        #results.append(f"武器類型：{weapon_type_name}")
+                        continue  # 若你不想再輸出 "武器類型 +x" 可跳過
 
                     # 過濾排除屬性
                     if stat_name in excluded_stat_names:
@@ -2557,7 +2557,7 @@ def parse_lua_effects_with_variables(
         if WP_INVESTIGATE_dmg and condition_met:
             results.append(f"武器浸透勁效果")
             results.append(f"無視 全種族 型怪的物理防禦 +100%")
-            Use_skill_levels[266] = True
+            #Use_skill_levels[266] = True #會跟目前裝備衝突 改到計算內處理
             continue
 
 
@@ -3341,7 +3341,9 @@ class ItemSearchApp(QWidget):
         globals()["BowAtk"] = sum(val for val, _ in effect_dict.get((f"弓攻擊力", "%"), []))
         globals()["CRATE"] = sum(val for val, _ in effect_dict.get((f"C.RATE", ""), []))   
         Ignore_size = sum(val for val, _ in effect_dict.get((f"武器體型修正", "%"), []))   
-
+        if any("武器浸透勁效果" in key for (key, unit) in effect_dict.keys()):
+            print("有武器浸透勁效果")
+            Use_skill_levels[266] = True
 
 
         #=======================技能欄公式====================
@@ -3502,9 +3504,11 @@ class ItemSearchApp(QWidget):
         
 
         #物理===================     
-        #浸透勁效果        
+        #浸透勁效果
+
         def_reduction_temp = int(100-def_reduction) #總階級種族破防-浸透勁破防100% 
         WPINVESTIGATEATK = max(0,int((target_def/2) + (target_def/2)*(def_reduction_temp/100))) if GUSklv(266) == 1 else 0 
+        target_defc = 0 if GUSklv(266) == 1 else target_defc
         #print(f"浸透勁效果後atk+{WPINVESTIGATEATK}")
         #近傷ATK
         #NATK = int(BaseLv/4) + int(total_STR) + int(total_DEX/5) + int(total_LUK/3) + int(total_POW*5)
@@ -5372,6 +5376,7 @@ class ItemSearchApp(QWidget):
 
         effect_dict = {}
         base_effect_dict = {} 
+        
 
         for part in self.refine_parts.values():#先清除部位 to itemid的對應
             slot_id = part["slot"]
@@ -5412,11 +5417,16 @@ class ItemSearchApp(QWidget):
                             if parsed:
                                 key, value, unit = parsed
                                 key = self.normalize_effect_key(key)
-                                
-
                                 # 建立效果來源清單
                                 effect_dict.setdefault((key, unit), []).append((value, source_label))
+                            else:
+                                text = line.strip()
+                                if text:
+                                    key = self.normalize_effect_key(text)
 
+                                    # ✅ 純文字效果也寫入 effect_dict
+                                    # value = 0, unit = ""
+                                    effect_dict.setdefault((key, ""), []).append((0, source_label))
 
                         # --- 第二次：基礎能力（grade=0 + refine_inputs 全 0） ---
                         base_effects = parse_lua_effects_with_variables(
@@ -5477,10 +5487,16 @@ class ItemSearchApp(QWidget):
                             if parsed:
                                 key, value, unit = parsed
                                 key = self.normalize_effect_key(key)
-                                
-
                                 # 建立效果來源清單
                                 effect_dict.setdefault((key, unit), []).append((value, source_label))
+                            else:
+                                text = line.strip()
+                                if text:
+                                    key = self.normalize_effect_key(text)
+
+                                    # ✅ 純文字效果也寫入 effect_dict
+                                    # value = 0, unit = ""
+                                    effect_dict.setdefault((key, ""), []).append((0, source_label))
                                 
             # ▶️ 詞條處理（如果有手動輸入）
             if "note" in ui:
@@ -5515,7 +5531,14 @@ class ItemSearchApp(QWidget):
 
                             # 建立效果來源清單
                             effect_dict.setdefault((key, unit), []).append((value, source_label))
+                        else:
+                            text = line.strip()
+                            if text:
+                                key = self.normalize_effect_key(text)
 
+                                # ✅ 純文字效果也寫入 effect_dict
+                                # value = 0, unit = ""
+                                effect_dict.setdefault((key, ""), []).append((0, source_label))
 
         # ▶️ 加入技能增益（例如料理等）
         for skill_name, entry in all_skill_entries.items():
