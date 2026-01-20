@@ -251,5 +251,7 @@ EnchantName = {
 	[EnumVAR.VAR_MRESAMOUNT[1]] = "AddExtParam(1, 245, %d)",
 	[EnumVAR.VAR_HEAL_PLUS[1]] = "AddExtParam(1, 254, %d)",
 	[EnumVAR.VAR_CRITICAL_RATE[1]] = "AddExtParam(1, 253, %d)",
+	[EnumVAR.DAMAGE_HIT_TARGET[1]] = "AddDamage_HIT(1, %d)",
+	[Enum-VAR.DAMAGE_HIT_USER[1]] = "所受命中物理傷害 - %d%% ",
 	[Enum-VAR.EnumVAR_LAST[1]] = "END"
 }
