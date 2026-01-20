@@ -1,5 +1,5 @@
 #部分資料取自ROCalculator,搜尋 ROCalculator 可以知道哪些有使用
-Version = "v0.1.28-260119"
+Version = "v0.1.29-260120"
 
 import sys, builtins, time
 from PySide6.QtCore import QThread, Signal, Qt, QMetaObject, QTimer
@@ -599,14 +599,15 @@ SubWeapon_mapping = {#主程式Subweapon to ROCalculator 轉換
 }
 
 
-TSTATUS_POINT_COSTS = [#取自ROCalculator(特性數值點術
+TSTATUS_POINT_COSTS = [#取自ROCalculator(特性數值點術 
     7,10,13,16,19,26,29,32,35,38,
     45,48,51,54,57,64,67,70,73,76,
     83,86,89,92,95,102,105,108,111,114,
     121,124,127,130,133,140,143,146,149,152,
     159,162,165,168,171,178,181,184,187,190,
     197,200,203,206,209,216,219,222,225,228,
-    235
+    235,238,241,244,247,254,257,260,263,266,
+    273,276,279,282,285,292
 ]
 
 
@@ -2552,6 +2553,13 @@ def parse_lua_effects_with_variables(
             results.append(f"對 {class_name} 階級的物理傷害 {sign}{val}%")
             continue
 
+        WP_INVESTIGATE_dmg = re.match(r"SetInvestigate()", line)
+        if WP_INVESTIGATE_dmg and condition_met:
+            results.append(f"武器浸透勁效果")
+            results.append(f"無視 全種族 型怪的物理防禦 +100%")
+            Use_skill_levels[266] = True
+            continue
+
 
         # 特定魔物物理增傷MonsterAtkPercent(value)
         register_function("MonsterAtkPercent", "增加特定魔物物理傷害", [
@@ -3493,7 +3501,11 @@ class ItemSearchApp(QWidget):
             return label + " " * max(space_count, 0)
         
 
-        #物理===================        
+        #物理===================     
+        #浸透勁效果        
+        def_reduction_temp = int(100-def_reduction) #總階級種族破防-浸透勁破防100% 
+        WPINVESTIGATEATK = max(0,int((target_def/2) + (target_def/2)*(def_reduction_temp/100))) if GUSklv(266) == 1 else 0 
+        #print(f"浸透勁效果後atk+{WPINVESTIGATEATK}")
         #近傷ATK
         #NATK = int(BaseLv/4) + int(total_STR) + int(total_DEX/5) + int(total_LUK/3) + int(total_POW*5)
         NATK = int((BaseLv/4) + (total_STR) + (total_DEX/5) + (total_LUK/3) + (total_POW*5))
@@ -3501,7 +3513,7 @@ class ItemSearchApp(QWidget):
         #FATK = int(BaseLv/4) + int(total_STR/5) + int(total_DEX) + int(total_LUK/3) + int(total_POW*5)
         FATK = int((BaseLv/4) + (total_STR/5) + (total_DEX) + (total_LUK/3) + (total_POW*5))
         #後ATK (只給面板顯示不參與計算)
-        AKTC = ATK_Mweapon + ATK_armor + atk_refine_total
+        AKTC = ATK_Mweapon + ATK_armor + atk_refine_total + WPINVESTIGATEATK
         #C.RATE
         total_CRATE = CRATE + int(total_CRT/3)
         if weapon_class in (11,13,14,17,18,19,20,21):#DEX系
@@ -3545,7 +3557,7 @@ class ItemSearchApp(QWidget):
             ATKF = int((NATK*2) * (get_damage_multiplier(0, target_element, target_element_lv)/100)) #前段強制無屬 除非溫暖風轉屬
         
         #後武器總ATK
-        ATKC_Mweapon_ALL = (specialATK + ATK_armor) 
+        ATKC_Mweapon_ALL = (specialATK + ATK_armor + WPINVESTIGATEATK) 
         #print(f"ATKC_Mweapon_ALL:{ATKC_Mweapon_ALL}")
 
         
@@ -3943,9 +3955,9 @@ class ItemSearchApp(QWidget):
                                 (MR_AttackDamage,1),
                                 #技能倍率
                                 (skill_result,0),
-                                #敵人MRES減傷
+                                #敵人RES減傷
                                 (damage_nores,"raw"),
-                                #敵人MDEF減傷
+                                #敵人DEF減傷
                                 (damage_nodef,"raw"),
                                 #敵人DEF減算
                                 (target_defc,None),
