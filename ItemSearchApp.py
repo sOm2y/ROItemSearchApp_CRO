@@ -1,5 +1,5 @@
 #部分資料取自ROCalculator,搜尋 ROCalculator 可以知道哪些有使用
-Version = "v0.1.30-260120"
+Version = "v0.1.31-260121"
 
 import sys, builtins, time
 from PySide6.QtCore import QThread, Signal, Qt, QMetaObject, QTimer
@@ -8,6 +8,8 @@ import enchant #載入附魔工具
 import skill_tree #載入技能樹
 import reform_viewer #載入改造工具
 from rrf_to_App import run_rrf_main#載入rrf轉換
+from monster_lookup_dialog import MonsterLookupDialog#查詢怪物
+
 class InitWorker(QThread):
     log_signal = Signal(str)
     progress_signal = Signal(str)
@@ -1497,6 +1499,10 @@ class FileSelectionDialog(QDialog):#刪除清單
         ]
 
 
+
+
+
+
 def parse_lua_effects_with_variables(
     block_text,
     refine_inputs,
@@ -2835,10 +2841,10 @@ import json, os
 from PySide6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QComboBox, QPushButton
 
 class PreferencesDialog(QDialog):
-    def __init__(self, current_mode: str, parent=None):
+    def __init__(self, current_mode: str, current_api_key: str = "", parent=None):
         super().__init__(parent)
         self.setWindowTitle("偏好設定")
-        self.resize(260, 140)
+        self.resize(260, 180)  # 高度加一點
 
         layout = QVBoxLayout(self)
 
@@ -2846,27 +2852,40 @@ class PreferencesDialog(QDialog):
         hl = QHBoxLayout()
         hl.addWidget(QLabel("自動更新模式："))
         self.mode_combo = QComboBox()
-        # 顯示文字 → 實際值
         options = [
-            #("自動模式", "auto_missing"),
-            #("優先線上，失敗回退本地 (online_prefer)", "online_prefer"),
             ("線上來源", "online_only"),
             ("本機來源", "local_only"),
-            #("強制本地重建 (local_rebuild)", "local_rebuild"),
         ]
         for text, val in options:
             self.mode_combo.addItem(text, userData=val)
-        # 設定目前值
+
         idx = self.mode_combo.findData(current_mode or "online_only")
         self.mode_combo.setCurrentIndex(idx if idx >= 0 else 0)
 
         hl.addWidget(self.mode_combo)
         layout.addLayout(hl)
-
-        #說明
+        # 說明
         tip = QLabel("建議使用線上模式，設為本機需要環境有Python跟java環境才可編譯。")
         tip.setWordWrap(True)
         layout.addWidget(tip)
+        # ✅ 新增：API Key
+        ak = QHBoxLayout()
+        ak.addWidget(QLabel("API Key："))
+        self.api_edit = QLineEdit()
+        self.api_edit.setPlaceholderText("輸入 API Key")
+        self.api_edit.setText(current_api_key or "")
+        self.api_edit.setEchoMode(QLineEdit.EchoMode.Password)  # 預設隱藏
+        ak.addWidget(self.api_edit)
+        layout.addLayout(ak)
+
+        self.show_key_cb = QCheckBox("顯示")
+        self.show_key_cb.toggled.connect(self._toggle_api_visible)
+        layout.addWidget(self.show_key_cb)
+        # 說明
+        keytip = QLabel("此key用於divine-pride內的魔物查詢api，用來取得魔物資訊。")
+        keytip.setWordWrap(True)
+        layout.addWidget(keytip)
+
 
         # 按鈕
         btns = QHBoxLayout()
@@ -2879,8 +2898,16 @@ class PreferencesDialog(QDialog):
         btns.addWidget(cancel_btn)
         layout.addLayout(btns)
 
+    def _toggle_api_visible(self, checked: bool):
+        self.api_edit.setEchoMode(
+            QLineEdit.EchoMode.Normal if checked else QLineEdit.EchoMode.Password
+        )
+
     def selected_mode(self) -> str:
         return self.mode_combo.currentData()
+
+    def api_key(self) -> str:
+        return self.api_edit.text().strip()
 
 
 
@@ -2909,6 +2936,31 @@ class ItemSearchApp(QWidget):
         self.reform_viewer_window.setWindowTitle("改造查詢工具")
         self.reform_viewer_window.resize(700, 600)
         self.reform_viewer_window.show()
+
+    def _set_combo_by_key(self, combo, key: int):
+        idx = combo.findData(key)
+        if idx >= 0:
+            combo.setCurrentIndex(idx)
+
+    def apply_monster_to_main_ui(self, m: dict):
+        self._set_combo_by_key(self.size_box, m["size_id"])
+        self._set_combo_by_key(self.element_box, m["element_id"])
+        self.element_lv_input.setText(str(m["element_lv"]))
+        self._set_combo_by_key(self.race_box, m["race_id"])
+        self._set_combo_by_key(self.class_box, m["class_id"])
+
+        self.defc_input.setText(f'{m["def_before"]}')
+        self.mdefc_input.setText(f'{m["mdef_before"]}')
+        self.def_input.setText(str(m["def_after"]))
+        self.mdef_input.setText(str(m["mdef_after"]))
+
+        self.res_input.setText(str(m["res"]))
+        self.mres_input.setText(str(m["mres"]))
+
+    def open_monster_lookup(self):
+        dlg = MonsterLookupDialog(self)
+        dlg.monsterSelected.connect(self.apply_monster_to_main_ui)
+        dlg.exec()
 
 
 
@@ -4384,44 +4436,56 @@ class ItemSearchApp(QWidget):
 
 
     def _config_path(self):
-        # 存在專案 data/ 下
         base_dir = os.path.dirname(os.path.abspath(__file__))
         data_dir = os.path.join(base_dir, "data")
         os.makedirs(data_dir, exist_ok=True)
         return os.path.join(data_dir, "config.json")
 
     def load_config(self):
-        self.update_mode = "online_only"  # 預設
+        self.update_mode = "online_only"
+        self.api_key = ""
         try:
             with open(self._config_path(), "r", encoding="utf-8") as f:
                 cfg = json.load(f)
-            self.update_mode = cfg.get("online_only", self.update_mode)
+            self.update_mode = cfg.get("update_mode", self.update_mode)
+            self.api_key = cfg.get("api_key", self.api_key)
         except Exception:
-            pass  # 第一次沒有檔案就用預設
+            pass
 
     def save_config(self):
-        cfg = {"online_only": getattr(self, "online_only", "local_only")}
+        cfg = {
+            "update_mode": getattr(self, "update_mode", "online_only"),
+            "api_key": getattr(self, "api_key", ""),
+        }
         try:
             with open(self._config_path(), "w", encoding="utf-8") as f:
                 json.dump(cfg, f, ensure_ascii=False, indent=2)
         except Exception as e:
             print(f"儲存設定失敗：{e}")
 
+
     def get_update_mode(self) -> str:
-        # 提供給 InitWorker 調用
         if not hasattr(self, "update_mode"):
             self.load_config()
-        return self.update_mode or "local_only"
+        return self.update_mode or "online_only"
+
+    def get_api_key(self) -> str:
+        if not hasattr(self, "api_key"):
+            self.load_config()
+        return self.api_key or ""
 
     def open_compile_set(self):
-        # 確保先有目前設定
         self.load_config()
-        dlg = PreferencesDialog(current_mode=self.update_mode, parent=self)
+        dlg = PreferencesDialog(
+            current_mode=self.update_mode,
+            current_api_key=getattr(self, "api_key", ""),
+            parent=self
+        )
         if dlg.exec() == QDialog.Accepted:
             self.update_mode = dlg.selected_mode()
+            self.api_key = dlg.api_key()
             self.save_config()
-            # 你也可以視需要在這裡提示「下次啟動生效」或直接重新初始化資料
-            QMessageBox.information(self, "完成", f"已設定模式為：{self.update_mode}")
+            QMessageBox.information(self, "已完成key儲存", f"已設定模式為：{self.update_mode}")
 
 
 
@@ -6136,7 +6200,7 @@ class ItemSearchApp(QWidget):
 
     def save_compare_base(self):
         self.auto_compare_checkbox.setChecked(False)
-        self.replace_custom_calc_content()#儲存前強制運算
+        self.trigger_total_effect_update()#儲存前強制運算
         text = self.custom_calc_box.toPlainText()
         with open("compare_base.txt", "w", encoding="utf-8") as f:
             f.write(text)
@@ -8212,7 +8276,8 @@ class ItemSearchApp(QWidget):
         button_row = QHBoxLayout()
 
         self.save_compare_button = QPushButton("儲存比對基準")
-        self.save_compare_button.clicked.connect(self.save_compare_base)
+        self.save_compare_button.clicked.connect(lambda: (setattr(self, "_last_calc_state", None), self.save_compare_base()))
+
         button_row.addWidget(self.save_compare_button)
 
         # 中間新增勾選框
@@ -8330,19 +8395,7 @@ class ItemSearchApp(QWidget):
         element_lv_input_layout.addWidget(element_lv_input_label)
         element_lv_input_layout.addWidget(self.element_lv_input)
         target_layout.addLayout(element_lv_input_layout)
-        '''
-        #指定魔物增傷
-        monsterDamage_layout = QVBoxLayout()
-        self.monsterDamage_label = QLabel("魔物增傷")
-        self.monsterDamage_input = QLineEdit()
-        self.monsterDamage_input.setFixedWidth(60)
-        self.monsterDamage_input.setPlaceholderText("0")
-        monsterDamage_layout.addWidget(self.monsterDamage_label)
-        monsterDamage_layout.addWidget(self.monsterDamage_input)
-        target_layout.addLayout(monsterDamage_layout)
-        self.monsterDamage_label.setVisible(False)#UI暫時隱藏
-        self.monsterDamage_input.setVisible(False)
-        '''
+
         # 同樣方式套用在 race_map（假設你也要限制）
         visible_race_keys = [k for k in race_map if k <= 9]
         race_layout, self.race_box = make_combobox("種族", race_map, visible_race_keys)
@@ -8431,6 +8484,9 @@ class ItemSearchApp(QWidget):
         self.mres_input.editingFinished.connect(self.replace_custom_calc_content)
 
 
+        self.btn_open_monster_lookup = QPushButton("查詢怪物")
+        self.btn_open_monster_lookup.clicked.connect(self.open_monster_lookup)
+        layout.addWidget(self.btn_open_monster_lookup)
         # 新增按鈕
         self.replace_calc_button = QPushButton("計算")
         self.replace_calc_button.clicked.connect(lambda: (setattr(self, "_last_calc_state", None), self.trigger_total_effect_update()))
@@ -8544,10 +8600,9 @@ class ItemSearchApp(QWidget):
         # === 設定選單 ===
         settings_menu = menubar.addMenu("設定")
 
-        preferences_action = QAction("編譯模式設定", self)
+        preferences_action = QAction("偏好設定", self)
         preferences_action.triggered.connect(self.open_compile_set)
         settings_menu.addAction(preferences_action)
-
 
         
         menu_update = menubar.addMenu("更新")
