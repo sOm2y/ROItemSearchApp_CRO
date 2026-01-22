@@ -38,6 +38,12 @@ all_skill_entries = {#範例[    "": {"type": "技能/料理","code":["",""]},
     "暖胃香料紅酒": {"type": "料理","code":["AddExtParam(1, 207, 10)","AddExtParam(1, 140, 10)","AddMeleeAttackDamage(1, 10)","AddRangeAttackDamage(1, 10)","AddSkillMDamage(10, 10)"]},
     "暖心蛋酒": {"type": "料理","code":["AddExtParam(1, 111, 10)","AddExtParam(1, 112, 10)","SubSpellCastTime(10)"]},
 
+    #攻速水
+    "集中藥水": {"type": "料理","code":["AddExtParam(1, 301, 10)"],"exclusive": "ASPD_1"},
+    "覺醒藥水": {"type": "料理","code":["AddExtParam(1, 301, 15)"],"exclusive": "ASPD_1"},
+    "菠色克藥水": {"type": "料理","code":["AddExtParam(1, 301, 20)"],"exclusive": "ASPD_1"},
+    "毒藥瓶": {"type": "料理","code":["AddExtParam(1, 301, 20)"]},
+
     "高級戰鬥藥": {"type": "料理","code":["ClassAddDamage(0, 1, 10)","ClassAddDamage(1, 1, 10)","AddExtParam(1, 140, 10)","SubExtParam(1, 111, 5)","SubExtParam(1, 112, 5)"]},
     "魔力藥水": {"type": "料理","code":["AddExtParam(1, 200, 50)"]},
     "紅色藥草活化液": {"type": "料理","code":["AddMeleeAttackDamage(1, 15)","AddRangeAttackDamage(1, 15)"]},
@@ -52,6 +58,9 @@ all_skill_entries = {#範例[    "": {"type": "技能/料理","code":["",""]},
     #騎領
     "怒爆": {"id": "RK","type": "技能","code":["UseSkill(7)"]},
     "天龍光環": {"id": "RK","type": "技能","code":["UseSkill(5210)","temp = GetSkillLevel(5210)","AddDamage_SKID(1, 2008, temp * 10)","AddDamage_SKID(1, 5004, temp * 10)"]},
+    "盧恩石1": {"id": "RK","type": "技能","code":["AddExtParam(1, 103, 30)","AddMeleeAttackDamage(1, 30)"]},
+    "盧恩石5": {"id": "RK","type": "技能","code":["temp = GetSkillLevel(2010)","AddExtParam(0,302,temp / 10 * 4)","AddExtParam(1, 41, temp * 7)"]},
+    "盧恩石10": {"id": "RK","type": "技能","code":["AddExtParam(1, 111, 30)","AddExtParam(1, 112, 30)","AddDamage_Size(1, 0, 30)","AddDamage_Size(1, 1, 30)","AddDamage_Size(1, 2, 30)","AddDamage_CRI(1, 30)","AddMeleeAttackDamage(1, 30)","AddRangeAttackDamage(1, 30)"]},
     #主教
     "慈悲術": {"id": "AB","type": "技能","code": ["temp = 70 / 10","AddExtParam(0,103,10 + math.floor(temp))","AddExtParam(0,106,10 + math.floor(temp)","AddExtParam(0,107,10 + math.floor(temp)","AddExtParam(0,49,20)"]},
     "純白百合花": {"id": "AB","type": "技能","code":["temp = 70 / 10","AddExtParam(0,104,12 + math.floor(temp))","AddExtParam(0,167,10 + math.floor(temp))"]},
@@ -94,12 +103,18 @@ all_skill_entries = {#範例[    "": {"type": "技能/料理","code":["",""]},
     "地之紋章LV3": {"id": "SO","type": "技能","code":["AddSkillMDamage(4, 25)"]},
     "咒力賦予": {"id": "SO","type": "技能","code":["AddExtParam(1, 243, 20)"]},
     #皇家
-    "抗性聖盾": {"id": "RG","type": "技能","code":["UseSkill(5262)","temp = GetSkillLevel(5262) ","AddSkillMDamage(6, temp * 3)"]},
+    "抗性聖盾": {"id": "RG","type": "技能","code":["UseSkill(5262)","temp = GetSkillLevel(5262)","AddSkillMDamage(6, temp * 3)"]},
 
     #基因
-    "大聲吶喊": {"id": "GE","type": "技能","code":["AddExtParam(1, 103, 4)","AddExtParam(1, 41, 30)"]},
+    "大聲吶喊": {"id": ["GE","ME"],"type": "技能","code":["AddExtParam(1, 103, 4)","AddExtParam(1, 41, 30)"]},
     "手推車加速": {"id": "GE","type": "技能","code":["WeaponMasteryATK(50)"]},
     "研究報告": {"id": "GE","type": "技能","code":["UseSkill(5347)"]},
+    #機匠
+    #大聲吶喊跟基因重複
+    "兇砍": {"id": "ME","type": "技能","code":["AddExtParam(1, 207, 25)"],"exclusive": "BOVERTHRUST"},
+    "兇砍最大值": {"id": "ME","type": "技能","code":["AddExtParam(1, 207, 100)"],"exclusive": "BOVERTHRUST"},
+    "速度激發": {"id": "ME","type": "技能","code":["temp_wp = GetWeaponClass(4)","if temp_wp == 6 or temp_wp == 7 or temp_wp == 8 or temp_wp == 15 then","AddExtParam(1, 301, 30)","end"]},
+    "無視體型攻擊": {"id": "ME","type": "技能","code":["PerfectDamage(1)"]},
     
     #禁咒
     "魔力增幅": {"id": "WL","type": "技能","code":["UseSkill(366)"]},

@@ -1,5 +1,5 @@
 #部分資料取自ROCalculator,搜尋 ROCalculator 可以知道哪些有使用
-Version = "v0.1.31-260121"
+Version = "v0.1.32-260122"
 
 import sys, builtins, time
 from PySide6.QtCore import QThread, Signal, Qt, QMetaObject, QTimer
@@ -120,11 +120,13 @@ from PySide6.QtWidgets import (
     QPushButton, QTabWidget, QFormLayout, QSpinBox  ,QDoubleSpinBox  ,QFrame , QGridLayout,QDialog, QListWidget, QButtonGroup,QSlider,
 )
 
+from decimal import Decimal, ROUND_HALF_UP
 from datetime import datetime
 
 enabled_skill_levels = {}  # 存放已啟用技能的等級
 Use_skill_levels = {}#已啟用的技能id
 global_weapon_level_map = {}#武器等級
+global_armor_weapon_map = {}#裝備類型(防具武器)
 global_armor_level_map = {}#防具等級
 global_weapon_type_map = {}#武器類型
 global_weapon_atk_map = {}#武器基礎攻擊力
@@ -228,7 +230,7 @@ DataRegistry.register(
     path="data/job_dict.py",
     var_name="job_dict",
     default={
-    0: {"id": "","id_jobneme": "","id_jobneme_OL": "","selectskill": "", "name": "沒有資料", "TJobMaxPoint": [0,0,0,0,0,0,0,0,0,0,0,0],"point":"0"}},    # 你也可以做一個小預設值
+    0: {"id": "","id_jobneme": "","id_jobneme_OL": "","selectskill": "", "name": "沒有資料", "TJobMaxPoint": [0,0,0,0,0,0,0,0,0,0,0,0],"point":"0"}}, 
     on_reload=lambda win: win.reload_job_list()  # 若職業列表要更新
 )
 
@@ -240,11 +242,20 @@ DataRegistry.register(
     on_reload=lambda win: win.reload_job_list()  # 若職業列表要更新
 )
 
+DataRegistry.register(
+    key="ASPD",
+    path="data/job_dict.py",
+    var_name="WPASPDdata",
+    default={
+    0: {0:144}},
+    on_reload=lambda win: win.reload_job_list()  # 若職業列表要更新
+)
 # 外部py載入清單
 DataRegistry.reload_all()#先讀取所有外部py並設定預設
 all_skill_entries = DataRegistry.loaded_data["skills"]# 載入技能效果資料
 job_dict  = DataRegistry.loaded_data["jobs"]#職業job_id
 job_4th_hpsp = DataRegistry.loaded_data["jobHPSP"]#HPSP
+WPASPDdata = DataRegistry.loaded_data["ASPD"]#攻速資料
 
 
 effect_map = {
@@ -254,7 +265,9 @@ effect_map = {
     140: "MATK%", 167: "攻擊後延遲", 200: "MATK", 207: "ATK%",
     234: "POW", 235: "STA", 236: "WIS", 237: "SPL", 238: "CON", 239: "CRT",
     242: "P.ATK", 243: "S.MATK", 244: "RES", 245: "MRES",
-    253: "C.RATE", 254: "H.PLUS"
+    253: "C.RATE", 254: "H.PLUS",
+    #非官方編碼 用於二轉以下的技能跟集中覺醒波色克藥水
+    301: "(2轉以下)攻擊後延遲",302: "(2轉以下)ASPD"
 }
 element_map = {
     0: "無屬性",
@@ -328,7 +341,7 @@ stat_name_sets  = {#裝備基礎編碼
 
 
 weapon_type_map = {
-    1: "短劍", 2: "單手劍", 3: "雙手劍", 4: "單手矛", 5: "雙手矛",
+    0: "空手",1: "短劍", 2: "單手劍", 3: "雙手劍", 4: "單手矛", 5: "雙手矛",
     6: "單手斧", 7: "雙手斧", 8: "鈍器", 10: "單手仗", 12: "拳套",
     13: "樂器", 14: "鞭子", 15: "書", 16: "拳刃", 23: "雙手仗",
     11: "弓", 17: "左輪手槍", 18: "來福槍", 19: "格林機關槍",
@@ -1643,11 +1656,12 @@ def parse_lua_effects_with_variables(
             type_match = re.search(r'Type\s*=\s*"(\w+)"', block_text)
             equip_type = type_match.group(1) if type_match else "armor"
             stat_names = stat_name_sets.get(equip_type, stat_name_sets["armor"])
-
+            
             for idx, val in enumerate(stat_values):
                 if val != 0:
                     stat_name = stat_names[idx] if idx < len(stat_names) else f"未知{idx}"
-
+                    # ✅ 儲存武器或防具類型
+                    global_armor_weapon_map[current_location_slot] = equip_type
                     # 儲存武器或防具等級
                     if stat_name == "武器等級":
                         global_weapon_level_map[current_location_slot] = val                    
@@ -1970,7 +1984,7 @@ def parse_lua_effects_with_variables(
                 continue
 
             # 特例 2：攻擊後延遲（Add=減少、Sub=增加）+ 一定加 %
-            if effect_str == "攻擊後延遲":
+            if effect_str in ("攻擊後延遲","(2轉以下)攻擊後延遲"):
                 results.append(f"{effect_str} {sign_for(op, invert=True)}{val}%")
                 continue
 
@@ -3396,8 +3410,40 @@ class ItemSearchApp(QWidget):
         if any("武器浸透勁效果" in key for (key, unit) in effect_dict.keys()):
             print("有武器浸透勁效果")
             Use_skill_levels[266] = True
+        #ASPD計算
+        atkaspd = -sum(val for val, _ in effect_dict.get(("(2轉以下)攻擊後延遲", "%"), []))
+        #print(f"(2轉以下)攻擊後延遲減少：{atkaspd}%")
+        aspdno = sum(val for val, _ in effect_dict.get(("(2轉以下)ASPD", ""), []))
+        #print(f"(2轉以下)最終ASPD：{aspdno}")   
+        atkaspd_2 = -sum(val for val, _ in effect_dict.get(("攻擊後延遲", "%"), []))        
+        #print(f"攻擊後延遲減少：{atkaspd_2}%")
+        aspdno_2 = sum(val for val, _ in effect_dict.get(("ASPD", ""), []))
+        #print(f"最終ASPD：{aspdno_2}")        
+        has_shield = True if global_armor_weapon_map.get(3, 0) == "armor" else False
+        #print(f"副手拿盾：{has_shield}")
+       
+        if global_armor_weapon_map.get(3, 0) in ("Mweapon","Rweapon"):
+            # 雙刀（右手/左手）
+            #print("雙手模式")
+            aspd = self.calc_aspd(
+                WPASPDdata, job_id=job_id, agi=total_AGI, dex=total_DEX,
+                dual_wield=True,
+                right_weapon_type=global_weapon_type_map.get(4, 0),
+                left_weapon_type=global_weapon_type_map.get(3, 0),
+                cat1_rate=atkaspd, cat1_flat=aspdno,
+                cat2_rate=atkaspd_2, cat2_flat=aspdno_2
+            )
+        else:
+            #print("單手模式")
+            # 一般（可持盾）
+            aspd = self.calc_aspd(
+                WPASPDdata, job_id=job_id, agi=total_AGI, dex=total_DEX,
+                weapon_type=global_weapon_type_map.get(4, 0), has_shield=has_shield,
+                cat1_rate=atkaspd, cat1_flat=aspdno,    # 15% + 2 點（也可用 0.15）
+                cat2_rate=atkaspd_2, cat2_flat=aspdno_2
+            )        
 
-
+        self.ASPD_label.setText(f"ASPD：{aspd}")
         #=======================技能欄公式====================
         #====================DEF計算==================
         def calc_final_def_damage(d_ef: float, reduction_percent: float) -> float:
@@ -4855,6 +4901,7 @@ class ItemSearchApp(QWidget):
         #print("武器類型：", global_weapon_type_map)
         #print("技能：", enabled_skill_levels)
         global_weapon_level_map.clear()
+        global_armor_weapon_map.clear()
         global_armor_level_map.clear()
         global_weapon_type_map.clear()
         global_weapon_matk_map.clear()
@@ -4869,6 +4916,7 @@ class ItemSearchApp(QWidget):
 
         for slot in slot_ids:
             global_weapon_level_map[slot] = 0
+            global_armor_weapon_map[slot] = 0
             global_armor_level_map[slot] = 0
             global_weapon_type_map[slot] = 0
             global_weapon_matk_map[slot] = 0
@@ -4886,7 +4934,7 @@ class ItemSearchApp(QWidget):
         #print("武器類型：", global_weapon_type_map)
         #print("技能：", enabled_skill_levels)
 
-    def update_dex_int_half_note(self):
+    def update_dex_int_half_note(self):#素質無詠計算
         raw_effects = getattr(self, "effect_dict_raw", {})
 
         # base
@@ -4917,20 +4965,122 @@ class ItemSearchApp(QWidget):
         result = dex_part + int_part
 
         target = 265
-        gap = max(0, target - result)
+        #gap = max(0, target - result)
+        gap = target - result
+        status = "✅" if gap <= 0 else "⚠️ 未達標"
 
-        status = "✅" if gap == 0 else "⚠️ 未達標"
-
-        if gap == 0:
-            diff_text = ""
+        if gap <= 0:
+            need_dex = gap
+            need_int = gap * 2
+            diff_text = f"　（超過：DEX {need_dex} 或 INT {need_int}）"
         else:
             need_dex = gap
             need_int = gap * 2
-            diff_text = f"（還差：DEX +{need_dex} 或 INT +{need_int}）"
+            diff_text = f"　（還差：DEX +{need_dex} 或 INT +{need_int}）"
 
         self.DEX_INT_265_label.setText(
             f"※素質無詠 {dex_part} + {int_part} = {result} {status}\n{diff_text}"
         )
+
+
+
+    def calc_aspd(self,#攻速計算
+        wpasdp_data: dict,
+        job_id: int,
+        agi: float,
+        dex: float,
+        *,
+        # 一般模式用
+        weapon_type: int | None = None,
+        has_shield: bool = False,
+
+        # 雙刀模式用
+        dual_wield: bool = False,
+        right_weapon_type: int | None = None,
+        left_weapon_type: int | None = None,
+
+        # 類別加成（rate 可傳 0.15 或 15 都可）
+        cat1_rate: float = 0.0,
+        cat1_flat: float = 0.0,
+        cat2_rate: float = 0.0,
+        cat2_flat: float = 0.0,
+
+        # 最後四捨五入位數
+        round_digits: int = 3,
+    ) -> float:
+        """
+        回傳：套完基礎ASPD + 類別1/2 後的 ASPD，四捨五入到小數 round_digits 位（ROUND_HALF_UP）
+        """
+
+        def _rate_to_decimal(r: float) -> float:
+            # 允許使用者傳 0.15 或 15（代表 15%）
+            if r < 0:
+                return r
+            return r / 100.0 if r > 1 else r
+
+        def _round_half_up(x: float, digits: int) -> float:
+            q = Decimal("1").scaleb(-digits)  # e.g. digits=3 -> Decimal('0.001')
+            return float(Decimal(str(x)).quantize(q, rounding=ROUND_HALF_UP))
+
+        if job_id not in wpasdp_data:
+            #raise KeyError(f"找不到 job_id={job_id} 的武器基礎ASPD表")
+            return (f"未選擇職業或該職業不支援此武器。")
+
+        job_table = wpasdp_data[job_id]
+
+        cat1_rate = _rate_to_decimal(cat1_rate)
+        cat2_rate = _rate_to_decimal(cat2_rate)
+
+        # --- 1) 先算基礎 ASPD ---
+        if dual_wield:
+            if right_weapon_type is None or left_weapon_type is None:
+                raise ValueError("dual_wield=True 時必須提供 right_weapon_type 與 left_weapon_type")
+
+            base_r = job_table.get(right_weapon_type)
+            base_l = job_table.get(left_weapon_type)
+            if base_r is None or base_l is None:
+                #raise KeyError("雙刀武器類型不在此 job 的表內")
+                return (f"該職業不支援雙刀武器。")
+            if base_r <= 0 or base_l <= 0:
+                #raise ValueError("雙刀基礎ASPD <= 0，疑似不可用")
+                return (f"雙刀基礎ASPD <= 0")
+
+            aspd = (
+                base_r
+                + (base_l - 194) / 4
+                + math.sqrt(agi * 10.01 + dex * 11 / 60) * 1.04518
+            )
+
+        else:
+            if weapon_type is None:
+                raise ValueError("dual_wield=False 時必須提供 weapon_type")
+
+            base = job_table.get(weapon_type)
+            if base is None:
+                #raise KeyError(f"job_id={job_id} 不支援 weapon_type={weapon_type}")
+                return (f"該職業不支援此武器。")
+            if base <= 0:
+                #raise ValueError("基礎ASPD <= 0，疑似不可用")
+                return (f"基礎ASPD <= 0")
+
+            stat_term = math.sqrt(agi * 10.09 + dex * 11 / 60)
+
+            # 基礎ASPD145以上採用係數
+            if base >= 145:
+                stat_term *= (1 - (base - 144) / 50)
+
+            shield_penalty = float(job_table.get(50, 0)) if has_shield else 0.0  # 通常是負數
+            aspd = base + stat_term + shield_penalty
+
+        # --- 2) 類別1 ---
+        aspd_1 = 200 - (200 - aspd) * (1 - cat1_rate) + cat1_flat
+
+        # --- 3) 類別2 ---
+        aspd_2 = 195 - (195 - aspd_1) * (1 - cat2_rate) + cat2_flat
+
+        # --- 4) 小數第 3 位（或你指定的位數） ---
+        return _round_half_up(aspd_2, round_digits)
+
 
     def safe_update_textbox(self, textbox, text):
         scrollbar = textbox.verticalScrollBar()
@@ -7335,13 +7485,6 @@ class ItemSearchApp(QWidget):
             
             char_layout.addLayout(row_layout)
             char_layout.setAlignment(Qt.AlignTop)
-        # === 計算素質無詠 ===
-        
-        self.DEX_INT_265_label = QLabel("無詠計算位置")
-        #self.DEX_INT_265_label.setFont(QFont("Consolas", 12))
-        #self.DEX_INT_265_label.setFixedWidth(50)
-        #self.DEX_INT_265_label.setAlignment(Qt.AlignRight)
-        char_layout.addWidget(self.DEX_INT_265_label)
 
 
         tab_widget.addTab(char_scroll, "角色能力值")
@@ -7686,7 +7829,7 @@ class ItemSearchApp(QWidget):
 
 
         tab_widget.addTab(equip_scroll, "裝備設定")
-        main_layout.addWidget(tab_widget, 2)
+        
         
 
         # === 新增技能分頁（含搜尋） ===
@@ -7746,11 +7889,45 @@ class ItemSearchApp(QWidget):
         # 加入主分頁
         tab_widget.addTab(skill_page, "增益技能/料理")
 
+
+
+        # 先把 tab_widget 存起來（可選）
+        self.tab_widget = tab_widget
+
+        # ✅ 用一個容器把「tab + 狀態」上下包在一起
+        left_panel = QWidget()
+        left_panel.setFixedWidth(340)  
+
+        left_layout = QVBoxLayout(left_panel)
+        left_layout.setContentsMargins(0, 0, 0, 0)
+        left_layout.setSpacing(6)
+
+        # 上：三個分頁
+        left_layout.addWidget(self.tab_widget, stretch=1)
+
+        # 下：狀態區
+        self.status_box = QGroupBox("詠唱/攻速顯示")
+        self.status_box.setMinimumHeight(100)  
+        status_layout = QVBoxLayout(self.status_box)
+
+        # self.status_label = QLabel("（狀態顯示區）")
+        # self.status_label.setWordWrap(True)
+        # status_layout.addWidget(self.status_label)
+        # === 計算素質無詠 ===
         
+        self.DEX_INT_265_label = QLabel("無詠計算位置")
+        status_layout.addWidget(self.DEX_INT_265_label)
+
+        self.ASPD_label = QLabel("ASPD位置(預留)")
+        status_layout.addWidget(self.ASPD_label)
+
+        left_layout.addWidget(self.status_box, stretch=0)
+
+        # ✅ 只加 left_panel 進去
+        main_layout.addWidget(left_panel, 2)
 
 
-
-
+        
 
         # ===== 中間：裝備查詢區塊 =====
         middle_widget = QWidget()
@@ -9281,3 +9458,16 @@ if __name__ == "__main__":
     sys.exit(app.exec())
 
 
+# 技能計算BUG觀察紀錄
+# 毀滅彗星5等
+# 技能%等級是否-1%
+# 245 -0
+# 246 -0
+# 247
+# 248 -0
+# 249
+# 250 -0
+# 251 -1
+# 252 
+# 253 -1 
+# 260 -0
