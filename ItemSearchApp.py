@@ -1,5 +1,5 @@
 #部分資料取自ROCalculator,搜尋 ROCalculator 可以知道哪些有使用
-Version = "v0.1.32-260122"
+Version = "v0.1.33-260123"
 
 import sys, builtins, time
 from PySide6.QtCore import QThread, Signal, Qt, QMetaObject, QTimer
@@ -626,6 +626,163 @@ TSTATUS_POINT_COSTS = [#取自ROCalculator(特性數值點術
 ]
 
 
+from PySide6.QtCore import Qt, QElapsedTimer, QTimer
+from PySide6.QtWidgets import QWidget
+from PySide6 import QtGui
+
+class CastBarWidget(QWidget):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+
+        # durations
+        self._cast_ms = 1
+        self._gcd_ms = 0
+        self._cd_ms = 0
+
+        # timers
+        self._cast_elapsed = QElapsedTimer()
+        self._gcd_elapsed = QElapsedTimer()
+        self._cd_elapsed = QElapsedTimer()
+
+        # progress
+        self._cast_progress = 0.0
+        self._gcd_progress = 0.0
+        self._cd_progress = 0.0
+
+        # state
+        self._state = "idle"  # idle | cast | post
+
+        self._timer = QTimer(self)
+        self._timer.setInterval(16)
+        self._timer.timeout.connect(self.update)
+
+        self.setFixedHeight(10)
+
+    def start(self, cast_ms: int, gcd_ms: int = 0, cooldown_ms: int = 0):
+        self._cast_ms = max(1, int(cast_ms))
+        self._gcd_ms = max(0, int(gcd_ms))
+        self._cd_ms = max(0, int(cooldown_ms))
+
+        self._cast_elapsed.restart()
+        self._cast_progress = 0.0
+
+        self._gcd_progress = 0.0
+        self._cd_progress = 0.0
+
+        self._state = "cast"
+        self._timer.start()
+        self.update()
+
+    def stop(self):
+        self._timer.stop()
+        self._state = "idle"
+        self._cast_progress = 0.0
+        self._gcd_progress = 0.0
+        self._cd_progress = 0.0
+        self.update()
+
+    def _enter_post(self):
+        """詠唱結束後：綠色滿格，開始跑 GCD / CD（覆蓋都要留下）"""
+        self._state = "post"
+        self._cast_progress = 1.0  # 綠色滿格保留
+
+        # GCD：沒有時間也要直接蓋滿（照你「沒有就直接蓋上」的規則）
+        if self._gcd_ms > 0:
+            self._gcd_elapsed.restart()
+            self._gcd_progress = 0.0
+        else:
+            self._gcd_progress = 1.0  # 直接 100% 淺藍覆蓋
+
+        # CD：沒有時間也直接蓋滿
+        if self._cd_ms > 0:
+            self._cd_elapsed.restart()
+            self._cd_progress = 0.0
+        else:
+            self._cd_progress = 1.0  # 直接 100% 灰色覆蓋
+
+    def paintEvent(self, event):
+        # ---------- update ----------
+        if self._timer.isActive():
+            if self._state == "cast":
+                t = self._cast_elapsed.elapsed()
+                self._cast_progress = min(1.0, t / self._cast_ms)
+                if self._cast_progress >= 1.0:
+                    self._enter_post()
+
+            elif self._state == "post":
+                # GCD progress
+                if self._gcd_ms > 0 and self._gcd_progress < 1.0:
+                    t = self._gcd_elapsed.elapsed()
+                    self._gcd_progress = min(1.0, t / self._gcd_ms)
+                    if self._gcd_progress >= 1.0:
+                        self._gcd_progress = 1.0  # 跑完也留下
+
+                # CD progress
+                if self._cd_ms > 0 and self._cd_progress < 1.0:
+                    t = self._cd_elapsed.elapsed()
+                    self._cd_progress = min(1.0, t / self._cd_ms)
+                    if self._cd_progress >= 1.0:
+                        self._cd_progress = 1.0  # 跑完也留下
+
+                # 都不動了就停 timer（覆蓋留著也不需要一直刷新）
+                animating = (
+                    (self._gcd_ms > 0 and self._gcd_progress < 1.0) or
+                    (self._cd_ms > 0 and self._cd_progress < 1.0)
+                )
+                if not animating:
+                    self._timer.stop()
+
+        # ---------- paint ----------
+        p = QtGui.QPainter(self)
+        p.setRenderHint(QtGui.QPainter.Antialiasing, False)
+
+        rect = self.rect().adjusted(0, 0, -1, -1)
+
+        # border
+        p.setPen(QtGui.QPen(QtGui.QColor(120, 120, 120)))
+        p.setBrush(Qt.NoBrush)
+        p.drawRect(rect)
+
+        # green: cast grows, post stays full
+        if self._state == "cast":
+            green_ratio = self._cast_progress
+        elif self._state == "post":
+            green_ratio = 1.0
+        else:
+            green_ratio = 0.0
+
+        green_w = int(rect.width() * green_ratio)
+        if green_w > 0:
+            green_rect = rect.adjusted(1, 1, -(rect.width() - green_w) - 1, -1)
+            p.setPen(Qt.NoPen)
+            p.setBrush(QtGui.QColor(0, 200, 0))
+            p.drawRect(green_rect)
+
+        # GCD overlay: light-blue, LEFT -> RIGHT, stays when finished
+        if self._state == "post" and self._gcd_progress > 0.0:
+            w = int(rect.width() * self._gcd_progress)
+            if w > 0:
+                r = rect.adjusted(1, 1, -(rect.width() - w) - 1, -1)
+                p.setPen(Qt.NoPen)
+                p.setBrush(QtGui.QColor(0, 255, 255, 255))  # 淺藍半透明
+                p.drawRect(r)
+
+        # CD overlay: gray, LEFT -> RIGHT, stays when finished
+        if self._state == "post" and self._cd_progress > 0.0:
+            w = int(rect.width() * self._cd_progress)
+            if w > 0:
+                r = rect.adjusted(1, 1, -(rect.width() - w) - 1, -1)
+                p.setPen(Qt.NoPen)
+                p.setBrush(QtGui.QColor(0, 0, 0, 100))  # 灰色半透明
+                p.drawRect(r)
+
+        p.end()
+
+
+
+
+
+
 from PySide6.QtWidgets import QDialog
 from UI.ui_savemanager import Ui_SaveManagerDialog
 
@@ -731,6 +888,154 @@ def load_skill_map(filepath=None):
 
 
 load_skill_map() #讀取SKILL列表
+
+import re
+
+def update_skill_delay_labels(#技能延遲標籤更新
+    skill_name: str,
+    skill_map_all: dict,
+    lua_text: str,
+    fix_label,
+    delay_label,
+    cast_bar,
+    skill_level,
+    Equipfixed,
+    Equipfixed_2,
+    basestat,
+    Equipstat,
+    Equipgpost,
+    Equipspost
+
+):
+    """
+    skill_name   : skill_box.currentText()
+    skill_map_all: 技能資料字典（含 Name -> Code）
+    lua_text     : skilldelaylist.lua 內容（字串）
+    fix_label    : QLabel（固定 / 變動詠唱）
+    delay_label  : QLabel（共延 / 冷卻）
+    cast_bar     : CastBarWidget（詠唱條）
+    skill_level  : 技能等級（可選）
+    Equipfixed   : 固定詠唱（回傳用）
+    Equipfixed_2 : 固定詠唱百分比（回傳用）
+    stat         : 素質變動詠唱（回傳用）
+    Equipstat    : 裝備變動詠唱（回傳用）
+    Equipgpost   : 共延（回傳用）
+    Equipspost   : 冷卻（回傳用）
+    """
+
+    # ---------- Name -> Code ----------
+    skill_code = None
+    for _, row in skill_map_all.items():
+        if row.get("Name") == skill_name:
+            skill_code = (
+                row.get("Code")
+                or row.get("SkillCode")
+                or row.get("SkillNameCode")
+            )
+            break
+
+    if not skill_code:
+        fix_label.setText("找不到技能 Code")
+        delay_label.setText("")
+        return
+
+    # ---------- 找到 [SKID.CODE] 區塊 ----------
+    start_pat = re.compile(
+        rf"\[\s*SKID\.{re.escape(skill_code)}\s*\]\s*=\s*\{{",
+        re.MULTILINE
+    )
+    m = start_pat.search(lua_text)
+    if not m:
+        fix_label.setText(f"lua 找不到 [SKID.{skill_code}]")
+        delay_label.setText("")
+        return
+
+    i = m.end() - 1
+    depth = 0
+    block = None
+    for j in range(i, len(lua_text)):
+        if lua_text[j] == "{":
+            depth += 1
+        elif lua_text[j] == "}":
+            depth -= 1
+            if depth == 0:
+                block = lua_text[i:j + 1]
+                break
+
+    if not block:
+        fix_label.setText("技能資料解析失敗")
+        delay_label.setText("")
+        return
+
+    # ---------- 解析延遲欄位 ----------
+    def parse_array(field: str):
+        mm = re.search(rf"{field}\s*=\s*\{{([^}}]*)\}}", block, re.MULTILINE)
+        if not mm:
+            return [0]          # ❗ 沒資料 → [0]
+
+        nums = re.findall(r"-?\d+", mm.group(1))
+        return [int(x) for x in nums] if nums else [0]
+
+    fixed_raw = parse_array("SkillCastFixedDelay")
+    stat_raw  = parse_array("SkillCastStatDelay")
+    gpost_raw = parse_array("SkillGlobalPostDelay")
+    spost_raw = parse_array("SkillSinglePostDelay")
+
+
+    
+    # -- 變詠固詠計算 --    
+    basestat = math.sqrt(basestat / 265) * 100#素質轉換變詠%       
+    stat = [max(0,x * ((100 - basestat)/100) * ((100 - Equipstat)/100))  for x in stat_raw]#變詠秒數*素質變詠*裝備變詠
+    fixed = [max(0, (x + Equipfixed) * ((100 + Equipfixed_2)/100)) for x in fixed_raw]#固詠毫秒秒數-裝備固詠毫秒*裝備or技能固詠%(取最大值)
+    gpost= [max(0, x * ((100 + Equipgpost)/100)) for x in gpost_raw]#共延秒數*裝備共延%
+    spost= [max(0, x + Equipspost) for x in spost_raw]#冷卻秒數-裝備冷卻秒數
+    
+
+    # ---------- 依技能等級取值 ----------
+    def pick(arr):
+        if arr is None or len(arr) == 0:
+            return "無"
+
+        def ms_to_s(ms):
+            return f"{ms / 1000:.3f}".rstrip("0").rstrip(".")
+
+        if skill_level is None:
+            return "/".join(ms_to_s(x) for x in arr)
+
+        idx = max(skill_level - 1, 0)
+        ms = arr[idx] if idx < len(arr) else arr[-1]
+        return f"{ms_to_s(ms)}"
+
+
+    # ---------- 更新 QLabel ----------
+    fix_label.setText(
+        f"固詠: {pick(fixed)}秒({pick(fixed_raw)}秒) "
+        f"變詠: {pick(stat)}秒({pick(stat_raw)}秒)"
+    )
+
+    delay_label.setText(
+        f"共延: {pick(gpost)}秒({pick(gpost_raw)}秒) "
+        f"冷卻: {pick(spost)}秒({pick(spost_raw)}秒)"
+    )
+    # fix_label.setText(
+    #     f"固詠: {pick(fixed)}秒 "
+    #     f"變詠: {pick(stat)}秒"
+    # )
+
+    # delay_label.setText(
+    #     f"共延: {pick(gpost)}秒 "
+    #     f"冷卻: {pick(spost)}秒"
+    # )
+    stat_value = stat[skill_level] if skill_level < len(stat) else stat[-1]
+    fixed_value = fixed[skill_level] if skill_level < len(fixed) else fixed[-1]
+    spost_value = spost[skill_level] if skill_level < len(spost) else spost[-1]
+    gcdtotal_value = max(0.0, gpost[skill_level] if skill_level < len(gpost) else gpost[-1])
+
+    total_s = max(0.0, fixed_value + stat_value)
+    cdtotal_s = max(0.0, spost_value)
+    gcdtotal_s = max(0.0, gcdtotal_value)
+
+    cast_bar.start(int(total_s),int(gcdtotal_s),int(cdtotal_s))  # 轉 ms
 
 #動態下拉式選單
 import re
@@ -2045,6 +2350,25 @@ def parse_lua_effects_with_variables(
             sfct_handled = True
             continue
 
+        sfct_2 = re.match(
+            r"(Add|Sub)SFCTEquipPermill\(\s*(?:(\d+)\s*,\s*)?(.+?)\s*,\s*(\d+)\s*\)\s*$",
+            line
+        )
+        if sfct_2 and condition_met and not sfct_handled:
+            op, item_id, expr, dummy = sfct_2.groups()
+
+            # expr 是第二個參數，才是真正的 ms
+            val = safe_eval_expr(expr, variables, get_values, refine_inputs, grade)
+            val = val // 10  # 轉為百分比
+            sign = "+" if op == "Add" else "-"
+            if isinstance(val, int):
+                sign = "+" if op == "Add" else "-"
+                results.append(f"固定詠唱時間 {sign}{val}%")
+            else:
+                # 保留原本的「無法解析」提示
+                sign = "+" if op == "Add" else "-"
+                results.append(f"固定詠唱時間 {sign}({val})%（無法解析）")
+            continue
 
         # 增減「指定技能傷害(裝備段)」合併處理
         register_function("AddDamage_SKID", "增加技能傷害(裝備段)", [
@@ -2621,9 +2945,9 @@ def parse_lua_effects_with_variables(
     for skill_name, total_ms in skill_delay_accum.items():
         sec = abs(total_ms) / 1000
         if total_ms < 0:
-            results.append(f"技能【{skill_name}】冷卻時間縮短 {sec:.2f} 秒")
+            results.append(f"技能【{skill_name}】冷卻時間 -{sec:.2f} 秒")
         else:
-            results.append(f"技能【{skill_name}】冷卻時間延長 {sec:.2f} 秒")
+            results.append(f"技能【{skill_name}】冷卻時間 +{sec:.2f} 秒")
 
         # 所有邏輯都未匹配時：顯示無法辨識語句
 
@@ -2781,6 +3105,15 @@ def parse_lub_file(filename):#字典化物品列表
         except Exception:
             continue
     return parsed_items
+
+def load_skill_delay_lua(filename) -> str:
+    try:
+        with open(filename, "r", encoding="utf-8") as f:
+            return f.read()
+    except Exception as e:
+        print("讀取 skilldelaylist.lua 失敗:", e)
+        return ""
+
 
 def resolve_name_conflicts(parsed_items, equipment_blocks):
     """
@@ -3120,7 +3453,7 @@ class ItemSearchApp(QWidget):
 
         #current_text = self.custom_calc_box.toPlainText()
         skill_key = self.skill_box.currentData()
-        skill_lv = self.skill_LV_input.text()
+        skill_lv = int(self.skill_LV_input.text())
         
         # ✅ 裝備狀態（你可以根據實際來源換成 combo_effect_text.text() 之類的）
         equip_state = self.total_effect_text.toPlainText()
@@ -3443,7 +3776,37 @@ class ItemSearchApp(QWidget):
                 cat2_rate=atkaspd_2, cat2_flat=aspdno_2
             )        
 
-        self.ASPD_label.setText(f"ASPD：{aspd}")
+        if isinstance(aspd, (int, float)):
+            aspds = 50/(200-min(193,int(aspd)))
+            self.ASPD_label.setText(f"ASPD：{aspd} 每秒{aspds:.2f}下")
+        else:
+            self.ASPD_label.setText(f"ASPD：該職業不能拿此武器。")
+        #== 固定詠唱取得 ==
+        globals()["fixed_cast"] = sum(val for val, _ in effect_dict.get(("固定詠唱時間", "秒"), []))
+        #== 固定詠唱%取得 ==
+        globals()["fixed_cast_percent"] = min((val for val, _ in effect_dict.get(("固定詠唱時間", "%"), [])),default=0)
+        #== 變動詠唱取得 ==
+        globals()["variable_cast_percent"] = sum(val for val, _ in effect_dict.get(("變動詠唱時間", "%"), []))
+        #== 技能後延遲取得 ==
+        globals()["skill_delay_percent"] = sum(val for val, _ in effect_dict.get(("技能後延遲", "%"), []))
+        #== 技能冷卻取得 ==        
+        globals()["skill_cooldown_percent"] = sum(val for val, _ in effect_dict.get((f"技能【{selected_skill_name}】冷卻時間", "秒"), []))
+        
+        update_skill_delay_labels(#更新固定變動冷卻後延數值
+                skill_name=selected_skill_name,
+                skill_map_all=skill_map_all,
+                lua_text=self.lua_text,
+                fix_label=self.fix_label,
+                delay_label=self.Delay_label,
+                cast_bar=self.cast_bar,
+                skill_level=skill_lv,
+                Equipfixed=fixed_cast*1000,
+                Equipfixed_2=fixed_cast_percent,#固詠%
+                basestat=(total_DEX+(total_INT/2)),
+                Equipstat=variable_cast_percent,
+                Equipgpost=skill_delay_percent,
+                Equipspost=skill_cooldown_percent*1000
+            )
         #=======================技能欄公式====================
         #====================DEF計算==================
         def calc_final_def_damage(d_ef: float, reduction_percent: float) -> float:
@@ -6854,7 +7217,7 @@ class ItemSearchApp(QWidget):
         self.equipment_data = self.parse_equipment_blocks(content)
         print("📖 載入 技能清單...")
         load_skill_map("data/skillneme.csv") #讀取SKILL列表
-
+        self.lua_text = load_skill_delay_lua("data/skilldelaylist.lua")#讀取技能延遲
         self.parsed_items = resolve_name_conflicts(self.parsed_items ,self.equipment_data)#重複物品名稱加上id
         print("🎉 載入完成")
         return self.parsed_items
@@ -7906,7 +8269,7 @@ class ItemSearchApp(QWidget):
         left_layout.addWidget(self.tab_widget, stretch=1)
 
         # 下：狀態區
-        self.status_box = QGroupBox("詠唱/攻速顯示")
+        self.status_box = QGroupBox("攻速/詠唱顯示 [括弧內為技能需求秒數]")
         self.status_box.setMinimumHeight(100)  
         status_layout = QVBoxLayout(self.status_box)
 
@@ -7915,12 +8278,16 @@ class ItemSearchApp(QWidget):
         # status_layout.addWidget(self.status_label)
         # === 計算素質無詠 ===
         
-        self.DEX_INT_265_label = QLabel("無詠計算位置")
+        self.DEX_INT_265_label = QLabel("無詠計算")
         status_layout.addWidget(self.DEX_INT_265_label)
-
-        self.ASPD_label = QLabel("ASPD位置(預留)")
+        self.fix_label = QLabel("fix")
+        status_layout.addWidget(self.fix_label)
+        self.Delay_label = QLabel("Delay")
+        status_layout.addWidget(self.Delay_label)
+        self.ASPD_label = QLabel("ASPD")
         status_layout.addWidget(self.ASPD_label)
-
+        self.cast_bar = CastBarWidget(self)#詠唱條
+        status_layout.addWidget(self.cast_bar)
         left_layout.addWidget(self.status_box, stretch=0)
 
         # ✅ 只加 left_panel 進去
@@ -8405,6 +8772,8 @@ class ItemSearchApp(QWidget):
 
         # 綁定更新函式
         self.skill_box.currentIndexChanged.connect(update_skill_formula_display)
+
+
         skill_select_layout_top.addWidget(self.skill_box)
 
         # 技能等級
@@ -9447,7 +9816,7 @@ if __name__ == "__main__":
         window.parsed_items = data or {}
         window.update_combobox()
 
-        window.resize(1650, 800)
+        window.resize(1650, 900)
         window.show()
 
         QTimer.singleShot(1000, loading.close)
