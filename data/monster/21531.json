@@ -1,0 +1,158 @@
+{
+  "id": 21531,
+  "dbname": "EP19_MD_AQUILA",
+  "name": "Aquila",
+  "sprite": "EP19_MD_AQUILA",
+  "stats": {
+    "attackRange": 1,
+    "level": 210,
+    "health": 500000000,
+    "sp": 0,
+    "str": 80,
+    "int": 80,
+    "vit": 80,
+    "dex": 80,
+    "agi": 80,
+    "luk": 80,
+    "rechargeTime": 396,
+    "atk1": 6000,
+    "atk2": 1000,
+    "attack": {
+      "minimum": 5090,
+      "maximum": 7490
+    },
+    "magicAttack": {
+      "minimum": 990,
+      "maximum": 1590
+    },
+    "defense": 456,
+    "baseExperience": 5255640,
+    "jobExperience": 3658840,
+    "aggroRange": 10,
+    "escapeRange": 12,
+    "movementSpeed": 150.0,
+    "attackSpeed": 1584.0,
+    "attackedSpeed": 480.0,
+    "element": 60,
+    "scale": 2,
+    "race": 0,
+    "magicDefense": 112,
+    "hit": 490,
+    "flee": 460,
+    "ai": "",
+    "mvp": 1,
+    "class": 1,
+    "attr": 8,
+    "res": 275,
+    "mres": 242
+  },
+  "spawnSet": [],
+  "slaves": [],
+  "metamorphosis": [],
+  "sounds": [
+    "ep19_md_aquila_attack.wav",
+    "ep19_md_aquila_damage.wav",
+    "ep19_md_aquila_die1.wav",
+    "ep19_md_aquila_die2.wav",
+    "ep19_md_aquila_stand.wav"
+  ],
+  "questObjective": [
+    12561
+  ],
+  "drops": [
+    {
+      "itemId": 1000833,
+      "chance": 7000,
+      "stealProtected": false,
+      "serverTypeName": null,
+      "optionGroup": "G0"
+    },
+    {
+      "itemId": 1000814,
+      "chance": 500,
+      "stealProtected": false,
+      "serverTypeName": null,
+      "optionGroup": "G0"
+    },
+    {
+      "itemId": 1000813,
+      "chance": 1000,
+      "stealProtected": false,
+      "serverTypeName": null,
+      "optionGroup": "G0"
+    },
+    {
+      "itemId": 1000812,
+      "chance": 2500,
+      "stealProtected": false,
+      "serverTypeName": null,
+      "optionGroup": "G0"
+    },
+    {
+      "itemId": 1000811,
+      "chance": 5000,
+      "stealProtected": false,
+      "serverTypeName": null,
+      "optionGroup": "G0"
+    },
+    {
+      "itemId": 1000811,
+      "chance": 3000,
+      "stealProtected": false,
+      "serverTypeName": null,
+      "optionGroup": "G0"
+    },
+    {
+      "itemId": 512,
+      "chance": 0,
+      "stealProtected": false,
+      "serverTypeName": null,
+      "optionGroup": "G0"
+    },
+    {
+      "itemId": 300382,
+      "chance": 1,
+      "stealProtected": true,
+      "serverTypeName": null,
+      "optionGroup": "G0"
+    }
+  ],
+  "mapDrops": [],
+  "mvpdrops": [
+    {
+      "itemId": 1000812,
+      "chance": 7000,
+      "stealProtected": false,
+      "serverTypeName": null,
+      "optionGroup": null
+    },
+    {
+      "itemId": 1000813,
+      "chance": 2000,
+      "stealProtected": false,
+      "serverTypeName": null,
+      "optionGroup": null
+    },
+    {
+      "itemId": 1000814,
+      "chance": 1000,
+      "stealProtected": false,
+      "serverTypeName": null,
+      "optionGroup": null
+    }
+  ],
+  "spawn": [],
+  "skill": [],
+  "propertyTable": {
+    "0": 100,
+    "1": 100,
+    "2": 100,
+    "3": 100,
+    "4": 100,
+    "5": 100,
+    "6": 100,
+    "7": 100,
+    "8": 0,
+    "9": 100
+  }
+}

@@ -11,6 +11,10 @@ from PySide6.QtWidgets import (
 from PySide6.QtWidgets import QComboBox 
 # ================= monster =================
 MONSTERS_FILE = Path("data","monsters.json")
+MONSTER_CACHE_DIR = Path("data", "monster")
+def cache_path(monster_id: int) -> Path:
+    # data/monster/1002.json
+    return MONSTER_CACHE_DIR / f"{int(monster_id)}.json"
 
 def load_presets() -> list[dict]:
     """
@@ -85,11 +89,38 @@ class MonsterFetchWorker(QObject):
 
     def run(self):
         try:
+            # 1) 先讀快取
+            MONSTER_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+            cpath = cache_path(self.monster_id)
+
+            if cpath.exists():
+                with cpath.open("r", encoding="utf-8") as f:
+                    data = json.load(f)
+                if isinstance(data, dict):
+                    data["_from_cache"] = True
+                self.finished.emit(data)
+                return
+
+            # 2) 沒快取才打 API
+            if not self.api_key:
+                raise Exception("沒有快取，且未設定 API Key")
+
             url = f"https://www.divine-pride.net/api/database/Monster/{self.monster_id}?apiKey={self.api_key}"
             headers = {"Accept-Language": self.language}
             r = requests.get(url, headers=headers, timeout=10)
             r.raise_for_status()
-            self.finished.emit(r.json())
+            data = r.json()
+
+            # 3) 存快取（存原始 JSON）
+            try:
+                with cpath.open("w", encoding="utf-8") as f:
+                    json.dump(data, f, ensure_ascii=False, indent=2)
+            except Exception:
+                # 快取寫入失敗不阻擋主要流程
+                pass
+
+            self.finished.emit(data)
+
         except Exception as e:
             self.error.emit(str(e))
 
@@ -162,6 +193,7 @@ class MonsterLookupDialog(QDialog):
 
     # -------- logic --------
     def on_query(self):
+
         try:
             monster_id = int(self.id_input.text())
         except ValueError:
@@ -169,9 +201,6 @@ class MonsterLookupDialog(QDialog):
             return
 
         api_key = self.key_input.text().strip()
-        if not api_key:
-            QMessageBox.warning(self, "錯誤", "API Key 不可為空")
-            return
 
         self.status.setText("查詢中...")
         self.btn_query.setEnabled(False)
@@ -179,22 +208,33 @@ class MonsterLookupDialog(QDialog):
 
         self.thread = QThread(self)
         self.worker = MonsterFetchWorker(monster_id, api_key)
-        self.worker.moveToThread(self.thread)
-
         self.thread.started.connect(self.worker.run)
+
         self.worker.finished.connect(self.thread.quit)
         self.worker.finished.connect(self.worker.deleteLater)
+
+        # ✅ 這三行是關鍵：錯誤也要結束 thread，不然按「套用」關窗就會爆
+        self.worker.error.connect(self.thread.quit)
+        self.worker.error.connect(self.worker.deleteLater)
+        self.worker.error.connect(self.thread.quit)  #（重複也沒關係，但建議保留一次即可）
+
         self.thread.finished.connect(self.thread.deleteLater)
 
         self.worker.finished.connect(self.on_fetched)
         self.worker.error.connect(self.on_error)
 
+
         self.thread.start()
 
     def on_error(self, msg: str):
         self.btn_query.setEnabled(True)
+        self.btn_apply.setEnabled(False)   # <<< 重要：錯誤就不允許套用
+        self._last_data = None             # <<< 重要：清掉上一次成功資料，避免誤套用
+        self.name_preview.clear()
         self.status.setText("查詢失敗")
         QMessageBox.critical(self, "API 錯誤", msg)
+
+
 
     def on_fetched(self, data: dict):
         self.btn_query.setEnabled(True)
@@ -203,7 +243,8 @@ class MonsterLookupDialog(QDialog):
         self._last_data = parsed
 
         self.name_preview.setText(parsed["name"])
-        self.status.setText("查詢完成")
+        src = "快取" if data.get("_from_cache") else "API"
+        self.status.setText(f"查詢完成（{src}）")
         self.btn_apply.setEnabled(True)
 
     def on_apply(self):

@@ -1,0 +1,158 @@
+{
+  "id": 21533,
+  "dbname": "EP19_MD_JUNCEA_S",
+  "name": "Simulation Juncea",
+  "sprite": "EP19_MD_JUNCEA_S",
+  "stats": {
+    "attackRange": 2,
+    "level": 215,
+    "health": 225503800,
+    "sp": 1,
+    "str": 159,
+    "int": 101,
+    "vit": 276,
+    "dex": 377,
+    "agi": 91,
+    "luk": 110,
+    "rechargeTime": 403,
+    "atk1": 15250,
+    "atk2": 2280,
+    "attack": {
+      "minimum": 12574,
+      "maximum": 18674
+    },
+    "magicAttack": {
+      "minimum": 1912,
+      "maximum": 3280
+    },
+    "defense": 575,
+    "baseExperience": 7798710,
+    "jobExperience": 5430080,
+    "aggroRange": 10,
+    "escapeRange": 12,
+    "movementSpeed": 150.0,
+    "attackSpeed": 1008.0,
+    "attackedSpeed": 576.0,
+    "element": 85,
+    "scale": 2,
+    "race": 0,
+    "magicDefense": 100,
+    "hit": 506,
+    "flee": 762,
+    "ai": "",
+    "mvp": 1,
+    "class": 1,
+    "attr": 8,
+    "res": 376,
+    "mres": 131
+  },
+  "spawnSet": [],
+  "slaves": [],
+  "metamorphosis": [],
+  "sounds": [
+    "ep19_md_juncea_attack.wav",
+    "ep19_md_juncea_damage.wav",
+    "ep19_md_juncea_die.wav",
+    "ep19_md_juncea_die2.wav",
+    "ep19_md_juncea_stand.wav"
+  ],
+  "questObjective": [
+    16662
+  ],
+  "drops": [
+    {
+      "itemId": 1000834,
+      "chance": 7000,
+      "stealProtected": false,
+      "serverTypeName": null,
+      "optionGroup": "G0"
+    },
+    {
+      "itemId": 1000814,
+      "chance": 500,
+      "stealProtected": false,
+      "serverTypeName": null,
+      "optionGroup": "G0"
+    },
+    {
+      "itemId": 1000813,
+      "chance": 1000,
+      "stealProtected": false,
+      "serverTypeName": null,
+      "optionGroup": "G0"
+    },
+    {
+      "itemId": 1000812,
+      "chance": 2500,
+      "stealProtected": false,
+      "serverTypeName": null,
+      "optionGroup": "G0"
+    },
+    {
+      "itemId": 1000811,
+      "chance": 3500,
+      "stealProtected": false,
+      "serverTypeName": null,
+      "optionGroup": "G0"
+    },
+    {
+      "itemId": 1000811,
+      "chance": 1500,
+      "stealProtected": false,
+      "serverTypeName": null,
+      "optionGroup": "G0"
+    },
+    {
+      "itemId": 512,
+      "chance": 0,
+      "stealProtected": false,
+      "serverTypeName": null,
+      "optionGroup": "G0"
+    },
+    {
+      "itemId": 300378,
+      "chance": 1,
+      "stealProtected": true,
+      "serverTypeName": null,
+      "optionGroup": "G0"
+    }
+  ],
+  "mapDrops": [],
+  "mvpdrops": [
+    {
+      "itemId": 1000812,
+      "chance": 7000,
+      "stealProtected": false,
+      "serverTypeName": null,
+      "optionGroup": null
+    },
+    {
+      "itemId": 1000813,
+      "chance": 2000,
+      "stealProtected": false,
+      "serverTypeName": null,
+      "optionGroup": null
+    },
+    {
+      "itemId": 1000814,
+      "chance": 1000,
+      "stealProtected": false,
+      "serverTypeName": null,
+      "optionGroup": null
+    }
+  ],
+  "spawn": [],
+  "skill": [],
+  "propertyTable": {
+    "0": 100,
+    "1": 75,
+    "2": 75,
+    "3": 75,
+    "4": 75,
+    "5": 0,
+    "6": 125,
+    "7": -25,
+    "8": 25,
+    "9": -25
+  }
+}

@@ -663,7 +663,7 @@
 2211,WL_CRIMSONROCK,碧血隕石,magic,,,5,(700+Sklv*600)*BaseLv/100,3,-7,,,,,,,,,,,,
 2212,WL_HELLINFERNO,地獄火焰,magic,,,5,(Sklv*400)*BaseLv/100,3,1,,(Sklv*600)*BaseLv/100,7,-3,,,,,,,,
 2213,WL_COMET,毀滅慧星,magic,0,,5,(3000+Sklv*600)*BaseLv/100,0,-10,,,,,,,,,,,,
-2214,WL_CHAINLIGHTNING,連鎖電擊,magic,,,5,(500+Sklv*100)*BaseLv/100,4,4,,,,,,,,,,4,800,-100
+2214,WL_CHAINLIGHTNING,連鎖電擊,magic,0,,5,(500+Sklv*100)*BaseLv/100,4,4,,,,,,,,,,4,800,-100
 2215,WL_CHAINLIGHTNING_ATK,連鎖電擊,magic,,,,(500+Sklv*100)*BaseLv/100,4,4,,,,,,,,,,4,800,-100
 2216,WL_EARTHSTRAIN,地牛翻身,magic,,,5,(1000+Sklv*600)*BaseLv/100,2,-10,,,,,,,,,,,,
 2217,WL_TETRAVORTEX,屬性漩渦,,,,,,0,0,,,,,,,,,,,,

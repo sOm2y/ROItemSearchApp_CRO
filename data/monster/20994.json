@@ -1,0 +1,400 @@
+{
+  "id": 20994,
+  "dbname": "MD_BETELGEUSE",
+  "name": "參宿四",
+  "sprite": "BETELGEUSE",
+  "stats": {
+    "attackRange": 3,
+    "level": 250,
+    "health": 2000000000,
+    "sp": 0,
+    "str": 211,
+    "int": 152,
+    "vit": 132,
+    "dex": 279,
+    "agi": 211,
+    "luk": 108,
+    "rechargeTime": 720,
+    "atk1": 9748,
+    "atk2": 6481,
+    "attack": {
+      "minimum": 8259,
+      "maximum": 12158
+    },
+    "magicAttack": {
+      "minimum": 4938,
+      "maximum": 8827
+    },
+    "defense": 346,
+    "baseExperience": 0,
+    "jobExperience": 0,
+    "aggroRange": 10,
+    "escapeRange": 12,
+    "movementSpeed": 150.0,
+    "attackSpeed": 720.0,
+    "attackedSpeed": 360.0,
+    "element": 40,
+    "scale": 2,
+    "race": 9,
+    "magicDefense": 102,
+    "hit": 661,
+    "flee": 699,
+    "ai": "MONSTER_TYPE_21",
+    "mvp": 1,
+    "class": 1,
+    "attr": 1032,
+    "res": 500,
+    "mres": 500
+  },
+  "spawnSet": [],
+  "slaves": [],
+  "metamorphosis": [],
+  "sounds": [
+    "betelgeuse_attack1.wav",
+    "betelgeuse_attack2.wav",
+    "betelgeuse_damage.wav",
+    "betelgeuse_die.wav",
+    "betelgeuse_move.wav",
+    "betelgeuse_stand.wav",
+    "naght_sieger_attack.wav",
+    "naght_sieger_damage.wav",
+    "naght_sieger_die.wav",
+    "naght_sieger_move.wav"
+  ],
+  "questObjective": [
+    12515,
+    18192
+  ],
+  "drops": [
+    {
+      "itemId": 512,
+      "chance": 0,
+      "stealProtected": false,
+      "serverTypeName": null,
+      "optionGroup": "G0"
+    },
+    {
+      "itemId": 512,
+      "chance": 0,
+      "stealProtected": false,
+      "serverTypeName": null,
+      "optionGroup": "G0"
+    },
+    {
+      "itemId": 512,
+      "chance": 0,
+      "stealProtected": false,
+      "serverTypeName": null,
+      "optionGroup": "G0"
+    },
+    {
+      "itemId": 512,
+      "chance": 0,
+      "stealProtected": false,
+      "serverTypeName": null,
+      "optionGroup": "G0"
+    },
+    {
+      "itemId": 512,
+      "chance": 0,
+      "stealProtected": false,
+      "serverTypeName": null,
+      "optionGroup": "G0"
+    },
+    {
+      "itemId": 512,
+      "chance": 0,
+      "stealProtected": false,
+      "serverTypeName": null,
+      "optionGroup": "G0"
+    },
+    {
+      "itemId": 512,
+      "chance": 0,
+      "stealProtected": false,
+      "serverTypeName": null,
+      "optionGroup": "G0"
+    },
+    {
+      "itemId": 512,
+      "chance": 0,
+      "stealProtected": true,
+      "serverTypeName": null,
+      "optionGroup": "G0"
+    }
+  ],
+  "mapDrops": [
+    {
+      "itemId": 1000397,
+      "chance": 100,
+      "stealProtected": false,
+      "serverTypeName": null,
+      "optionGroup": "G0",
+      "mapName": "3@ch_t"
+    },
+    {
+      "itemId": 1000397,
+      "chance": 500,
+      "stealProtected": false,
+      "serverTypeName": null,
+      "optionGroup": "G0",
+      "mapName": "3@ch_t"
+    },
+    {
+      "itemId": 1000397,
+      "chance": 1000,
+      "stealProtected": false,
+      "serverTypeName": null,
+      "optionGroup": "G0",
+      "mapName": "3@ch_t"
+    }
+  ],
+  "mvpdrops": [
+    {
+      "itemId": 512,
+      "chance": 0,
+      "stealProtected": false,
+      "serverTypeName": null,
+      "optionGroup": null
+    },
+    {
+      "itemId": 512,
+      "chance": 0,
+      "stealProtected": false,
+      "serverTypeName": null,
+      "optionGroup": null
+    },
+    {
+      "itemId": 512,
+      "chance": 0,
+      "stealProtected": false,
+      "serverTypeName": null,
+      "optionGroup": null
+    }
+  ],
+  "spawn": [],
+  "skill": [
+    {
+      "idx": 42338,
+      "skillId": 779,
+      "status": "BERSERK_ST",
+      "level": 5,
+      "chance": 500,
+      "casttime": 1000,
+      "delay": 30000,
+      "interruptable": false,
+      "changeTo": null,
+      "condition": null,
+      "conditionValue": null,
+      "sendType": "SEND_EMOTICON",
+      "sendValue": "55"
+    },
+    {
+      "idx": 42339,
+      "skillId": 708,
+      "status": "BERSERK_ST",
+      "level": 4,
+      "chance": 200,
+      "casttime": 3000,
+      "delay": 30000,
+      "interruptable": false,
+      "changeTo": null,
+      "condition": null,
+      "conditionValue": null,
+      "sendType": "SEND_EMOTICON",
+      "sendValue": "23"
+    },
+    {
+      "idx": 42340,
+      "skillId": 2217,
+      "status": "BERSERK_ST",
+      "level": 5,
+      "chance": 200,
+      "casttime": 1000,
+      "delay": 30000,
+      "interruptable": false,
+      "changeTo": null,
+      "condition": null,
+      "conditionValue": null,
+      "sendType": null,
+      "sendValue": null
+    },
+    {
+      "idx": 42341,
+      "skillId": 777,
+      "status": "BERSERK_ST",
+      "level": 5,
+      "chance": 100,
+      "casttime": 200,
+      "delay": 180000,
+      "interruptable": false,
+      "changeTo": null,
+      "condition": null,
+      "conditionValue": null,
+      "sendType": "SEND_EMOTICON",
+      "sendValue": "38"
+    },
+    {
+      "idx": 42342,
+      "skillId": 778,
+      "status": "BERSERK_ST",
+      "level": 6,
+      "chance": 100,
+      "casttime": 200,
+      "delay": 180000,
+      "interruptable": false,
+      "changeTo": null,
+      "condition": null,
+      "conditionValue": null,
+      "sendType": null,
+      "sendValue": null
+    },
+    {
+      "idx": 42343,
+      "skillId": 768,
+      "status": "RUSH_ST",
+      "level": 5,
+      "chance": 300,
+      "casttime": 300,
+      "delay": 20000,
+      "interruptable": false,
+      "changeTo": null,
+      "condition": null,
+      "conditionValue": null,
+      "sendType": "SEND_EMOTICON",
+      "sendValue": "36"
+    },
+    {
+      "idx": 42344,
+      "skillId": 768,
+      "status": "BERSERK_ST",
+      "level": 5,
+      "chance": 300,
+      "casttime": 300,
+      "delay": 20000,
+      "interruptable": false,
+      "changeTo": null,
+      "condition": null,
+      "conditionValue": null,
+      "sendType": "SEND_EMOTICON",
+      "sendValue": "36"
+    },
+    {
+      "idx": 42345,
+      "skillId": 340,
+      "status": "RUSH_ST",
+      "level": 10,
+      "chance": 500,
+      "casttime": 0,
+      "delay": 5000,
+      "interruptable": true,
+      "changeTo": null,
+      "condition": null,
+      "conditionValue": null,
+      "sendType": null,
+      "sendValue": null
+    },
+    {
+      "idx": 42346,
+      "skillId": 83,
+      "status": "BERSERK_ST",
+      "level": 10,
+      "chance": 200,
+      "casttime": 1000,
+      "delay": 10000,
+      "interruptable": false,
+      "changeTo": null,
+      "condition": null,
+      "conditionValue": null,
+      "sendType": "SEND_EMOTICON",
+      "sendValue": "29"
+    },
+    {
+      "idx": 42347,
+      "skillId": 83,
+      "status": "RUSH_ST",
+      "level": 10,
+      "chance": 200,
+      "casttime": 1000,
+      "delay": 10000,
+      "interruptable": false,
+      "changeTo": null,
+      "condition": null,
+      "conditionValue": null,
+      "sendType": "SEND_EMOTICON",
+      "sendValue": "29"
+    },
+    {
+      "idx": 42348,
+      "skillId": 783,
+      "status": "BERSERK_ST",
+      "level": 4,
+      "chance": 200,
+      "casttime": 500,
+      "delay": 120000,
+      "interruptable": false,
+      "changeTo": null,
+      "condition": null,
+      "conditionValue": null,
+      "sendType": "SEND_EMOTICON",
+      "sendValue": "29"
+    },
+    {
+      "idx": 42349,
+      "skillId": 483,
+      "status": "BERSERK_ST",
+      "level": 1,
+      "chance": 500,
+      "casttime": 0,
+      "delay": 5000,
+      "interruptable": true,
+      "changeTo": null,
+      "condition": null,
+      "conditionValue": null,
+      "sendType": null,
+      "sendValue": null
+    },
+    {
+      "idx": 42350,
+      "skillId": 750,
+      "status": "BERSERK_ST",
+      "level": 4,
+      "chance": 200,
+      "casttime": 1000,
+      "delay": 60000,
+      "interruptable": true,
+      "changeTo": null,
+      "condition": "IF_HP",
+      "conditionValue": "30",
+      "sendType": "SEND_EMOTICON",
+      "sendValue": "47"
+    },
+    {
+      "idx": 42351,
+      "skillId": 750,
+      "status": "BERSERK_ST",
+      "level": 4,
+      "chance": 200,
+      "casttime": 1000,
+      "delay": 60000,
+      "interruptable": true,
+      "changeTo": null,
+      "condition": "IF_HP",
+      "conditionValue": "30",
+      "sendType": "SEND_EMOTICON",
+      "sendValue": "47"
+    }
+  ],
+  "propertyTable": {
+    "0": 100,
+    "1": 100,
+    "2": 100,
+    "3": 100,
+    "4": 100,
+    "5": 100,
+    "6": 100,
+    "7": 100,
+    "8": 50,
+    "9": 100
+  }
+}

@@ -904,7 +904,8 @@ def update_skill_delay_labels(#技能延遲標籤更新
     basestat,
     Equipstat,
     Equipgpost,
-    Equipspost
+    Equipspost,
+    selected_Equipspost
 
 ):
     """
@@ -921,6 +922,7 @@ def update_skill_delay_labels(#技能延遲標籤更新
     Equipstat    : 裝備變動詠唱（回傳用）
     Equipgpost   : 共延（回傳用）
     Equipspost   : 冷卻（回傳用）
+    selected_Equipspost : 選擇的裝備冷卻（回傳用）
     """
 
     # ---------- Name -> Code ----------
@@ -985,7 +987,7 @@ def update_skill_delay_labels(#技能延遲標籤更新
     
     # -- 變詠固詠計算 --    
     basestat = math.sqrt(basestat / 265) * 100#素質轉換變詠%       
-    stat = [max(0,x * ((100 - basestat)/100) * ((100 - Equipstat)/100))  for x in stat_raw]#變詠秒數*素質變詠*裝備變詠
+    stat = [max(0,(x + selected_Equipspost) * ((100 - basestat)/100) * ((100 - Equipstat)/100))  for x in stat_raw]#(變詠秒數+選擇技能變詠秒數)*素質變詠*裝備變詠
     fixed = [max(0, (x + Equipfixed) * ((100 + Equipfixed_2)/100)) for x in fixed_raw]#固詠毫秒秒數-裝備固詠毫秒*裝備or技能固詠%(取最大值)
     gpost= [max(0, x * ((100 + Equipgpost)/100)) for x in gpost_raw]#共延秒數*裝備共延%
     spost= [max(0, x + Equipspost) for x in spost_raw]#冷卻秒數-裝備冷卻秒數
@@ -3782,15 +3784,18 @@ class ItemSearchApp(QWidget):
         else:
             self.ASPD_label.setText(f"ASPD：該職業不能拿此武器。")
         #== 固定詠唱取得 ==
-        globals()["fixed_cast"] = sum(val for val, _ in effect_dict.get(("固定詠唱時間", "秒"), []))
+        fixed_cast = sum(val for val, _ in effect_dict.get(("固定詠唱時間", "秒"), []))
         #== 固定詠唱%取得 ==
-        globals()["fixed_cast_percent"] = min((val for val, _ in effect_dict.get(("固定詠唱時間", "%"), [])),default=0)
+        fixed_cast_percent = min((val for val, _ in effect_dict.get(("固定詠唱時間", "%"), [])),default=0)
         #== 變動詠唱取得 ==
-        globals()["variable_cast_percent"] = sum(val for val, _ in effect_dict.get(("變動詠唱時間", "%"), []))
+        variable_cast_percent = sum(val for val, _ in effect_dict.get(("變動詠唱時間", "%"), []))
         #== 技能後延遲取得 ==
-        globals()["skill_delay_percent"] = sum(val for val, _ in effect_dict.get(("技能後延遲", "%"), []))
+        skill_delay_percent = sum(val for val, _ in effect_dict.get(("技能後延遲", "%"), []))
         #== 技能冷卻取得 ==        
-        globals()["skill_cooldown_percent"] = sum(val for val, _ in effect_dict.get((f"技能【{selected_skill_name}】冷卻時間", "秒"), []))
+        skill_cooldown = sum(val for val, _ in effect_dict.get((f"技能【{selected_skill_name}】冷卻時間", "秒"), []))
+        #== 指定技能變詠冷卻取得 ==
+        selected_skill_cooldown_percent = sum(val for val, _ in effect_dict.get((f"技能【{selected_skill_name}】變動詠唱時間", "秒"), []))
+
         
         update_skill_delay_labels(#更新固定變動冷卻後延數值
                 skill_name=selected_skill_name,
@@ -3805,7 +3810,8 @@ class ItemSearchApp(QWidget):
                 basestat=(total_DEX+(total_INT/2)),
                 Equipstat=variable_cast_percent,
                 Equipgpost=skill_delay_percent,
-                Equipspost=skill_cooldown_percent*1000
+                Equipspost=skill_cooldown*1000,
+                selected_Equipspost=selected_skill_cooldown_percent*1000
             )
         #=======================技能欄公式====================
         #====================DEF計算==================
@@ -4894,7 +4900,7 @@ class ItemSearchApp(QWidget):
             self.update_mode = dlg.selected_mode()
             self.api_key = dlg.api_key()
             self.save_config()
-            QMessageBox.information(self, "已完成key儲存", f"已設定模式為：{self.update_mode}")
+            #QMessageBox.information(self, "偏好設定", f"設定模式為：{self.update_mode}/n 已完成key儲存")
 
 
 
@@ -7219,7 +7225,6 @@ class ItemSearchApp(QWidget):
         load_skill_map("data/skillneme.csv") #讀取SKILL列表
         self.lua_text = load_skill_delay_lua("data/skilldelaylist.lua")#讀取技能延遲
         self.parsed_items = resolve_name_conflicts(self.parsed_items ,self.equipment_data)#重複物品名稱加上id
-        print("🎉 載入完成")
         return self.parsed_items
 
     def rebuild_skill_tab(self):

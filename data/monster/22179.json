@@ -1,0 +1,160 @@
+{
+  "id": 22179,
+  "dbname": "MD_PRI_DRAGON_3",
+  "name": "Maple Tree",
+  "sprite": "MD_PRI_DRAGON_3",
+  "stats": {
+    "attackRange": 2,
+    "level": 275,
+    "health": 700000000,
+    "sp": 1,
+    "str": 415,
+    "int": 485,
+    "vit": 467,
+    "dex": 532,
+    "agi": 428,
+    "luk": 525,
+    "rechargeTime": 288,
+    "atk1": 43450,
+    "atk2": 12337,
+    "attack": {
+      "minimum": 35450,
+      "maximum": 52830
+    },
+    "magicAttack": {
+      "minimum": 9395,
+      "maximum": 16798
+    },
+    "defense": 213,
+    "baseExperience": 0,
+    "jobExperience": 0,
+    "aggroRange": 10,
+    "escapeRange": 12,
+    "movementSpeed": 150.0,
+    "attackSpeed": 1440.0,
+    "attackedSpeed": -1.0,
+    "element": 24,
+    "scale": 2,
+    "race": 3,
+    "magicDefense": 241,
+    "hit": 903,
+    "flee": 977,
+    "ai": "",
+    "mvp": 1,
+    "class": 1,
+    "attr": 1032,
+    "res": 1399,
+    "mres": 2324
+  },
+  "spawnSet": [],
+  "slaves": [],
+  "metamorphosis": [],
+  "sounds": [
+    "goblin_attack.wav",
+    "goblin_damage.wav",
+    "goblin_die.wav",
+    "md_pri_dragon_3_attack.wav",
+    "md_pri_dragon_3_die.wav",
+    "md_pri_dragon_3_move.wav",
+    "md_pri_dragon_3_stand.wav"
+  ],
+  "questObjective": [
+    12615
+  ],
+  "drops": [
+    {
+      "itemId": 1001442,
+      "chance": 2000,
+      "stealProtected": false,
+      "serverTypeName": null,
+      "optionGroup": "G0"
+    },
+    {
+      "itemId": 1001442,
+      "chance": 1000,
+      "stealProtected": false,
+      "serverTypeName": null,
+      "optionGroup": "G0"
+    },
+    {
+      "itemId": 1001414,
+      "chance": 1000,
+      "stealProtected": false,
+      "serverTypeName": null,
+      "optionGroup": "G0"
+    },
+    {
+      "itemId": 1001450,
+      "chance": 500,
+      "stealProtected": false,
+      "serverTypeName": null,
+      "optionGroup": "G0"
+    },
+    {
+      "itemId": 1001451,
+      "chance": 500,
+      "stealProtected": false,
+      "serverTypeName": null,
+      "optionGroup": "G0"
+    },
+    {
+      "itemId": 1001452,
+      "chance": 500,
+      "stealProtected": false,
+      "serverTypeName": null,
+      "optionGroup": "G0"
+    },
+    {
+      "itemId": 512,
+      "chance": 0,
+      "stealProtected": false,
+      "serverTypeName": null,
+      "optionGroup": "G0"
+    },
+    {
+      "itemId": 512,
+      "chance": 0,
+      "stealProtected": true,
+      "serverTypeName": null,
+      "optionGroup": "G0"
+    }
+  ],
+  "mapDrops": [],
+  "mvpdrops": [
+    {
+      "itemId": 1001442,
+      "chance": 5000,
+      "stealProtected": false,
+      "serverTypeName": null,
+      "optionGroup": null
+    },
+    {
+      "itemId": 616,
+      "chance": 2500,
+      "stealProtected": false,
+      "serverTypeName": null,
+      "optionGroup": null
+    },
+    {
+      "itemId": 12246,
+      "chance": 2500,
+      "stealProtected": false,
+      "serverTypeName": null,
+      "optionGroup": null
+    }
+  ],
+  "spawn": [],
+  "skill": [],
+  "propertyTable": {
+    "0": 100,
+    "1": 90,
+    "2": 150,
+    "3": 100,
+    "4": 25,
+    "5": 125,
+    "6": 100,
+    "7": 100,
+    "8": 100,
+    "9": 100
+  }
+}
