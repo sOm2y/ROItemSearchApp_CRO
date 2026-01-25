@@ -1,5 +1,5 @@
 #部分資料取自ROCalculator,搜尋 ROCalculator 可以知道哪些有使用
-Version = "v0.1.33-260123"
+Version = "v0.1.34-260126"
 
 import sys, builtins, time
 from PySide6.QtCore import QThread, Signal, Qt, QMetaObject, QTimer
@@ -906,7 +906,6 @@ def update_skill_delay_labels(#技能延遲標籤更新
     Equipgpost,
     Equipspost,
     selected_Equipspost
-
 ):
     """
     skill_name   : skill_box.currentText()
@@ -987,7 +986,8 @@ def update_skill_delay_labels(#技能延遲標籤更新
     
     # -- 變詠固詠計算 --    
     basestat = math.sqrt(basestat / 265) * 100#素質轉換變詠%       
-    stat = [max(0,(x + selected_Equipspost) * ((100 - basestat)/100) * ((100 - Equipstat)/100))  for x in stat_raw]#(變詠秒數+選擇技能變詠秒數)*素質變詠*裝備變詠
+    stat = [max(0,(x + selected_Equipspost) * ((100 - basestat)/100) * ((100 + Equipstat)/100))  for x in stat_raw]#(變詠秒數+選擇技能變詠秒數)*素質變詠*裝備變詠
+    #print(f"素質{basestat}，*裝備變詠：{Equipstat}")
     fixed = [max(0, (x + Equipfixed) * ((100 + Equipfixed_2)/100)) for x in fixed_raw]#固詠毫秒秒數-裝備固詠毫秒*裝備or技能固詠%(取最大值)
     gpost= [max(0, x * ((100 + Equipgpost)/100)) for x in gpost_raw]#共延秒數*裝備共延%
     spost= [max(0, x + Equipspost) for x in spost_raw]#冷卻秒數-裝備冷卻秒數
@@ -1032,12 +1032,16 @@ def update_skill_delay_labels(#技能延遲標籤更新
     fixed_value = fixed[skill_level] if skill_level < len(fixed) else fixed[-1]
     spost_value = spost[skill_level] if skill_level < len(spost) else spost[-1]
     gcdtotal_value = max(0.0, gpost[skill_level] if skill_level < len(gpost) else gpost[-1])
+    gcdtotal_raw_value = max(0.0, gpost_raw[skill_level] if skill_level < len(gpost_raw) else gpost_raw[-1])
 
     total_s = max(0.0, fixed_value + stat_value)
     cdtotal_s = max(0.0, spost_value)
     gcdtotal_s = max(0.0, gcdtotal_value)
+    gcdtotal_raw_s = max(0.0, gcdtotal_raw_value)
+
 
     cast_bar.start(int(total_s),int(gcdtotal_s),int(cdtotal_s))  # 轉 ms
+    return gcdtotal_raw_s/1000
 
 #動態下拉式選單
 import re
@@ -3745,6 +3749,19 @@ class ItemSearchApp(QWidget):
         if any("武器浸透勁效果" in key for (key, unit) in effect_dict.keys()):
             print("有武器浸透勁效果")
             Use_skill_levels[266] = True
+        #== 固定詠唱取得 ==
+        fixed_cast = sum(val for val, _ in effect_dict.get(("固定詠唱時間", "秒"), []))
+        #== 固定詠唱%取得 ==
+        fixed_cast_percent = min((val for val, _ in effect_dict.get(("固定詠唱時間", "%"), [])),default=0)
+        #== 變動詠唱取得 ==
+        variable_cast_percent = sum(val for val, _ in effect_dict.get(("變動詠唱時間", "%"), []))
+        #== 技能後延遲取得 ==
+        skill_delay_percent = sum(val for val, _ in effect_dict.get(("技能後延遲", "%"), []))
+        #== 技能冷卻取得 ==        
+        skill_cooldown = sum(val for val, _ in effect_dict.get((f"技能【{selected_skill_name}】冷卻時間", "秒"), []))
+        #== 指定技能變詠冷卻取得 ==
+        selected_skill_cooldown_percent = sum(val for val, _ in effect_dict.get((f"技能【{selected_skill_name}】變動詠唱時間", "秒"), []))
+
         #ASPD計算
         atkaspd = -sum(val for val, _ in effect_dict.get(("(2轉以下)攻擊後延遲", "%"), []))
         #print(f"(2轉以下)攻擊後延遲減少：{atkaspd}%")
@@ -3778,26 +3795,8 @@ class ItemSearchApp(QWidget):
                 cat2_rate=atkaspd_2, cat2_flat=aspdno_2
             )        
 
-        if isinstance(aspd, (int, float)):
-            aspds = 50/(200-min(193,int(aspd)))
-            self.ASPD_label.setText(f"ASPD：{aspd} 每秒{aspds:.2f}下")
-        else:
-            self.ASPD_label.setText(f"ASPD：該職業不能拿此武器。")
-        #== 固定詠唱取得 ==
-        fixed_cast = sum(val for val, _ in effect_dict.get(("固定詠唱時間", "秒"), []))
-        #== 固定詠唱%取得 ==
-        fixed_cast_percent = min((val for val, _ in effect_dict.get(("固定詠唱時間", "%"), [])),default=0)
-        #== 變動詠唱取得 ==
-        variable_cast_percent = sum(val for val, _ in effect_dict.get(("變動詠唱時間", "%"), []))
-        #== 技能後延遲取得 ==
-        skill_delay_percent = sum(val for val, _ in effect_dict.get(("技能後延遲", "%"), []))
-        #== 技能冷卻取得 ==        
-        skill_cooldown = sum(val for val, _ in effect_dict.get((f"技能【{selected_skill_name}】冷卻時間", "秒"), []))
-        #== 指定技能變詠冷卻取得 ==
-        selected_skill_cooldown_percent = sum(val for val, _ in effect_dict.get((f"技能【{selected_skill_name}】變動詠唱時間", "秒"), []))
-
         
-        update_skill_delay_labels(#更新固定變動冷卻後延數值
+        gcdtotal_raw_s = update_skill_delay_labels(#更新固定變動冷卻後延數值
                 skill_name=selected_skill_name,
                 skill_map_all=skill_map_all,
                 lua_text=self.lua_text,
@@ -3813,6 +3812,15 @@ class ItemSearchApp(QWidget):
                 Equipspost=skill_cooldown*1000,
                 selected_Equipspost=selected_skill_cooldown_percent*1000
             )
+        print(f"{gcdtotal_raw_s}")
+
+        if isinstance(aspd, (int, float)):            
+            aspds = 50/(200-min(193,int(aspd)))
+            ASPD_GCD = max(0,math.ceil((1 - ((1 / (50 / (200 - min(193,int(aspd))))) / gcdtotal_raw_s)) / 0.01))
+            self.ASPD_label.setText(f"ASPD：{aspd} 每秒{aspds:.2f}下 (共延需求{ASPD_GCD}%)")
+        else:
+            self.ASPD_label.setText(f"ASPD：該職業不能拿此武器。")
+
         #=======================技能欄公式====================
         #====================DEF計算==================
         def calc_final_def_damage(d_ef: float, reduction_percent: float) -> float:

@@ -1,0 +1,160 @@
+{
+  "id": 21955,
+  "dbname": "RENIRE",
+  "name": "Renire",
+  "sprite": "RENIRE",
+  "stats": {
+    "attackRange": 1,
+    "level": 270,
+    "health": 384095393,
+    "sp": 1,
+    "str": 256,
+    "int": 256,
+    "vit": 244,
+    "dex": 248,
+    "agi": 211,
+    "luk": 244,
+    "rechargeTime": 574,
+    "atk1": 21177,
+    "atk2": 6930,
+    "attack": null,
+    "magicAttack": null,
+    "defense": 472,
+    "baseExperience": 0,
+    "jobExperience": 0,
+    "aggroRange": 10,
+    "escapeRange": 12,
+    "movementSpeed": 150.0,
+    "attackSpeed": 600.0,
+    "attackedSpeed": 432.0,
+    "element": 61,
+    "scale": 1,
+    "race": 4,
+    "magicDefense": 270,
+    "hit": 681,
+    "flee": 688,
+    "ai": "",
+    "mvp": 1,
+    "class": 1,
+    "attr": 520,
+    "res": 481,
+    "mres": 381
+  },
+  "spawnSet": [],
+  "slaves": [],
+  "metamorphosis": [],
+  "sounds": [
+    "hornet_damage.wav",
+    "hornet_die.wav",
+    "hornet_stand.wav",
+    "mistress_attack.wav",
+    "renire_attack.wav",
+    "renire_damage.wav",
+    "renire_die.wav",
+    "renire_move.wav",
+    "renire_stand.wav"
+  ],
+  "questObjective": [],
+  "drops": [
+    {
+      "itemId": 1001086,
+      "chance": 0,
+      "stealProtected": false,
+      "serverTypeName": null,
+      "optionGroup": "G0"
+    },
+    {
+      "itemId": 1001085,
+      "chance": 0,
+      "stealProtected": false,
+      "serverTypeName": null,
+      "optionGroup": "G0"
+    },
+    {
+      "itemId": 7316,
+      "chance": 0,
+      "stealProtected": false,
+      "serverTypeName": null,
+      "optionGroup": "G0"
+    },
+    {
+      "itemId": 25728,
+      "chance": 0,
+      "stealProtected": false,
+      "serverTypeName": null,
+      "optionGroup": "G0"
+    },
+    {
+      "itemId": 25730,
+      "chance": 0,
+      "stealProtected": false,
+      "serverTypeName": null,
+      "optionGroup": "G0"
+    },
+    {
+      "itemId": 25729,
+      "chance": 0,
+      "stealProtected": false,
+      "serverTypeName": null,
+      "optionGroup": "G0"
+    },
+    {
+      "itemId": 25731,
+      "chance": 0,
+      "stealProtected": false,
+      "serverTypeName": null,
+      "optionGroup": "G0"
+    },
+    {
+      "itemId": 300450,
+      "chance": 0,
+      "stealProtected": true,
+      "serverTypeName": null,
+      "optionGroup": "G0"
+    }
+  ],
+  "mapDrops": [],
+  "mvpdrops": [
+    {
+      "itemId": 1001203,
+      "chance": 3000,
+      "stealProtected": false,
+      "serverTypeName": null,
+      "optionGroup": null
+    },
+    {
+      "itemId": 23817,
+      "chance": 3000,
+      "stealProtected": false,
+      "serverTypeName": null,
+      "optionGroup": null
+    },
+    {
+      "itemId": 616,
+      "chance": 2000,
+      "stealProtected": false,
+      "serverTypeName": null,
+      "optionGroup": null
+    }
+  ],
+  "spawn": [
+    {
+      "mapname": "mjo_wst01",
+      "amount": 1,
+      "respawnTime": 5000
+    }
+  ],
+  "skill": [],
+  "propertyTable": {
+    "0": 100,
+    "1": -25,
+    "2": 100,
+    "3": 70,
+    "4": 200,
+    "5": 50,
+    "6": 100,
+    "7": 100,
+    "8": 50,
+    "9": 50
+  }
+}
