@@ -3313,6 +3313,7 @@ class ItemSearchApp(QWidget):
     def open_monster_lookup(self):
         dlg = MonsterLookupDialog(self)
         dlg.monsterSelected.connect(self.apply_monster_to_main_ui)
+        dlg.monsterSelected.connect(lambda: (setattr(self, "_last_calc_state", None), self.trigger_total_effect_update()))
         dlg.exec()
 
 
@@ -6361,7 +6362,7 @@ class ItemSearchApp(QWidget):
 
         
 
-    def trigger_total_effect_update(self):#計算統一處理，除非特殊狀態不然不要單獨處理效果       
+    def trigger_total_effect_update(self):#統一計算處理，除非特殊狀態不然不要單獨處理效果       
         '''
         計算統一處理，除非特殊狀態不然不要單獨處理效果
         '''        
