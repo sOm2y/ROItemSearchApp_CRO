@@ -2833,11 +2833,12 @@ def parse_lua_effects_with_variables(
             {"name": "種族", "map": "race_map"},
             {"name": "數值%", "type": "value"}
         ])
-        ignore_race_pct = re.match(r"SetIgnoreDefRace_Percent\((\d+),\s*(\d+)\)", line)
+        ignore_race_pct = re.match(r"SetIgnoreDefRace_Percent\((\d+),\s*(.+?)\)", line)
         if ignore_race_pct and condition_met:
-            race_id, value = ignore_race_pct.groups()
+            race_id, value_expr = ignore_race_pct.groups()
             race_name = race_map.get(int(race_id), f"種族{race_id}")
-            results.append(f"無視 {race_name} 型怪的物理防禦 {value}%")
+            val = safe_eval_expr(value_expr, variables, get_values, refine_inputs, grade)
+            results.append(f"無視 {race_name} 型怪的物理防禦 {val}%")
             continue
 
         # SetIgnoreDEFClass(class_id)
