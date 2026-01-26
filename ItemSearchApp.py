@@ -1,5 +1,5 @@
 #部分資料取自ROCalculator,搜尋 ROCalculator 可以知道哪些有使用
-Version = "v0.1.35-260126"
+Version = "v0.1.36-260127"
 
 import sys, builtins, time
 from PySide6.QtCore import QThread, Signal, Qt, QMetaObject, QTimer
@@ -9,7 +9,7 @@ import skill_tree #載入技能樹
 import reform_viewer #載入改造工具
 from rrf_to_App import run_rrf_main#載入rrf轉換
 from monster_lookup_dialog import MonsterLookupDialog#查詢怪物
-
+import requests
 class InitWorker(QThread):
     log_signal = Signal(str)
     progress_signal = Signal(str)
@@ -52,6 +52,55 @@ class InitWorker(QThread):
             print(f"初始化發生錯誤：{e}")
         finally:
             builtins.print = original_print
+
+from PySide6.QtWidgets import (
+    QDialog, QVBoxLayout, QHBoxLayout, QLabel,
+    QPushButton, QTextBrowser
+)
+from PySide6.QtCore import Qt, QUrl
+from PySide6.QtGui import QDesktopServices
+
+
+class UpdateDialog(QDialog):#顯示更新內容
+    def __init__(self, local_ver: str, remote_ver: str, notes_md: str, release_url: str, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("有新版本")
+        self.setModal(True)
+        self.resize(640, 520)
+
+        layout = QVBoxLayout(self)
+
+        title = QLabel(f"目前版本：{local_ver}　　最新版本：{remote_ver}")
+        title.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        layout.addWidget(title)
+
+        link = QLabel(f'<a href="{release_url}">前往 Release 頁面</a>')
+        link.setOpenExternalLinks(True)
+        layout.addWidget(link)
+
+        self.browser = QTextBrowser()
+        # 讓 QTextBrowser 顯示 markdown（PySide6 支援 setMarkdown）
+        self.browser.setMarkdown(notes_md if notes_md.strip() else "(此版本沒有填寫更新內容)")
+        self.browser.setReadOnly(True)
+
+        # 點連結開外部瀏覽器（避免某些情況下內建行為不一致）
+        self.browser.setOpenExternalLinks(False)
+        self.browser.anchorClicked.connect(lambda url: QDesktopServices.openUrl(QUrl(url.toString())))
+
+        layout.addWidget(self.browser, 1)
+
+        btn_row = QHBoxLayout()
+        btn_row.addStretch(1)
+
+        self.btn_update = QPushButton("立即更新")
+        self.btn_cancel = QPushButton("稍後再說")
+
+        self.btn_update.clicked.connect(self.accept)
+        self.btn_cancel.clicked.connect(self.reject)
+
+        btn_row.addWidget(self.btn_update)
+        btn_row.addWidget(self.btn_cancel)
+        layout.addLayout(btn_row)
 
 
 
@@ -7324,6 +7373,8 @@ class ItemSearchApp(QWidget):
         print("✓ JOB 下拉選單已重新載入")
 
 
+
+
     def refresh_skill_list(self):
         # 搜尋字（只過濾，不排序）
         query = ""
@@ -7379,6 +7430,11 @@ class ItemSearchApp(QWidget):
             self.skill_checkbox_layout.addWidget(self.skill_checkboxes[name])
 
 
+
+
+
+
+
     def do_update(self):
         if not self._remote_version:
             QMessageBox.warning(self, "提示", "請先點『檢查更新』。")
@@ -7404,6 +7460,18 @@ class ItemSearchApp(QWidget):
         self.close()
 
     def check_update(self):
+        def fetch_release_notes(owner: str, repo: str, tag: str, timeout: int = 8) -> str:
+            url = f"https://api.github.com/repos/{owner}/{repo}/releases/tags/{tag}"
+            headers = {
+                "Accept": "application/vnd.github+json",
+                # 可加 UA，避免某些環境被擋
+                "User-Agent": "ROItemSearchApp-Updater"
+            }
+            r = requests.get(url, headers=headers, timeout=timeout)
+            r.raise_for_status()
+            data = r.json()
+            return data.get("body", "") or ""
+
         app_dir = os.getcwd()
 
         try:
@@ -7424,24 +7492,25 @@ class ItemSearchApp(QWidget):
         cmp_result = compare_versions(remote_ver, local_ver)
 
         if cmp_result > 0:
-            #self.action_do_update.setEnabled(True)
+            release_url = f"https://github.com/z2911902/ROItemSearchApp/releases/tag/{remote_ver}"
 
-            msg = QMessageBox(self)
-            msg.setWindowTitle("有新版本")
-            msg.setIcon(QMessageBox.Icon.Information)
-            msg.setText(
-                f"目前版本：{local_ver}\n"
-                f"最新版本：{remote_ver}\n\n"
-                "要不要立即更新？"
+            try:
+                notes = fetch_release_notes("z2911902", "ROItemSearchApp", str(remote_ver))
+            except Exception as e:
+                notes = f"⚠ 無法取得更新內容：{e}\n\n你仍可前往 Release 頁面查看：\n{release_url}"
+
+            dlg = UpdateDialog(
+                local_ver=str(local_ver),
+                remote_ver=str(remote_ver),
+                notes_md=notes,
+                release_url=release_url,
+                parent=self
             )
 
-            btn_update = msg.addButton("立即更新", QMessageBox.ButtonRole.AcceptRole)
-            msg.addButton("稍後再說", QMessageBox.ButtonRole.RejectRole)
+            if dlg.exec() == QDialog.Accepted:
+                self.do_update()
 
-            msg.exec()
 
-            if msg.clickedButton() == btn_update:
-                self.do_update()  # 或 self.action_do_update.trigger()
 
         elif cmp_result == 0:
             #self.action_do_update.setEnabled(False)
