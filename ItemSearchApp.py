@@ -1,5 +1,5 @@
 #部分資料取自ROCalculator,搜尋 ROCalculator 可以知道哪些有使用
-Version = "v0.1.34-260126"
+Version = "v0.1.35-260126"
 
 import sys, builtins, time
 from PySide6.QtCore import QThread, Signal, Qt, QMetaObject, QTimer
@@ -1857,6 +1857,8 @@ def parse_lua_effects_with_variables(
         expr = re.sub(r"GetRefineLevel\((\d+)\)", lambda m: str(refine_inputs.get(int(m.group(1)), 0)), expr)
         expr = re.sub(r"GetEquipGradeLevel\((\d+)\)", lambda m: str(grade), expr)
         expr = re.sub(r"GetEquipArmorLv\((\d+)\)",lambda m: str(global_armor_level_map.get(int(m.group(1)), 0)),expr) # 防具等級GetEquipArmorLv(數字部位)
+        expr = re.sub(r"GetEquipWeaponLv\((\d+)\)",lambda m: str(global_weapon_level_map.get(int(m.group(1)), 0)),expr) # 武器等級GetEquipWeaponLv(數字部位)
+
         # 將變數名稱替換成實際數值
         for v in sorted(variables.keys(), key=lambda x: -len(x)):
             expr = re.sub(rf'\b{re.escape(v)}\b', str(variables[v]), expr)
@@ -2016,7 +2018,7 @@ def parse_lua_effects_with_variables(
             expr = re.sub(r"GetRefineLevel\((\d+)\)", lambda m: str(refine_inputs.get(int(m.group(1)), 0)), expr)
             expr = re.sub(r"GetEquipGradeLevel\((\d+)\)", lambda m: str(grade), expr)
             expr = re.sub(r"GetItemIDLocation\((\d+)\)", lambda m: str(slot_item_id_map.get(int(m.group(1)), 0)), expr)
-            #expr = re.sub(r"GetWeaponClass\((\d+)\)", lambda m: str(global_weapon_type_map.get(int(m.group(1)), 0)), expr)
+            
             for v in sorted(variables.keys(), key=lambda x: -len(x)):
                 expr = re.sub(rf'\b{re.escape(v)}\b', str(variables[v]), expr)
 
@@ -2054,7 +2056,7 @@ def parse_lua_effects_with_variables(
             expr = re.sub(r"GetRefineLevel\((\d+)\)", lambda m: str(refine_inputs.get(int(m.group(1)), 0)), expr)
             expr = re.sub(r"GetEquipGradeLevel\((\d+)\)", lambda m: str(grade), expr)
             expr = re.sub(r"GetItemIDLocation\((\d+)\)", lambda m: str(slot_item_id_map.get(int(m.group(1)), 0)), expr)
-            #expr = re.sub(r"GetWeaponClass\((\d+)\)", lambda m: str(global_weapon_type_map.get(int(m.group(1)), 0)), expr)
+            
             for v in sorted(variables.keys(), key=lambda x: -len(x)):
                 expr = re.sub(rf'\b{re.escape(v)}\b', str(variables[v]), expr)
             expr = expr.replace("~=", "!=")
@@ -2183,6 +2185,20 @@ def parse_lua_effects_with_variables(
                 results.append(f"⚠️ 無法計算 `{var}` = GetWeaponClass({slot})")
             continue
 
+        # 新增對 temp = GetEquipWeaponLv(...) 的處理邏輯
+        weapon_Lv_name = re.match(r"(\w+)\s*=\s*GetEquipWeaponLv\((\d+)\)", line)
+        if weapon_Lv_name:
+            var, slot = weapon_Lv_name.groups()
+            try:
+                slot_i = int(slot)
+                # 從全域表取得該武器的位置類別，沒有設定則預設 0
+                value = global_weapon_level_map.get(slot_i, 0)
+                variables[var] = value
+                results.append(f"📌 `{var}` = {value}（GetEquipWeaponLv({slot})）")
+            except:
+                results.append(f"⚠️ 無法計算 `{var}` = GetEquipWeaponLv({slot})")
+            continue
+        
         # math.floor(...) 指定變數
         var_math = re.match(r"(\w+)\s*=\s*math\.floor\((.+)\)", line)
         if var_math:
@@ -2190,6 +2206,7 @@ def parse_lua_effects_with_variables(
             expr = re.sub(r"get\((\d+)\)", lambda m: str(get_values.get(int(m.group(1)), 0)), expr)
             expr = re.sub(r"GetRefineLevel\((\d+)\)", lambda m: str(refine_inputs.get(int(m.group(1)), 0)), expr)
             expr = re.sub(r"GetEquipGradeLevel\((\d+)\)", lambda m: str(grade), expr)
+            
             for v in sorted(variables.keys(), key=lambda x: -len(x)):
                 expr = re.sub(rf'\b{re.escape(v)}\b', str(variables[v]), expr)
             try:
