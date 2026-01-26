@@ -72,6 +72,9 @@ all_skill_entries = {#範例[    "": {"type": "技能/料理","code":["",""]},
     "贖罪": {"id": "AB","type": "技能","code":["SetIgnoreDefRace_Percent(9999, 25)","SetIgnoreMdefRace(9999, 25)"]},
     #斬首
     "致命塗毒": {"id": "GX","type": "技能","code":["UseSkill(378)"]},
+    "魅影強化": {"id": "GX","type": "技能","code":["UseSkill(5285)"]},
+    "偽裝強化": {"id": "GX","type": "技能","code":["UseSkill(2033)"]},
+
     
     #704
     "五行符": {"id": "SL","type": "技能","code":["AddMDamage_Property(1, 0, 20)","AddMDamage_Property(1, 1, 20)","AddMDamage_Property(1,2, 20)","AddMDamage_Property(1, 3, 20)","AddMDamage_Property(1, 4, 20)","AddDamage_Property(1, 0, 20)","AddDamage_Property(1, 1, 20)","AddDamage_Property(1,2, 20)","AddDamage_Property(1, 3, 20)","AddDamage_Property(1, 4, 20)"]},

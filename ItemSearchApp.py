@@ -3813,11 +3813,14 @@ class ItemSearchApp(QWidget):
                 Equipspost=skill_cooldown*1000,
                 selected_Equipspost=selected_skill_cooldown_percent*1000
             )
-        print(f"{gcdtotal_raw_s}")
+        
 
         if isinstance(aspd, (int, float)):            
             aspds = 50/(200-min(193,int(aspd)))
-            ASPD_GCD = max(0,math.ceil((1 - ((1 / (50 / (200 - min(193,int(aspd))))) / gcdtotal_raw_s)) / 0.01))
+            if gcdtotal_raw_s <= 0:
+                ASPD_GCD = 0
+            else:
+                ASPD_GCD = max(0,math.ceil((1 - ((1 / (50 / (200 - min(193,int(aspd))))) / gcdtotal_raw_s)) / 0.01))
             self.ASPD_label.setText(f"ASPD：{aspd} 每秒{aspds:.2f}下 (共延需求{ASPD_GCD}%)")
         else:
             self.ASPD_label.setText(f"ASPD：該職業不能拿此武器。")
