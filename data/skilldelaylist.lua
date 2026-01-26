@@ -3786,6 +3786,36 @@ SKILL_DELAY_LIST = {
 		SkillSinglePostDelay = { 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000 },
 		SkillCastStatDelay = { 4000, 4000, 4000, 4000, 4000, 4000, 4000, 4000, 4000, 4000 }
 	},
+	[SKID.EM_ELEMENTAL_BUSTER_FIRE] = {
+		SkillGlobalPostDelay = { 500, 500, 500, 500, 500, 500, 500, 500, 500, 500 },
+		SkillCastFixedDelay = { 1500, 1500, 1500, 1500, 1500, 1500, 1500, 1500, 1500, 1500 },
+		SkillSinglePostDelay = { 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000 },
+		SkillCastStatDelay = { 4000, 4000, 4000, 4000, 4000, 4000, 4000, 4000, 4000, 4000 }
+	},
+	[SKID.EM_ELEMENTAL_BUSTER_WATER] = {
+		SkillGlobalPostDelay = { 500, 500, 500, 500, 500, 500, 500, 500, 500, 500 },
+		SkillCastFixedDelay = { 1500, 1500, 1500, 1500, 1500, 1500, 1500, 1500, 1500, 1500 },
+		SkillSinglePostDelay = { 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000 },
+		SkillCastStatDelay = { 4000, 4000, 4000, 4000, 4000, 4000, 4000, 4000, 4000, 4000 }
+	},
+	[SKID.EM_ELEMENTAL_BUSTER_WIND] = {
+		SkillGlobalPostDelay = { 500, 500, 500, 500, 500, 500, 500, 500, 500, 500 },
+		SkillCastFixedDelay = { 1500, 1500, 1500, 1500, 1500, 1500, 1500, 1500, 1500, 1500 },
+		SkillSinglePostDelay = { 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000 },
+		SkillCastStatDelay = { 4000, 4000, 4000, 4000, 4000, 4000, 4000, 4000, 4000, 4000 }
+	},
+	[SKID.EM_ELEMENTAL_BUSTER_GROUND] = {
+		SkillGlobalPostDelay = { 500, 500, 500, 500, 500, 500, 500, 500, 500, 500 },
+		SkillCastFixedDelay = { 1500, 1500, 1500, 1500, 1500, 1500, 1500, 1500, 1500, 1500 },
+		SkillSinglePostDelay = { 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000 },
+		SkillCastStatDelay = { 4000, 4000, 4000, 4000, 4000, 4000, 4000, 4000, 4000, 4000 }
+	},
+	[SKID.EM_ELEMENTAL_BUSTER_POISON] = {
+		SkillGlobalPostDelay = { 500, 500, 500, 500, 500, 500, 500, 500, 500, 500 },
+		SkillCastFixedDelay = { 1500, 1500, 1500, 1500, 1500, 1500, 1500, 1500, 1500, 1500 },
+		SkillSinglePostDelay = { 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000 },
+		SkillCastStatDelay = { 4000, 4000, 4000, 4000, 4000, 4000, 4000, 4000, 4000, 4000 }
+	},
 	[SKID.SH_HYUN_ROK_SPIRIT_POWER] = {
 		SkillGlobalPostDelay = { 700, 700, 700, 700, 700, 700, 700 },
 		SkillCastFixedDelay = { 1500, 1500, 1500, 1500, 1500, 1500, 1500 },
