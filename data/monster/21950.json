@@ -1,0 +1,160 @@
+{
+  "id": 21950,
+  "dbname": "GAIA_POL",
+  "name": "Gaia Pol",
+  "sprite": "GAIA_POL",
+  "stats": {
+    "attackRange": 1,
+    "level": 270,
+    "health": 401194387,
+    "sp": 1,
+    "str": 207,
+    "int": 207,
+    "vit": 197,
+    "dex": 201,
+    "agi": 171,
+    "luk": 197,
+    "rechargeTime": 432,
+    "atk1": 21969,
+    "atk2": 6757,
+    "attack": null,
+    "magicAttack": null,
+    "defense": 435,
+    "baseExperience": 0,
+    "jobExperience": 0,
+    "aggroRange": 10,
+    "escapeRange": 12,
+    "movementSpeed": 200.0,
+    "attackSpeed": 624.0,
+    "attackedSpeed": 288.0,
+    "element": 82,
+    "scale": 2,
+    "race": 2,
+    "magicDefense": 247,
+    "hit": 641,
+    "flee": 641,
+    "ai": "",
+    "mvp": 1,
+    "class": 1,
+    "attr": 520,
+    "res": 410,
+    "mres": 322
+  },
+  "spawnSet": [],
+  "slaves": [],
+  "metamorphosis": [],
+  "sounds": [
+    "gaia_pol_attack.wav",
+    "gaia_pol_damage.wav",
+    "gaia_pol_die.wav",
+    "gaia_pol_move.wav",
+    "gaia_pol_stand.wav",
+    "ktullanux_attack.wav",
+    "ktullanux_damage.wav",
+    "ktullanux_die.wav",
+    "ktullanux_stand.wav"
+  ],
+  "questObjective": [],
+  "drops": [
+    {
+      "itemId": 1001072,
+      "chance": 0,
+      "stealProtected": false,
+      "serverTypeName": null,
+      "optionGroup": "G0"
+    },
+    {
+      "itemId": 1001075,
+      "chance": 0,
+      "stealProtected": false,
+      "serverTypeName": null,
+      "optionGroup": "G0"
+    },
+    {
+      "itemId": 919,
+      "chance": 0,
+      "stealProtected": false,
+      "serverTypeName": null,
+      "optionGroup": "G0"
+    },
+    {
+      "itemId": 25728,
+      "chance": 0,
+      "stealProtected": false,
+      "serverTypeName": null,
+      "optionGroup": "G0"
+    },
+    {
+      "itemId": 25730,
+      "chance": 0,
+      "stealProtected": false,
+      "serverTypeName": null,
+      "optionGroup": "G0"
+    },
+    {
+      "itemId": 25729,
+      "chance": 0,
+      "stealProtected": false,
+      "serverTypeName": null,
+      "optionGroup": "G0"
+    },
+    {
+      "itemId": 25731,
+      "chance": 0,
+      "stealProtected": false,
+      "serverTypeName": null,
+      "optionGroup": "G0"
+    },
+    {
+      "itemId": 300445,
+      "chance": 0,
+      "stealProtected": true,
+      "serverTypeName": null,
+      "optionGroup": "G0"
+    }
+  ],
+  "mapDrops": [],
+  "mvpdrops": [
+    {
+      "itemId": 1001200,
+      "chance": 3000,
+      "stealProtected": false,
+      "serverTypeName": null,
+      "optionGroup": null
+    },
+    {
+      "itemId": 23817,
+      "chance": 3000,
+      "stealProtected": false,
+      "serverTypeName": null,
+      "optionGroup": null
+    },
+    {
+      "itemId": 616,
+      "chance": 2000,
+      "stealProtected": false,
+      "serverTypeName": null,
+      "optionGroup": null
+    }
+  ],
+  "spawn": [
+    {
+      "mapname": "ra_pol01",
+      "amount": 1,
+      "respawnTime": 5000
+    }
+  ],
+  "skill": [],
+  "propertyTable": {
+    "0": 100,
+    "1": 100,
+    "2": -50,
+    "3": 200,
+    "4": 60,
+    "5": 75,
+    "6": 75,
+    "7": 75,
+    "8": 25,
+    "9": 25
+  }
+}
