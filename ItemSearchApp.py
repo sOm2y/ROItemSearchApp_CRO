@@ -1,5 +1,5 @@
 #部分資料取自ROCalculator,搜尋 ROCalculator 可以知道哪些有使用
-Version = "v0.1.37-260131"
+Version = "v0.1.38-260202"
 
 import sys, builtins, time
 from PySide6.QtCore import QThread, Signal, Qt, QMetaObject, QTimer
@@ -3398,8 +3398,10 @@ class ItemSearchApp(QWidget):
 
 
     def open_damage_calculator(self):
-        if self.atktype in ("physical","d_b"):
+        if self.atktype in ("physical"):
             atk = self.ATK_ALL
+        elif self.atktype in ("d_b"):
+            atk = 100
         else:
             atk = self.MATK_ALL
 
@@ -4555,7 +4557,7 @@ class ItemSearchApp(QWidget):
                                 #爆傷
                                 (CRI_Critical_hit,1,"爆擊傷害%"),
                                 #遠傷% 技能判斷
-                                (MR_AttackDamage,1,"遠傷%"),
+                                (MR_AttackDamage,1,"近/遠傷%"),
                                 #技能倍率
                                 (skill_result,0,"技能倍率%"),
                                 #敵人RES減傷
@@ -4589,7 +4591,7 @@ class ItemSearchApp(QWidget):
                                 #爆傷
                                 (CRI_Critical_hit,1,"爆擊傷害%"),
                                 #近傷% 技能判斷
-                                (MR_AttackDamage,1,"近傷%"),
+                                (MR_AttackDamage,1,"近/遠傷%"),
                                 #技能倍率
                                 (skill_result,0,"技能倍率%"),
                                 #高階拳刃修煉
@@ -4621,11 +4623,11 @@ class ItemSearchApp(QWidget):
                             MR_AttackDamage = MeleeAttackDamage
 
 
-                        default = 0#龍火只吃技能倍率 給他個0做基礎
+                        default = 1#龍火只吃技能倍率 給他個1做基礎
                         final_damage = apply_stepwise_percent_mode(
                             default,
                             #技能倍率
-                            (skill_result,"+","技能倍率%"),
+                            (skill_result,"raw","技能倍率%"),
                             #敵人屬性耐性(1+萬紫+彗星)
                             ((1 + magic_poison_buff),"raw","屬性耐受性%"),
                             #敵人RES減傷
@@ -4633,13 +4635,13 @@ class ItemSearchApp(QWidget):
                             #敵人DEF減傷
                             (damage_nodef,"raw","DEF減傷%"),
                             #敵人DEF減算
-                            (target_defc,None,"DEF減傷%"),
+                            (target_defc,None,"DEF減算"),
                             #裝備段技能增傷
                             (Use_Skills,1,"技能增傷%(裝備段)"),
                             #技能段技能增傷
                             (passive_skill_buff,1,"技能增傷%(技能段)"),
                             #遠傷% 技能判斷
-                            (MR_AttackDamage,1,"遠傷%"),
+                            (MR_AttackDamage,1,"近/遠傷%"),
                             #屬性倍率
                             (get_damage_multiplier(User_attack_element, target_element, target_element_lv),0,"屬性倍率%")
                         )
@@ -9991,13 +9993,14 @@ if __name__ == "__main__":
 # 技能計算BUG觀察紀錄
 # 毀滅彗星5等
 # 技能%等級是否-1%
-# 245 -0
-# 246 -0
-# 247
-# 248 -0
-# 249
 # 250 -0
 # 251 -1
-# 252 
-# 253 -1 
+# 252 -0
+# 253 -1
+# 254 -0 
+# 255 -1
+# 256 
+# 257 -1
+# 258 
+# 259 
 # 260 -0

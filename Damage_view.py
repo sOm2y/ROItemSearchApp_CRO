@@ -199,7 +199,7 @@ class StepDelegate(QStyledItemDelegate):
         name_rect.setWidth(140)
 
         factor_rect = r.adjusted(left_pad + 150, 0, 0, 0)
-        factor_rect.setWidth(90)
+        factor_rect.setWidth(100)
 
         # mode_rect = r.adjusted(left_pad + 125 + 100, 0, 0, 0)
         # mode_rect.setWidth(150)

@@ -66,7 +66,7 @@ def decode_element(element_code: int):
     lv_a = element_code // 20
     rem = element_code % 20
     if rem in (0, 5, 10, 15) and 1 <= lv_a <= 4:
-        return rem // 5, lv_a
+        return rem , lv_a
 
     lv_b = element_code // 20
     id_b = element_code % 20
