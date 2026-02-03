@@ -4077,7 +4077,7 @@ class ItemSearchApp(QWidget):
                     else:  # mode == 0
                         multiplier = bonus / 100
                     #valueol = value * multiplier
-                    value = math.floor(value * multiplier + 1e-9)
+                    value = math.floor(value * multiplier + 1e-9)#避免浮點數誤差
                 #print(f"計算: {valueol} > {value} {steps_name}")
                 
             return value
