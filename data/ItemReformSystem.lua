@@ -3889,6 +3889,18 @@ Material = {Acc_Stone_3 = 100, Zelunium = 1000, Snow_Flower = 200, Bloody_Coin =
 InformationString = {"<B>改造資訊說明</B>", "1) 精煉值 : ^4D4DFF0^000000", "2) 附加能力 : 保留", "3) 卡片及附魔 : 保留", "4) 評價階級 : 保留"}}, 
 [10173] = {BaseItem = "Cel_Design_Pendant", 
 Material = {Acc_Stone_3 = 200, Zelunium = 1000, Rotten_Rope = 200, Bloody_Coin = 6666, M_Dimension_Essence = 10, Ymir_Heart_P_TW = 1}, ResultItem = "Cel_Design_Pendant_LT", NeedRefineMin = 0, NeedRefineMax = 20, NeedOptionNumMin = 0, IsEmptySocket = false, ChangeRefineValue = 0, RandomOptionCode = "", PreserveSocketItem = true, PreserveGrade = true, 
+InformationString = {"<B>改造資訊說明</B>", "1) 精煉值 : ^4D4DFF0^000000", "2) 附加能力 : 保留", "3) 卡片及附魔 : 保留", "4) 評價階級 : 保留"}}, 
+[10174] = {BaseItem = "Circul_Of_Life_Spring", 
+Material = {Energy_Of_Elemental = 20, M_Dimension_Essence = 10, Genesis_Of_Life = 200}, ResultItem = "Season_Hood_Spring", NeedRefineMin = 0, NeedRefineMax = 20, NeedOptionNumMin = 0, IsEmptySocket = false, ChangeRefineValue = 0, RandomOptionCode = "", PreserveSocketItem = true, PreserveGrade = true, 
+InformationString = {"<B>改造資訊說明</B>", "1) 精煉值 : ^4D4DFF0^000000", "2) 附加能力 : 保留", "3) 卡片及附魔 : 保留", "4) 評價階級 : 保留"}}, 
+[10175] = {BaseItem = "Circul_Of_Life_Summer", 
+Material = {Energy_Of_Elemental = 20, M_Dimension_Essence = 10, Genesis_Of_Life = 200}, ResultItem = "Season_Hood_Summer", NeedRefineMin = 0, NeedRefineMax = 20, NeedOptionNumMin = 0, IsEmptySocket = false, ChangeRefineValue = 0, RandomOptionCode = "", PreserveSocketItem = true, PreserveGrade = true, 
+InformationString = {"<B>改造資訊說明</B>", "1) 精煉值 : ^4D4DFF0^000000", "2) 附加能力 : 保留", "3) 卡片及附魔 : 保留", "4) 評價階級 : 保留"}}, 
+[10176] = {BaseItem = "Circul_Of_Life_Autumn", 
+Material = {Energy_Of_Elemental = 20, M_Dimension_Essence = 10, Genesis_Of_Life = 200}, ResultItem = "Season_Hood_Autumn", NeedRefineMin = 0, NeedRefineMax = 20, NeedOptionNumMin = 0, IsEmptySocket = false, ChangeRefineValue = 0, RandomOptionCode = "", PreserveSocketItem = true, PreserveGrade = true, 
+InformationString = {"<B>改造資訊說明</B>", "1) 精煉值 : ^4D4DFF0^000000", "2) 附加能力 : 保留", "3) 卡片及附魔 : 保留", "4) 評價階級 : 保留"}}, 
+[10177] = {BaseItem = "Circul_Of_Life_Winter", 
+Material = {Energy_Of_Elemental = 20, M_Dimension_Essence = 10, Genesis_Of_Life = 200}, ResultItem = "Season_Hood_Winter", NeedRefineMin = 0, NeedRefineMax = 20, NeedOptionNumMin = 0, IsEmptySocket = false, ChangeRefineValue = 0, RandomOptionCode = "", PreserveSocketItem = true, PreserveGrade = true, 
 InformationString = {"<B>改造資訊說明</B>", "1) 精煉值 : ^4D4DFF0^000000", "2) 附加能力 : 保留", "3) 卡片及附魔 : 保留", "4) 評價階級 : 保留"}}}
 ReformItemList = {
 Thanos_W_Reform_1 = {12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24}, 
@@ -3976,5 +3988,6 @@ Hero_Equipment_Cube = {129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 14
 WOE_Reform_Box_TW = {10167}, 
 Gaebolg_A_Hammer_1 = {1148, 1149, 1150, 1151, 1152, 1153}, 
 Gaebolg_A_Hammer_2 = {1154, 1155, 1156, 1157, 1158, 1159}, 
-Gaebolg_A_Hammer_3 = {1160, 1161, 1162, 1163, 1164, 1165}}
+Gaebolg_A_Hammer_3 = {1160, 1161, 1162, 1163, 1164, 1165}, 
+Four_S_Scroll_TW = {10174, 10175, 10176, 10177}}
 

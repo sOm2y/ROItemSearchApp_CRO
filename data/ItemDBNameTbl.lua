@@ -4851,7 +4851,11 @@ ItemDBNameTbl = {
   Dimension_Ring_AAS = 490892,
   Dimension_Ring_ABC = 490893,
   Dimension_Ring_SH = 490896,
-  Dimension_Ring_HN = 490897
+  Dimension_Ring_HN = 490897,
+  Fierce_Kick_Boots = 470417,
+  Dimension_Ring_AG = 490905,
+  Dimension_Ring_EM = 490906,
+  Four_S_Scroll_TW = 106314
 }
 
 function ItemDB_To_ItemID(in_ItemDB)
