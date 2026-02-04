@@ -109,7 +109,12 @@
 	temp_wp = GetWeaponClass(4)
 
 }
+[2248] = {
+	temp = GSklv(2248)
+	AddExtParam(1, 106, temp)
 
+
+}
 [2276] = {
 	temp = GSklv(2276)
 	temp_wp = GetWeaponClass(4)

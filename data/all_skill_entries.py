@@ -88,9 +88,11 @@ all_skill_entries = {#範例[    "": {"type": "技能/料理","code":["",""]},
     "心神凝聚": {"id": ["RA","SN"],"type": "技能","code":["temp = 2 + GetSkillLevel(45)","tempAGI = skill_focus_AGI","tempDEX = skill_focus_DEX","AddExtParam(1, 104, tempAGI * (temp/100))","AddExtParam(1, 107, tempDEX * (temp/100))"]},
     #agi跟dex只吃角色基本素質+job加成+裝備基礎(不含精煉給的)+被動技能常駐，
     #料理、卡片、附魔、詞條類、攻擊觸發、非常駐的技能都不算。
-    "狙殺瞄準": {"id": "RA","type": "技能","code":["AddExtParam(1, 207, 20)","AddExtParam(1, 52, 10)","AddExtParam(1, 49, 30)"]},
+    "狙殺瞄準": {"id": "RA","type": "技能","code":["UseSkill(380)","AddExtParam(1, 52, 100)","AddExtParam(1, 49, 30)","AddExtParam(1, 103, 5)","AddExtParam(1, 104, 5)","AddExtParam(1, 105, 5)","AddExtParam(1, 106, 5)","AddExtParam(1, 107, 5)","AddExtParam(1, 108, 5)"]},
     "精英狙擊": {"id": "RA","type": "技能","code":["AddRangeAttackDamage(1, 350)"],"exclusive": "sniper_group"},
     "憤怒暴風": {"id": "RA","type": "技能","code":["AddRangeAttackDamage(1, 350)","AddDamage_SKID(1, 5334, 20)"],"exclusive": "sniper_group"},
+    #魅影
+    "追跡狀態": {"id": "SC","type": "技能","code":["UseSkill(5315)","UseSkill(6513)","UseSkill(6514)"]},
     #妖術
     "召喚元素:阿爾多雷 火": {"id": "SO","type": "技能","code":["AddDamage_SKID(1, 5372, 30)","AddSkillMDamage(3, 10)"],"exclusive": "4ht_elves"},
     "召喚元素:迪盧比奧 水": {"id": "SO","type": "技能","code":["AddDamage_SKID(1, 5369, 30)","AddSkillMDamage(1, 10)"],"exclusive": "4ht_elves"},
@@ -107,7 +109,8 @@ all_skill_entries = {#範例[    "": {"type": "技能/料理","code":["",""]},
     "咒力賦予": {"id": "SO","type": "技能","code":["AddExtParam(1, 243, 20)"]},
     #皇家
     "抗性聖盾": {"id": "RG","type": "技能","code":["UseSkill(5262)","temp = GetSkillLevel(5262)","AddSkillMDamage(6, temp * 3)"]},
-
+    "末日審判": {"id": "RG","type": "技能","code":["UseSkill(5263)"]},
+    "攻擊架式": {"id": "RG","type": "技能","code":["temp = GetSkillLevel(5260)","AddExtParam(1, 242, temp * 3)","AddExtParam(1, 243, temp * 3)","SubExtParam(1, 45, temp * 40)"]},
     #基因
     "大聲吶喊": {"id": ["GE","ME"],"type": "技能","code":["AddExtParam(1, 103, 4)","AddExtParam(1, 41, 30)"]},
     "手推車加速": {"id": "GE","type": "技能","code":["WeaponMasteryATK(50)"]},
@@ -126,4 +129,6 @@ all_skill_entries = {#範例[    "": {"type": "技能/料理","code":["",""]},
     #終初
     #心神凝聚跟風鷹重複
     "突破規矩": {"id": "SN","type": "技能","code":["UseSkill(5462)"]},
-}
+    #忍者
+    "四色符": {"id": ["OB","KO"],"type": "技能","code":["UseSkill(5499)"]},
+}   
