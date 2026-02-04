@@ -373,7 +373,7 @@ class_map = {
 
 stat_name_sets  = {#裝備基礎編碼
     "armor": [
-        "DEF", "STR", "AGI", "VIT", "INT", "DEX", "LUK", "未知7", "未知8",
+        "DEF", "STR", "INT", "VIT", "DEX", "AGI", "LUK", "未知7", "未知8",
         "MDEF", "防具等級", "POW", "SPL", "STA", "WIS", "CON", "CRT"
     ],
     "Mweapon": [

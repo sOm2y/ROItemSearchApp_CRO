@@ -24,11 +24,14 @@
 	temp_2 = GSklv(63)
 	temp_3 = GSklv(2007)
 	temp_wp = GetWeaponClass(4)
+	job = 0
 	if temp_wp == 4 or temp_wp == 5 then
 		WeaponMasteryATK(temp * 4)
-		if temp_2 > 0 or temp_3 > 0 then
+		if temp_2 > 0 and job > 0 then
 			WeaponMasteryATK(temp)
-
+		end
+		if temp_3 > 0 and job > 0 then
+			WeaponMasteryATK(temp)
 		end
 	end
 }
