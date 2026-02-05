@@ -90,7 +90,7 @@ all_skill_entries = {#範例[    "": {"type": "技能/料理","code":["",""]},
     #料理、卡片、附魔、詞條類、攻擊觸發、非常駐的技能都不算。
     "狙殺瞄準": {"id": "RA","type": "技能","code":["UseSkill(380)","AddExtParam(1, 52, 100)","AddExtParam(1, 49, 30)","AddExtParam(1, 103, 5)","AddExtParam(1, 104, 5)","AddExtParam(1, 105, 5)","AddExtParam(1, 106, 5)","AddExtParam(1, 107, 5)","AddExtParam(1, 108, 5)"]},
     "精英狙擊": {"id": "RA","type": "技能","code":["AddRangeAttackDamage(1, 350)"],"exclusive": "sniper_group"},
-    "憤怒暴風": {"id": "RA","type": "技能","code":["AddRangeAttackDamage(1, 350)","AddDamage_SKID(1, 5334, 20)"],"exclusive": "sniper_group"},
+    "憤怒暴風": {"id": "RA","type": "技能","code":["UseSkill(5328)","AddRangeAttackDamage(1, 350)","AddDamage_SKID(1, 5334, 20)"],"exclusive": "sniper_group"},
     #魅影
     "追跡狀態": {"id": "SC","type": "技能","code":["UseSkill(5315)","UseSkill(6513)","UseSkill(6514)","UseSkill(5316)"]},
     #妖術

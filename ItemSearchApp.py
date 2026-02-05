@@ -900,7 +900,7 @@ def get_total_tstat_points(level: int) -> int:
 skill_df = pd.DataFrame(columns=[#檔案不在使用硬編碼以防跳錯
     "ID","Code","Name","attack_type","Rangedamage","Special_WPRange","Slv","Calculation","element","hits",
     "Critical_hit","combo","combo_element","combo_hits","Special_Calculation","combo_Special_Calculation",
-    "monster_race","skill_buff","decay_hits","bonus_add","bonus_step"
+    "monster_race","skill_buff","Special_Critical_hit","decay_hits","bonus_add","bonus_step"
 ])
 
 # 初始化技能映射變數
@@ -1397,7 +1397,7 @@ class CSVEditor(QMainWindow):
                 "tooltip": "技能打擊次數。(負值為總傷害/次數)"
             },
             "Critical_hit": {
-                "label": "技能爆擊/命中增傷判定",
+                "label": "技能爆擊/命中判定",
                 "tooltip": "設定爆擊倍率，例如 0.5 代表半爆擊；設定命中增傷設定0；負數代表兩者不啟用。"
             },
             "combo": {
@@ -1427,6 +1427,10 @@ class CSVEditor(QMainWindow):
             "skill_buff": {
                 "label": "觸發特殊計算技能(ID)",
                 "tooltip": "目前技能觸發的特殊技能 ID（例如狀態技能）。"
+            },
+            "Special_Critical_hit": {
+                "label": "特殊技能爆擊/命中判定",
+                "tooltip": "觸發特殊條件爆擊倍率，例如 0.5 代表半爆擊；設定命中增傷設定0；負數代表兩者不啟用。"
             },
             "decay_hits": {
                 "label": "遞增/減段數",
@@ -4217,6 +4221,7 @@ class ItemSearchApp(QWidget):
 
         special_formula_ok = pd.notna(skill_row.get("Special_Calculation"))
         trigger_special = False
+        trigger_skillbuff = False  # ✅ 新增：獨立記 skill_buff 是否命中
 
         # 先：種族判斷
         if special_formula_ok and pd.notna(skill_row.get("monster_race")):
@@ -4224,21 +4229,32 @@ class ItemSearchApp(QWidget):
             if str(target_race).strip() in allowed_races:
                 trigger_special = True
 
-        # 再：skill_buff 判斷（Use_skill_levels 裡有用到 buff 技能就觸發）
-        if (not trigger_special) and special_formula_ok and pd.notna(skill_row.get("skill_buff")):
+        # 再：skill_buff 判斷
+        if pd.notna(skill_row.get("skill_buff")):
             buff_ids = []
             for x in str(skill_row["skill_buff"]).split(","):
                 x = x.strip()
                 if x.isdigit():
                     buff_ids.append(int(x))
 
-            # ✅ 只要其中一個 buff 技能被使用過 (True) 就觸發
             if any(Use_skill_levels.get(bid, False) for bid in buff_ids):
-                trigger_special = True
+                trigger_skillbuff = True
+                # ✅ 原本特殊公式觸發規則照留：只有在 Special_Calculation 有資料時才會影響 trigger_special
+                if special_formula_ok and (not trigger_special):
+                    trigger_special = True   
 
         # 套用特殊公式
         if trigger_special and special_formula_ok:
             final_formula = str(skill_row["Special_Calculation"]).strip()
+
+        # 爆擊傷害
+        Critical_hit = float(skill_row["Critical_hit"]) if pd.notna(skill_row.get("Critical_hit")) else 0
+
+        # ✅ 新增：Special_Critical_hit 有資料 + skill_buff 命中 -> 取代 Critical_hit
+        if trigger_skillbuff and pd.notna(skill_row.get("Special_Critical_hit")):
+            Critical_hit = float(skill_row["Special_Critical_hit"])
+
+        print(f"技能爆傷率：{Critical_hit}")
 
 
         # 同步更新 UI
@@ -4350,8 +4366,7 @@ class ItemSearchApp(QWidget):
 
 
 
-        #技能爆傷判斷
-        Critical_hit = float(skill_row["Critical_hit"]) if pd.notna(skill_row.get("Critical_hit")) else 0
+
         
         #print(f"攻擊模式：{attack_type}")
         
@@ -4404,6 +4419,8 @@ class ItemSearchApp(QWidget):
                         full_formula = formula
 
                 # === 套用替換函式 ===
+
+
                 full_formula = replace_gsklv_calls(full_formula)#替換gsklv
                 full_formula = replace_gusklv_calls(full_formula)#替換gusklv
                 full_formula = replace_custom_calls(full_formula)#替換wpon(0)2:1
@@ -4433,6 +4450,10 @@ class ItemSearchApp(QWidget):
                     #skill_result = round(calc_result, 2)
                     skill_result = int(calc_result)
                     #skill_result = calc_result
+
+                    #狙殺瞄準20%加在增/減益後
+                    skill_result = skill_result + 20 if int(GUSklv(380)) == 1 else skill_result
+                    
 
                     print(f"[{i+1}/{repeat_count}] 技能公式結果: {skill_result}")
                     self.steps = []
@@ -4530,19 +4551,20 @@ class ItemSearchApp(QWidget):
 
                         #是否技能爆擊/命中增傷
                         if Critical_hit < 0:#負值兩者不吃
-                            Critical_hitmag = -40#不吃crate
+                            Critical_hitmag = 0#不吃crate
                             CRI_Critical_hit = 0
                             excel_Damage_HIT = 0
                         elif Critical_hit == 0:#0值吃命中增傷
-                            Critical_hitmag = -40
+                            Critical_hitmag = 0
                             CRI_Critical_hit = 0
                             excel_Damage_HIT = Damage_HIT
                         elif Critical_hit > 0:#正值吃爆傷
-                            Critical_hitmag = total_CRATE
+                            CRI_Critical_hit = CRI_Critical_hit
+                            Critical_hitmag = total_CRATE + 40
                             excel_Damage_HIT = 0#技能爆擊不吃命中增傷
                         else:#非數字
-                            Critical_hitmag = -40#不吃crate
-                            excel_Damage_HIT = 0
+                            Critical_hitmag = 0#不吃crate
+                            excel_Damage_HIT = Damage_HIT
                             CRI_Critical_hit = 0
                         #print(f"special_away_BUFF:{special_away_BUFF}")
                         #print(f"special_melee_BUFF:{special_melee_BUFF}")
@@ -4571,7 +4593,7 @@ class ItemSearchApp(QWidget):
                                 #技能段技能增傷
                                 (passive_skill_buff,1,"技能增傷%(技能段)"),
                                 #C.RATE
-                                (Critical_hitmag,1.4,"C.RATE"),
+                                (Critical_hitmag,1,"C.RATE"),
                                 #(潛擊)+(孢子)+(爪痕)+(撼動) 遠傷判斷類型
                                 (specialatkbuff,"raw","混傷BUFF"),
                                 #屬性紋章 風水火地
@@ -4607,7 +4629,7 @@ class ItemSearchApp(QWidget):
                                 #技能段技能增傷
                                 (passive_skill_buff,1,"技能增傷%(技能段)"),
                                 #C.RATE
-                                (Critical_hitmag,1.4,"C.RATE"),
+                                (Critical_hitmag,1,"C.RATE"),
                                 #(潛擊)+(爪痕)+(撼動) 遠傷判斷類型
                                 (specialatkbuff,"raw","混傷BUFF"),
                                 #屬性紋章 風水火地
