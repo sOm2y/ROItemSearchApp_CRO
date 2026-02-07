@@ -1,5 +1,5 @@
 #部分資料取自ROCalculator,搜尋 ROCalculator 可以知道哪些有使用
-Version = "v0.1.38-260202"
+Version = "v0.1.39-260208"
 
 import sys, builtins, time
 from PySide6.QtCore import QThread, Signal, Qt, QMetaObject, QTimer
@@ -10,6 +10,7 @@ import reform_viewer #載入改造工具
 from rrf_to_App import run_rrf_main#載入rrf轉換
 from monster_lookup_dialog import MonsterLookupDialog#查詢怪物
 from Damage_view import DamageCalculator
+
 import requests
 class InitWorker(QThread):
     log_signal = Signal(str)
@@ -1174,24 +1175,34 @@ class MultiComboField(QWidget):
 
 import requests
 
-REMOTE_VERSION_URL = "https://z2911902.github.io/ROItemSearchApp/data/version.txt" 
 UPDATER_EXE = "update.exe"
 TARGET_EXE = "ItemSearchApp.exe"
+GITHUB_OWNER = "z2911902"
+GITHUB_REPO = "ROItemSearchApp"
 
-# 你指定的 zip 下載 URL 格式
-ZIP_URL_TEMPLATE = "https://github.com/z2911902/ROItemSearchApp/releases/download/{ver}/ROItemSearchApp.zip"
+GITHUB_LATEST_RELEASE_API = (
+    f"https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}/releases/latest"
+)
 
+ZIP_URL_TEMPLATE = (
+    "https://github.com/z2911902/ROItemSearchApp/releases/download/{ver}/ROItemSearchApp.zip"
+)
 
 def read_local_version(app_dir: str) -> str:
-    path = os.path.join(app_dir,"data","version.txt")
+    path = os.path.join(app_dir, "data", "version.txt")
     with open(path, "r", encoding="utf-8") as f:
         return f.read().strip()
 
-
-def read_remote_version(url: str) -> str:
-    r = requests.get(url, timeout=10)
+def read_remote_version_github(timeout: int = 8) -> str:
+    headers = {
+        "Accept": "application/vnd.github+json",
+        "User-Agent": "ROItemSearchApp-Updater",
+    }
+    r = requests.get(GITHUB_LATEST_RELEASE_API, headers=headers, timeout=timeout)
     r.raise_for_status()
-    return r.text.strip()
+    data = r.json()
+    # tag_name 例如 "v1.2.3"
+    return (data.get("tag_name") or "").strip()
 
 
 def normalize_version(v: str) -> tuple[tuple[int, ...], int]:
@@ -4470,7 +4481,7 @@ class ItemSearchApp(QWidget):
                             #敵人屬性耐性(1+萬紫+毒弱+彗星)
                             ((1 + skill_wanzih4_buff + skill_poison_weak_buff + magic_poison_buff),"raw","屬性耐受性%"),
                             #屬性魔法
-                            (get_effect_multiplier('MD_Damage', User_attack_element) + get_effect_multiplier('MD_Damage', 10),1,"屬性魔法%"),
+                            (get_effect_multiplier('MD_Damage', user_attack_element) + get_effect_multiplier('MD_Damage', 10),1,"屬性魔法%"),
                             #種族
                             (get_effect_multiplier('MD_Race', target_race) + get_effect_multiplier('MD_Race', 9999),1,"種族%"),
                             #階級
@@ -4482,7 +4493,7 @@ class ItemSearchApp(QWidget):
                             #技能倍率
                             (skill_result,0,"技能倍率%"),
                             #屬性倍率
-                            (get_damage_multiplier(User_attack_element, target_element, target_element_lv),0,"屬性倍率%"),
+                            (get_damage_multiplier(user_attack_element, target_element, target_element_lv),0,"屬性倍率%"),
                             #敵人MRES減傷
                             (Mdamage_nomres,"raw","MRES減傷%"),
                             #敵人MDEF減傷
@@ -4527,8 +4538,8 @@ class ItemSearchApp(QWidget):
                         
                         #print(f"屬性倍率計算前: {final_damage_1}")
                         #屬性倍率
-                        final_damage_1 = math.ceil(final_damage_1 * get_damage_multiplier(User_attack_element, target_element, target_element_lv) / 100)
-                        self.steps.append(["屬性倍率%", math.ceil(get_damage_multiplier(User_attack_element, target_element, target_element_lv))])                        
+                        final_damage_1 = math.ceil(final_damage_1 * get_damage_multiplier(user_attack_element, target_element, target_element_lv) / 100)
+                        self.steps.append(["屬性倍率%", math.ceil(get_damage_multiplier(user_attack_element, target_element, target_element_lv))])                        
                         #print(f"屬性倍率計算後: {final_damage_1}")
                         #最終ATK
                         final_damage_1 += ATKF
@@ -4665,7 +4676,7 @@ class ItemSearchApp(QWidget):
                             #遠傷% 技能判斷
                             (MR_AttackDamage,1,"近/遠傷%"),
                             #屬性倍率
-                            (get_damage_multiplier(User_attack_element, target_element, target_element_lv),0,"屬性倍率%")
+                            (get_damage_multiplier(user_attack_element, target_element, target_element_lv),0,"屬性倍率%")
                         )
                         
                         
@@ -4825,8 +4836,9 @@ class ItemSearchApp(QWidget):
 
             # 顯示 combo 均分段（只取第一段為代表）
             r = combo_split_results[0]
+            combo_main_element_name = element_map.get(r["user_attack_element"], f"未知({r['user_attack_element']})")
             combo_total = r["damage_by_hit"] * r["times"]
-            result.append(f"【{element_map.get(User_attack_element, User_attack_element)}】===============COMBO 技能（均分）========================")
+            result.append(f"【{combo_main_element_name}】===============COMBO 技能（均分）========================")
             result.append(f"單次傷害(COMBO): {r['damage_by_hit']:,}")
             result.append(f"打擊次數(COMBO): {r['times']} 次")
             result.append(f"總傷害(COMBO):   {combo_total:,}")
@@ -7535,17 +7547,18 @@ class ItemSearchApp(QWidget):
         self.close()
 
     def check_update(self):
-        def fetch_release_notes(owner: str, repo: str, tag: str, timeout: int = 8) -> str:
-            url = f"https://api.github.com/repos/{owner}/{repo}/releases/tags/{tag}"
+        def fetch_latest_release_notes(owner: str, repo: str, timeout: int = 8) -> tuple[str, str]:
+            url = f"https://api.github.com/repos/{owner}/{repo}/releases/latest"
             headers = {
                 "Accept": "application/vnd.github+json",
-                # 可加 UA，避免某些環境被擋
                 "User-Agent": "ROItemSearchApp-Updater"
             }
             r = requests.get(url, headers=headers, timeout=timeout)
             r.raise_for_status()
             data = r.json()
-            return data.get("body", "") or ""
+            return (data.get("tag_name") or "").strip(), (data.get("body") or "")
+
+
 
         app_dir = os.getcwd()
 
@@ -7557,10 +7570,13 @@ class ItemSearchApp(QWidget):
             return
 
         try:
-            remote_ver = read_remote_version(REMOTE_VERSION_URL)
+            remote_ver = read_remote_version_github()
+            if not remote_ver:
+                raise RuntimeError("GitHub 回傳的 tag_name 為空（可能沒有 release）。")
         except Exception as e:
-            QMessageBox.critical(self, "更新檢查失敗", f"讀取遠端 version.txt 失敗：\n{e}")
+            QMessageBox.critical(self, "更新檢查失敗", f"取得 GitHub 最新 Release 失敗：\n{e}")
             return
+
 
         self._remote_version = remote_ver
 
@@ -7570,7 +7586,8 @@ class ItemSearchApp(QWidget):
             release_url = f"https://github.com/z2911902/ROItemSearchApp/releases/tag/{remote_ver}"
 
             try:
-                notes = fetch_release_notes("z2911902", "ROItemSearchApp", str(remote_ver))
+                remote_ver, notes = fetch_latest_release_notes("z2911902", "ROItemSearchApp")
+
             except Exception as e:
                 notes = f"⚠ 無法取得更新內容：{e}\n\n你仍可前往 Release 頁面查看：\n{release_url}"
 
