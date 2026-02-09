@@ -374,7 +374,8 @@ class DamageCalculator(QWidget):
                 [Step(n, f, "INT", 0.0) for n, f in initial_steps]
             )
         else:
-            self.model = StepModel([Step(n, f, "INT", 0.0) for n, f in steps])
+            #print(steps)
+            self.model = StepModel([Step(n, f, "INT", 0.0) for n, f , *_ in steps])
         self.view.setModel(self.model)
 
         self.delegate = StepDelegate(self.view)

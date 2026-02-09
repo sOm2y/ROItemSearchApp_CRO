@@ -1,5 +1,5 @@
 #部分資料取自ROCalculator,搜尋 ROCalculator 可以知道哪些有使用
-Version = "v0.1.39-260208"
+Version = "v0.1.39-260209"
 
 import sys, builtins, time
 from PySide6.QtCore import QThread, Signal, Qt, QMetaObject, QTimer
@@ -2084,7 +2084,20 @@ def parse_lua_effects_with_variables(
             expr = re.sub(r"GetRefineLevel\((\d+)\)", lambda m: str(refine_inputs.get(int(m.group(1)), 0)), expr)
             expr = re.sub(r"GetEquipGradeLevel\((\d+)\)", lambda m: str(grade), expr)
             expr = re.sub(r"GetItemIDLocation\((\d+)\)", lambda m: str(slot_item_id_map.get(int(m.group(1)), 0)), expr)
-            
+            # GetPureJob() == X  ->  X in <list>
+            expr = re.sub(
+                r"GetPureJob\(\)\s*==\s*(\d+)",
+                lambda m: f"({int(m.group(1))} in {GetPureJob})",
+                expr
+            )
+
+            # GetPureJob() ~= X  ->  X not in <list>
+            expr = re.sub(
+                r"GetPureJob\(\)\s*~=\s*(\d+)",
+                lambda m: f"({int(m.group(1))} not in {GetPureJob})",
+                expr
+            )
+
             for v in sorted(variables.keys(), key=lambda x: -len(x)):
                 expr = re.sub(rf'\b{re.escape(v)}\b', str(variables[v]), expr)
 
@@ -3606,7 +3619,7 @@ class ItemSearchApp(QWidget):
         mres = self.mres_input.text() or "0"
         skill_formula = self.skill_formula_input.text()
         # 組合新的 state_key
-        state_key = f"{Use_skill_levels}|{skill_formula}|{skill_key}|{skill_lv}|{equip_state}|{special_state}|{size_key}|{element_key}|{race_key}|{class_key}|{d_ef}|{defc}|{res}|{mdef}|{mdefc}|{mres}|{element_lv_key}|{user_element_key}|{total_STR}|{total_AGI}|{total_VIT}|{total_INT}|{total_DEX}|{total_LUK}|{total_POW}|{total_STA}|{total_WIS}|{total_SPL}|{total_CON}|{total_CRT}"
+        state_key = f"{BaseLv}|{Use_skill_levels}|{skill_formula}|{skill_key}|{skill_lv}|{equip_state}|{special_state}|{size_key}|{element_key}|{race_key}|{class_key}|{d_ef}|{defc}|{res}|{mdef}|{mdefc}|{mres}|{element_lv_key}|{user_element_key}|{total_STR}|{total_AGI}|{total_VIT}|{total_INT}|{total_DEX}|{total_LUK}|{total_POW}|{total_STA}|{total_WIS}|{total_SPL}|{total_CON}|{total_CRT}"
 
 
         if getattr(self, "_last_calc_state", None) == state_key:
@@ -5000,14 +5013,14 @@ class ItemSearchApp(QWidget):
         #result.append(f"{pad_label('技能公式:')}{results[0]['formula']}")
         
         if len(results) > 1 and combo_split_results:
-            self.steps.append(("打擊虛數", 1/r["times"])*100)
-            self.steps.append(("總傷害", r["times"]*100))
+            self.steps.append(["打擊虛數", (1/r["times"])*100])
+            self.steps.append(["總傷害", r["times"]*100])
         elif len(results) > 1:
             #self.steps.append(("總傷害", r["times"]))
             pass
         else:
-            self.steps.append(("打擊虛數", (1/r["times"])*100))
-            self.steps.append(("總傷害", r["times"]*100))
+            self.steps.append(["打擊虛數", (1/r["times"])*100])
+            self.steps.append(["總傷害", r["times"]*100])
 
         result.extend(bottom_result)#顯示前面儲存的公式
         self.custom_calc_box.setHtml(self.generate_highlighted_html(result))
@@ -5712,6 +5725,8 @@ class ItemSearchApp(QWidget):
         try:
             job_id = self.input_fields["JOB"].currentData()
             tjob_bonus = job_dict.get(job_id, {}).get("TJobMaxPoint", [])
+            globals()["GetPureJob"] = job_dict.get(job_id, {}).get("GetPureJob", [])
+            print(f"職業系列id: {GetPureJob}")
             stat_names = ["STR", "AGI", "VIT", "INT", "DEX", "LUK", "POW", "STA", "WIS", "SPL", "CON", "CRT"]
 
             raw_effects = getattr(self, "effect_dict_raw", {})
