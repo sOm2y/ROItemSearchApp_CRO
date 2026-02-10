@@ -4855,7 +4855,10 @@ ItemDBNameTbl = {
   Fierce_Kick_Boots = 470417,
   Dimension_Ring_AG = 490905,
   Dimension_Ring_EM = 490906,
-  Four_S_Scroll_TW = 106314
+  Four_S_Scroll_TW = 106314,
+  Mecha_Engine_Wing = 480737,
+  Mecha_Engine_Wing_LT = 480738,
+  Umbala_Utan_Helmet = 401238
 }
 
 function ItemDB_To_ItemID(in_ItemDB)
