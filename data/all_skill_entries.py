@@ -133,5 +133,7 @@ all_skill_entries = {#範例[    "": {"type": "技能/料理","code":["",""]},
     "四色符": {"id": ["OB","KO"],"type": "技能","code":["UseSkill(5499)"]},
     "噩夢狀態": {"id": ["OB","KO"],"type": "技能","code":["UseSkill(5493)","UseSkill(5494)","UseSkill(5495)"]},
     "暗器狀態": {"id": ["OB","KO"],"type": "技能","code":["UseSkill(5484)"]},
-    
+    #槍手
+    "王牌出手": {"id": "RE","type": "技能","code":["UseSkill(5414)"]},
+
 }   

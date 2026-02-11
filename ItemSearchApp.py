@@ -416,11 +416,11 @@ weapon_class_codes = {#輸出用
     14: "Whips",  # 鞭子
     15: "Books",  # 書
     16: "Katars",  # 拳刃
-    17: "Guns",  # 左輪手槍
-    18: "Guns",  # 來福槍
-    19: "Guns",  # 格林機關槍
-    20: "Guns",  # 霰彈槍
-    21: "Guns",  # 榴彈槍
+    17: "Pistol",  # 左輪手槍
+    18: "Rifle",  # 來福槍
+    19: "Gatling",  # 格林機關槍
+    20: "Shotgun",  # 霰彈槍
+    21: "Grenade",  # 榴彈槍
     22: "Shuriken",  # 風魔飛鏢
     23: "Rods",  # 雙手仗
 }
@@ -1459,6 +1459,14 @@ class CSVEditor(QMainWindow):
                 "label": "技能遠距傷害",
                 "tooltip": "技能套用遠距傷害計算。"
             },
+            "half_bypass_def": {
+                "label": "半無視DEF",
+                "tooltip": "無視後DEF乘算，數字加算到前DEF。"
+            },
+            "half_bypass_res": {
+                "label": "無視RES",
+                "tooltip": "無視RES"
+            },
             "special_wprange": {
                 "label": "裝備武器套用遠距計算",
                 "tooltip": "裝備該類型的武器自動轉換遠傷。"
@@ -1522,7 +1530,7 @@ class CSVEditor(QMainWindow):
                 edit_field = MultiComboField(WPClass_options)
 
             # ★★★ 新增：Rangedamage 用勾選框 ★★★
-            elif header.lower() == "rangedamage":
+            elif header.lower() in ("rangedamage","half_bypass_def","half_bypass_res"):
                 edit_field = QCheckBox()
             else:
                 edit_field = QLineEdit()
@@ -1620,7 +1628,7 @@ class CSVEditor(QMainWindow):
                     widget.setCurrentIndex(idx if idx >= 0 else 0)
                     continue
 
-                if isinstance(widget, QCheckBox) and key == "rangedamage":
+                if isinstance(widget, QCheckBox) and key in ("rangedamage","half_bypass_def","half_bypass_res"):
                     widget.setChecked(str(value).strip() in ("1", "true", "True"))
                     continue
 
@@ -1680,7 +1688,7 @@ class CSVEditor(QMainWindow):
                     new_value = widget.currentData()  # "magic"/"physical"
                 elif isinstance(widget, QComboBox):
                     new_value = widget.currentText()
-                elif isinstance(widget, QCheckBox) and key == "rangedamage":
+                elif isinstance(widget, QCheckBox) and key in ("rangedamage","half_bypass_def","half_bypass_res"):
                     new_value = "1" if widget.isChecked() else "0"
 
                 else:
@@ -1796,9 +1804,16 @@ class CSVEditor(QMainWindow):
 
 def open_skill_editor(app_instance=None):
     global skill_editor  
+
     if skill_editor is None or not skill_editor.isVisible():
         skill_editor = CSVEditor(r"data\skillneme.csv", parent=app_instance)
         skill_editor.app_instance = app_instance
+
+        if app_instance:
+            parent_pos = app_instance.pos()
+            skill_editor.move(parent_pos.x() + 280,
+                              parent_pos.y() + 75)
+
         skill_editor.show()
     else:
         skill_editor.raise_()
@@ -4010,11 +4025,23 @@ class ItemSearchApp(QWidget):
             resistance = numerator / denominator
             return min(resistance, 1.0)  # ⬅️ 保證不超過 1.0
             
+        # === [1] 取得技能 row
+        skill_row = skill_df[skill_df["Name"] == selected_skill_name]
+        if skill_row.empty:
+            # 給一個「空內容但欄位齊全」的 Series
+            skill_row = pd.Series({col: None for col in skill_df.columns})
+        else:
+            skill_row = skill_row.iloc[0]
+
+        #半無視防禦取得
+        half_bypass_def = int(skill_row["half_bypass_def"]) if pd.notna(skill_row.get("half_bypass_def")) else 0 
+        half_bypass_res = int(skill_row["half_bypass_res"]) if pd.notna(skill_row.get("half_bypass_res")) else 0 
 
         #物理破防
         def_reduction = ((get_effect_multiplier('D_Race_def', target_race))+(get_effect_multiplier('D_Race_def', 9999))+(get_effect_multiplier('D_class_def', target_class)))
-        damage_nodef = calc_final_def_damage(target_def, def_reduction)             
-
+        #半無視def判斷
+        damage_nodef = 1 if half_bypass_def == 1 else calc_final_def_damage(target_def, def_reduction)             
+        target_defc = target_def + target_defc if half_bypass_def == 1 else target_defc
         #魔法破防
         mdef_reduction = ((get_effect_multiplier('MD_Race_def', target_race))+(get_effect_multiplier('MD_Race_def', 9999))+(get_effect_multiplier('MD_class_def', target_class)))
         Mdamage_nomdef = calc_final_mdef_damage(target_mdef, mdef_reduction)       
@@ -4022,7 +4049,9 @@ class ItemSearchApp(QWidget):
         #res        
         res_reduction = ((get_effect_multiplier('D_Race_res', target_race))+(get_effect_multiplier('D_Race_res', 9999)))
         res_reduction = min(res_reduction, 50)#破抗性最大50%
-        damage_nores = calc_final_res_damage(target_res, res_reduction)
+        #無視res判斷
+        damage_nores = 1 if half_bypass_res == 1 else calc_final_res_damage(target_res, res_reduction)
+
         
         #MRES
         mres_reduction = ((get_effect_multiplier('MD_Race_res', target_race))+(get_effect_multiplier('MD_Race_res', 9999)))
@@ -4230,13 +4259,7 @@ class ItemSearchApp(QWidget):
         skill_hits = eval_hits(expr)#計算最終次數
 
         #print(f"技能攻擊次數: {skill_hits}")
-        # === [1] 取得技能 row
-        skill_row = skill_df[skill_df["Name"] == selected_skill_name]
-        if skill_row.empty:
-            # 給一個「空內容但欄位齊全」的 Series
-            skill_row = pd.Series({col: None for col in skill_df.columns})
-        else:
-            skill_row = skill_row.iloc[0]
+
 
         # [2] 根據種族選擇正確的公式，並同步 UI
         default_formula = str(skill_row["Calculation"]).strip()
@@ -4338,6 +4361,7 @@ class ItemSearchApp(QWidget):
         self.atktype = attack_type
         #技能遠傷判斷
         skill_Rangedamage = int(skill_row["Rangedamage"]) if pd.notna(skill_row.get("Rangedamage")) else 0 
+
         #print(f"技能遠傷判斷: {skill_Rangedamage}")
 
         wpclass_skill_Rangedamage = skill_row.get("special_wprange", 0)
@@ -5726,7 +5750,7 @@ class ItemSearchApp(QWidget):
             job_id = self.input_fields["JOB"].currentData()
             tjob_bonus = job_dict.get(job_id, {}).get("TJobMaxPoint", [])
             globals()["GetPureJob"] = job_dict.get(job_id, {}).get("GetPureJob", [])
-            print(f"職業系列id: {GetPureJob}")
+            #print(f"職業系列id: {GetPureJob}")
             stat_names = ["STR", "AGI", "VIT", "INT", "DEX", "LUK", "POW", "STA", "WIS", "SPL", "CON", "CRT"]
 
             raw_effects = getattr(self, "effect_dict_raw", {})
@@ -7106,7 +7130,7 @@ class ItemSearchApp(QWidget):
                             line = _progress_percent_line(done, total, speed)
                             print(line, end="\r")  # 👈 只這行關鍵：同一行覆寫
 
-                    print()  # 👈 下載結束補一個換行
+                    #print()  # 👈 下載結束補一個換行
 
                     # 基本健檢：避免 404 HTML
                     try:
