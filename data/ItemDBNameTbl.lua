@@ -4858,7 +4858,21 @@ ItemDBNameTbl = {
   Four_S_Scroll_TW = 106314,
   Mecha_Engine_Wing = 480737,
   Mecha_Engine_Wing_LT = 480738,
-  Umbala_Utan_Helmet = 401238
+  Umbala_Utan_Helmet = 401238,
+  IG_Soul_IC = 313376,
+  IG_Soul_RS = 313377,
+  MT_Soul_RS = 313378,
+  MT_Soul_PS = 313379,
+  MT_Soul_EC = 313380,
+  BO_Soul_MP = 313381,
+  BO_Soul_DE = 313382,
+  SHC_Soul_CS = 313383,
+  ABC_Soul_HAS = 313384,
+  ABC_Soul_CB = 313385,
+  ABC_Soul_CS = 313386,
+  TR_Soul_RW = 313387,
+  NW_Soul_WS = 313388,
+  NW_Soul_MF = 313389
 }
 
 function ItemDB_To_ItemID(in_ItemDB)

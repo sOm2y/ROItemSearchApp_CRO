@@ -1111,7 +1111,7 @@
 5350,TR_RETROSPECTION,美聲回顧,,,,,,0,0,,,,,,,,,,,,,,,
 5351,TR_MYSTIC_SYMPHONY,神秘交響曲,,,,,,0,0,,,,,,,,,,,,,,,
 5352,TR_KVASIR_SONATA,克瓦希爾奏鳴曲,,,,,,0,0,,,,,,,,,,,,,,,
-5353,TR_ROSEBLOSSOM,玫瑰箭矢,physical,,,5,(200+Sklv*2000+total_CON*3*5)*BaseLv/100,0,-2,,(250+Sklv*2800+total_CON*3*5)*BaseLv/100,0,1,,,,,,,,,,,
+5353,TR_ROSEBLOSSOM,玫瑰箭矢,physical,1,,5,(200+Sklv*2000+total_CON*3*5)*BaseLv/100,0,-2,,(250+Sklv*2800+total_CON*3*5)*BaseLv/100,0,1,,,,,,,0,0,,,
 5354,TR_ROSEBLOSSOM_ATK,玫瑰箭矢_ATK,,,,,,0,0,,,,,,,,,,,,,,,
 5355,TR_RHYTHMSHOOTING,節奏射擊,physical,1,,5,(550+Sklv*950+total_CON*5*5)*BaseLv/100,0,3,,,,,,5357,(850+Sklv*1050+total_CON*7*5)*BaseLv/100,,,,,,,,
 5356,TR_METALIC_FURY,金屬狂怒,magic,0,,5,(Sklv*3850+total_SPL*1.5*GSklv(5357))*BaseLv/100,0,1,,,,,,5357,(Sklv*4650+total_SPL*2*GSklv(5357))*BaseLv/100,,,,,,,,
