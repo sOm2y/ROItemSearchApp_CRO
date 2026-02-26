@@ -3,7 +3,7 @@
 [2] = {
 	temp = GSklv(2)
 	temp_wp = GetWeaponClass(4)
-	if temp_wp == 2 then
+	if temp_wp == 1 or temp_wp == 2 then
 		WeaponMasteryATK(temp * 4)
 	end
 }
@@ -170,6 +170,25 @@
 		if temp == 9 then
 			SubDamage_Size(1, 2, 1)
 		end
+	end
+}
+[5311] = {
+	temp = GSklv(5311)
+	temp_wp = GetWeaponClass(4)
+	if temp_wp == 1 or temp_wp == 11 and temp > 0 then
+		AddDamage_Size(1, 0, temp)
+		AddDamage_Size(1, 1, temp * 1.45 + 1)
+		AddDamage_Size(1, 2, temp * 2)
+	end
+
+}
+[5312] = {
+	temp = GSklv(5312)
+	temp_wp = GetWeaponClass(4)
+	if temp_wp == 1 or temp_wp == 2 and temp > 0 then
+		AddMDamage_Size(1, 0, temp * 1.45 + 1)
+		AddMDamage_Size(1, 1, temp * 1.45 + 1)
+		AddMDamage_Size(1, 2, temp * 1.45 + 1)
 	end
 }
 

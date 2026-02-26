@@ -93,6 +93,9 @@ all_skill_entries = {#範例[    "": {"type": "技能/料理","code":["",""]},
     "憤怒暴風": {"id": "RA","type": "技能","code":["UseSkill(5328)","AddRangeAttackDamage(1, 350)","AddDamage_SKID(1, 5334, 20)"],"exclusive": "sniper_group"},
     #魅影
     "追跡狀態": {"id": "SC","type": "技能","code":["UseSkill(5315)","UseSkill(6513)","UseSkill(6514)","UseSkill(5316)"]},
+    "靠近狀態": {"id": "SC","type": "技能","code":["UseSkill(5321)"]},
+    "深淵殺手": {"id": "SC","type": "技能","code":["temp = GetSkillLevel(5318)","AddExtParam(1, 242, temp * 2 + 10)","AddExtParam(1, 243, temp * 2 + 10)","AddExtParam(1, 49, temp * 20 + 100)"]},
+    "自動魅影念咒": {"id": "SC","type": "技能","code":["temp = GetSkillLevel(2286)","AddExtParam(1, 200, temp * 5)"]},
     #妖術
     "召喚元素:阿爾多雷 火": {"id": "SO","type": "技能","code":["AddDamage_SKID(1, 5372, 30)","AddSkillMDamage(3, 10)"],"exclusive": "4ht_elves"},
     "召喚元素:迪盧比奧 水": {"id": "SO","type": "技能","code":["AddDamage_SKID(1, 5369, 30)","AddSkillMDamage(1, 10)"],"exclusive": "4ht_elves"},
