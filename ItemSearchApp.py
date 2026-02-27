@@ -1,5 +1,5 @@
 #部分資料取自ROCalculator,搜尋 ROCalculator 可以知道哪些有使用
-Version = "v0.1.41-260227"
+Version = "v0.1.42-260227"
 
 import sys, builtins, time
 from PySide6.QtCore import QThread, Signal, Qt, QMetaObject, QTimer
@@ -904,7 +904,7 @@ def get_total_tstat_points(level: int) -> int:
 
 
 skill_df = pd.DataFrame(columns=[#檔案不在使用硬編碼以防跳錯
-    "ID","Code","Name","attack_type","Rangedamage","Special_WPRange","Slv","Calculation","element","hits",
+    "ID","Code","Name","attack_type","Rangedamage","skill_cannon","Special_WPRange","Slv","Calculation","element","hits",
     "Critical_hit","combo","combo_element","combo_hits","Special_Calculation","combo_Special_Calculation",
     "monster_race","skill_buff","Special_Critical_hit","decay_hits","bonus_add","bonus_step"
 ])
@@ -1479,6 +1479,10 @@ class CSVEditor(QMainWindow):
             "skill_SpecialATK": {
                 "label": "技能特殊段加算傷害",
                 "tooltip": "綠光減傷前加算。"
+            },
+            "skill_cannon": {
+                "label": "使用加農砲彈",
+                "tooltip": "計算公式加入砲彈ATK。"
             }
 
         }
@@ -1535,7 +1539,7 @@ class CSVEditor(QMainWindow):
                 edit_field = MultiComboField(WPClass_options)
 
             # ★★★ 新增：Rangedamage 用勾選框 ★★★
-            elif header.lower() in ("rangedamage","half_bypass_def","half_bypass_res"):
+            elif header.lower() in ("rangedamage","half_bypass_def","half_bypass_res","skill_cannon"):
                 edit_field = QCheckBox()
             else:
                 edit_field = QLineEdit()
@@ -1633,7 +1637,7 @@ class CSVEditor(QMainWindow):
                     widget.setCurrentIndex(idx if idx >= 0 else 0)
                     continue
 
-                if isinstance(widget, QCheckBox) and key in ("rangedamage","half_bypass_def","half_bypass_res"):
+                if isinstance(widget, QCheckBox) and key in ("rangedamage","half_bypass_def","half_bypass_res","skill_cannon"):
                     widget.setChecked(str(value).strip() in ("1", "true", "True"))
                     continue
 
@@ -1693,7 +1697,7 @@ class CSVEditor(QMainWindow):
                     new_value = widget.currentData()  # "magic"/"physical"
                 elif isinstance(widget, QComboBox):
                     new_value = widget.currentText()
-                elif isinstance(widget, QCheckBox) and key in ("rangedamage","half_bypass_def","half_bypass_res"):
+                elif isinstance(widget, QCheckBox) and key in ("rangedamage","half_bypass_def","half_bypass_res","skill_cannon"):
                     new_value = "1" if widget.isChecked() else "0"
 
                 else:
@@ -1960,12 +1964,6 @@ def parse_lua_effects_with_variables(
         except Exception as e:
             return f"{expr}（無法解析）"
 
-    
-    
-    
-        
-    
-    
 
     for line in lines:
         original_line = line.strip()
@@ -3695,6 +3693,8 @@ class ItemSearchApp(QWidget):
         #print(f"武器等級R{weaponR_Level} L{weaponL_Level}")
         #箭矢彈藥ATK
         globals()["ammoATK"] = sum(val for val, _ in effect_dict.get(("箭矢/彈藥ATK", ""), []))
+        #砲彈ATK
+        globals()["CannonballATK"] = sum(val for val, _ in effect_dict.get(("砲彈ATK", ""), []))
         #武器精煉R右L左
         globals()["weaponRefineR"] = int(self.refine_inputs_ui["右手(武器)"]["refine"].text())
         globals()["weaponRefineL"] = int(self.refine_inputs_ui["左手(盾牌)"]["refine"].text())
@@ -4318,7 +4318,7 @@ class ItemSearchApp(QWidget):
             final_formula = str(skill_row["Special_Calculation"]).strip()
 
         # 爆擊傷害
-        Critical_hit = float(skill_row["Critical_hit"]) if pd.notna(skill_row.get("Critical_hit")) else 0
+        Critical_hit = float(replace_custom_calls(str(skill_row.get("Critical_hit")))) if pd.notna(skill_row.get("Critical_hit")) else 0.0
 
         # ✅ 新增：Special_Critical_hit 有資料 + skill_buff 命中 -> 取代 Critical_hit
         if trigger_skillbuff and pd.notna(skill_row.get("Special_Critical_hit")):
@@ -4384,7 +4384,8 @@ class ItemSearchApp(QWidget):
         self.atktype = attack_type
         #技能遠傷判斷
         skill_Rangedamage = int(skill_row["Rangedamage"]) if pd.notna(skill_row.get("Rangedamage")) else 0 
-
+        #技能砲彈ATK開關
+        skill_cannon = int(skill_row["skill_cannon"]) if pd.notna(skill_row.get("skill_cannon")) else 0 
         #print(f"技能遠傷判斷: {skill_Rangedamage}")
 
         wpclass_skill_Rangedamage = skill_row.get("special_wprange", 0)
@@ -4582,6 +4583,9 @@ class ItemSearchApp(QWidget):
                         #(潛擊)+(孢子)+(撼動)+(聖油)
                         special_away_BUFF = max(1, sneak_attack_buff + SPORE_attack_buff + RUSH_attack_buff + OLEUM_attack_buff)
 
+                        #技能砲彈ATK判斷             
+                        Excel_CannonballATK = CannonballATK if skill_cannon == 1 else 0
+
                         #技能遠傷進傷
                         if skill_Rangedamage == 1:
                             MR_AttackDamage = RangeAttackDamage + BowAtk if weapon_class == 11 else RangeAttackDamage
@@ -4644,6 +4648,8 @@ class ItemSearchApp(QWidget):
                                 (ATKF,"+","前ATK"),
                                 #P.ATK
                                 (total_PATK,1,"PATK"),
+                                #砲彈atk
+                                (Excel_CannonballATK,"+","砲彈ATK"),
                                 #物理命中傷害
                                 (excel_Damage_HIT,1,"命中增傷%"),
                                 #爆傷
@@ -4678,6 +4684,8 @@ class ItemSearchApp(QWidget):
                                 (ATKF,"+","前ATK"),
                                 #P.ATK
                                 (total_PATK,1,"PATK"),
+                                #砲彈atk
+                                (Excel_CannonballATK,"+","砲彈ATK"),
                                 #武器修煉ATK
                                 (WeaponMasteryATK,"+","武器修煉ATK"),
                                 #物理命中傷害
@@ -7847,6 +7855,7 @@ class ItemSearchApp(QWidget):
             "頭下":   {"slot": 12, "type": "裝備"},
             "鎧甲":   {"slot": 2,  "type": "裝備"},
             "右手(武器)":   {"slot": 4,  "type": "裝備"},
+            "投擲物品":   {"slot": 110,  "type": "裝備"},
             "左手(盾牌)":   {"slot": 3,  "type": "裝備"},
             "披肩":   {"slot": 5,  "type": "裝備"},
             "鞋子":   {"slot": 6,  "type": "裝備"},
@@ -8064,9 +8073,11 @@ class ItemSearchApp(QWidget):
                     jobmaxhp = int(self.jobhp * ((100+VIT)/100) * (1+HPPercent/100) + HP)
                     jobmaxsp = int(self.jobsp * ((100+INT)/100) * (1+SPPercent/100) + SP)
 
+                    userjobmaxhp = int(mhp_input * ((100+VIT)/100) * (1+HPPercent/100) + HP)
+                    userjobmaxsp = int(msp_input * ((100+INT)/100) * (1+SPPercent/100) + SP)
                     # 使用者沒輸入或輸入 0 → 用職業表
-                    globals()["MHP"] = mhp_input if mhp_input > 0 else jobmaxhp
-                    globals()["MSP"] = msp_input if msp_input > 0 else jobmaxsp
+                    globals()["MHP"] = userjobmaxhp if mhp_input > 0 else jobmaxhp
+                    globals()["MSP"] = userjobmaxsp if msp_input > 0 else jobmaxsp
 
                     hp_pct = self.hp_slider.value()
                     sp_pct = self.sp_slider.value()
@@ -8327,6 +8338,8 @@ class ItemSearchApp(QWidget):
                 equip_input.setPlaceholderText("石碑名稱")
             elif part_name == "寵物蛋":
                 equip_input.setPlaceholderText("寵物名稱")
+            elif part_name == "投擲物品":
+                equip_input.setPlaceholderText("投擲名稱")
             else:
                 equip_input.setPlaceholderText("裝備名稱")
 
@@ -8504,7 +8517,7 @@ class ItemSearchApp(QWidget):
             self.refresh_presets(part_name)
 
             # 🟢 特例：符文石碑 → 隱藏卡片與詞條欄位
-            if part_name in ("符文石碑", "寵物蛋"):
+            if part_name in ("符文石碑", "寵物蛋","投擲物品"):
                 # 隱藏卡片欄位
                 for c in part_ui["cards"]:
                     c.setVisible(False)
@@ -8521,6 +8534,12 @@ class ItemSearchApp(QWidget):
                 if note_widget:
                     note_widget.setVisible(False)
 
+                if part_name == "投擲物品":
+                    refine_widget = part_ui["refine"]
+                    refine_widget.setVisible(False)
+                    grade_widget = part_ui["grade"]
+                    grade_widget.setVisible(False)
+
                 # 🧩 若是寵物蛋，再隱藏精煉欄位
                 if part_name == "寵物蛋" and "refine" in part_ui:
                     refine_widget = part_ui["refine"]
@@ -8528,6 +8547,7 @@ class ItemSearchApp(QWidget):
                     refine_parent = refine_widget.parentWidget()
                     if refine_parent:
                         refine_widget.hide()  # 雙保險：同時呼叫 hide()
+
             #技能只顯示詞條
             if part_name == "技能":
                 equip_widget = part_ui["equip"]

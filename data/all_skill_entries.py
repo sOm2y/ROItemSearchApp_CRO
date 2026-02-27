@@ -145,6 +145,9 @@ all_skill_entries = {#範例[    "": {"type": "技能/料理","code":["",""]},
     "噩夢狀態": {"id": ["OB","KO"],"type": "技能","code":["UseSkill(5493)","UseSkill(5494)","UseSkill(5495)"]},
     "暗器狀態": {"id": ["OB","KO"],"type": "技能","code":["UseSkill(5484)"]},
     #槍手
-    "王牌出手": {"id": "RE","type": "技能","code":["UseSkill(5414)"]},
-
+    "王牌出手": {"id": "RE","type": "技能","code":["temp = GetSkillLevel(5414)","UseSkill(5414)","AddRangeAttackDamage(1, temp * 10)","AddExtParam(1, 242, temp * 3)"]},
+    "專注瞄準": {"id": "RE","type": "技能","code":["AddExtParam(1, 41, 150)","AddExtParam(1, 49, 250)","AddExtParam(1, 239, 30)"]},
+    "格林狂熱": {"id": "RE","type": "技能","code":["temp = GetSkillLevel(517)","AddExtParam(1, 41, temp * 10 + 20)"]},    
+    "瘋狂凱斯樂": {"id": "RE","type": "技能","code":["AddExtParam(1, 41, 100)"],"exclusive": "ALTER_MADNESSCANCEL"},
+    "白金祭壇": {"id": "RE","type": "技能","code":["temp = GetSkillLevel(2563)","AddExtParam(1, 41, temp * 10 + 100)"],"exclusive": "ALTER_MADNESSCANCEL"},
 }   

@@ -220,7 +220,17 @@
 		AddSkillMDamage(5, temp * 1.4)
 	end
 }
-
+[5401] = {
+	temp = GSklv(5401)
+	temp_wp = GetWeaponClass(4)
+	if temp_wp == 17 or temp_wp == 18 or temp_wp == 19 or temp_wp == 20 or temp_wp == 21 then
+		AddExtParam(1, 242, temp + 2)
+	end
+}
+[5402] = {
+	temp = GSklv(5402)
+	AddExtParam(1, 238, temp)
+}
 [5416] = {
 	temp = GSklv(5416)
 	AddExtParam(1, 243, temp)
