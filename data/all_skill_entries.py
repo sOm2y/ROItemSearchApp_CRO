@@ -8,6 +8,7 @@ all_skill_entries = {#範例[    "": {"type": "技能/料理","code":["",""]},
     "智慧料理": {"type": "料理","code":["AddExtParam(0,106,10)"],"exclusive": "food_int"},
     "靈巧料理": {"type": "料理","code":["AddExtParam(0,107,10)"],"exclusive": "food_dex"},
     "幸運料理": {"type": "料理","code":["AddExtParam(0,108,10)"],"exclusive": "food_luk"},
+    "終極料理/萬能年糕": {"type": "料理","code":["AddExtParam(1, 41, 30)","AddExtParam(1, 200, 30)","AddExtParam(0,103,10)","AddExtParam(0,104,10)","AddExtParam(0,105,10)","AddExtParam(0,106,10)","AddExtParam(0,107,10)","AddExtParam(0,108,10)"],"exclusive": "food_str,food_agi,food_vit,food_int,food_dex,food_luk"},
     #15料
     "力量棒棒條": {"type": "料理","code":["AddExtParam(0,103,15)"],"exclusive": "food_str"},
     "敏捷棒棒條": {"type": "料理","code":["AddExtParam(0,104,15)"],"exclusive": "food_agi"},
@@ -15,7 +16,11 @@ all_skill_entries = {#範例[    "": {"type": "技能/料理","code":["",""]},
     "智慧棒棒條": {"type": "料理","code":["AddExtParam(0,106,15)"],"exclusive": "food_int"},
     "靈巧棒棒條": {"type": "料理","code":["AddExtParam(0,107,15)"],"exclusive": "food_dex"},
     "幸運棒棒條": {"type": "料理","code":["AddExtParam(0,108,15)"],"exclusive": "food_luk"},
+
+    "特性增強藥劑": {"type": "料理","code":["AddExtParam(1, 234, 5)","AddExtParam(1, 235, 5)","AddExtParam(1, 236, 5)","AddExtParam(1, 238, 5)","AddExtParam(1, 237, 5)","AddExtParam(1, 239, 5)","AddExtParam(1, 242, 10)","AddExtParam(1, 243, 10)"]},
+    "活力激發劑": {"type": "料理","code":["AddExtParam(0,103,20)","AddExtParam(0,104,20)","AddExtParam(0,105,20)","AddExtParam(0,106,20)","AddExtParam(0,107,20)","AddExtParam(0,108,20)"],"exclusive": "food_str,food_agi,food_vit,food_int,food_dex,food_luk"},
     #20料
+    
     "烤野豬": {"type": "料理","code":["AddExtParam(0,103,20)"]},
     "捕蟲藥草煎": {"type": "料理","code":["AddExtParam(0,104,20)"]},
     "米洛斯燒肉": {"type": "料理","code":["AddExtParam(0,105,20)"]},
@@ -23,7 +28,7 @@ all_skill_entries = {#範例[    "": {"type": "技能/料理","code":["",""]},
     "小雪獸冰茶": {"type": "料理","code":["AddExtParam(0,107,20)"]},
     "畢帝特龍尾麵": {"type": "料理","code":["AddExtParam(0,108,20)"]},
 
-    "特性增強藥劑": {"type": "料理","code":["AddExtParam(1, 234, 5)","AddExtParam(1, 235, 5)","AddExtParam(1, 236, 5)","AddExtParam(1, 238, 5)","AddExtParam(1, 237, 5)","AddExtParam(1, 239, 5)","AddExtParam(1, 242, 10)","AddExtParam(1, 243, 10)"]},
+    
     #櫻花
     # "蒙布朗蛋糕": {"type": "料理","code":["AddMDamage_Size(1, 0, 15)","AddMDamage_Size(1, 1, 15)","AddMDamage_Size(1, 2, 15)"]},
     # "櫻花年糕": {"type": "料理","code":["AddMDamage_Property(1, 10, 10)"]},
@@ -124,11 +129,14 @@ all_skill_entries = {#範例[    "": {"type": "技能/料理","code":["",""]},
     "兇砍最大值": {"id": "ME","type": "技能","code":["AddExtParam(1, 207, 100)"],"exclusive": "BOVERTHRUST"},
     "速度激發": {"id": "ME","type": "技能","code":["temp_wp = GetWeaponClass(4)","if temp_wp == 6 or temp_wp == 7 or temp_wp == 8 or temp_wp == 15 then","AddExtParam(1, 301, 30)","end"]},
     "無視體型攻擊": {"id": "ME","type": "技能","code":["PerfectDamage(1)"]},
+    "武器值最大化": {"id": "ME","type": "技能","code":["UseSkill(114)"]},
     
     #禁咒
     "魔力增幅": {"id": "WL","type": "技能","code":["UseSkill(366)"]},
     "魔力巔峰Lv4(毀滅颶風)": {"id": "WL","type": "技能","code":["UseSkill(5232)","AddSkillMDamage(4, 30)","AddExtParam(1, 200, 100)"],"exclusive": "CLIMAX"},
     "魔力巔峰Lv3": {"id": "WL","type": "技能","code":["UseSkill(5232)","AddDamage_SKID(1, 5222, 300)","AddDamage_SKID(1, 5218, 200)","AddDamage_SKID(1, 5215, 150)"],"exclusive": "CLIMAX"},
+    "魔法省悟": {"id": "WL","type": "技能","code":["UseSkill(2206)"]},
+    
     #終初
     #心神凝聚跟風鷹重複
     "突破規矩": {"id": "SN","type": "技能","code":["UseSkill(5462)"]},

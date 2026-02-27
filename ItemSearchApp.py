@@ -1,5 +1,5 @@
 #部分資料取自ROCalculator,搜尋 ROCalculator 可以知道哪些有使用
-Version = "v0.1.40-260227"
+Version = "v0.1.41-260227"
 
 import sys, builtins, time
 from PySide6.QtCore import QThread, Signal, Qt, QMetaObject, QTimer
@@ -666,7 +666,9 @@ SubWeapon_mapping = {#主程式Subweapon to ROCalculator 轉換
     "MATK_MweaponL": "MATK",
     "weaponRefineL": "refinelevel"
 }
-
+SkillOption_mapping = {#主程式Subweapon to ROCalculator 轉換
+    "WeaponMasteryATK": "WeaponMasteryATKInput",
+}
 
 TSTATUS_POINT_COSTS = [#取自ROCalculator(特性數值點術 
     7,10,13,16,19,26,29,32,35,38,
@@ -3671,7 +3673,7 @@ class ItemSearchApp(QWidget):
         #裝備ATK(不含武器)
         globals()["ATK_armor"] = sum(val for val, _ in effect_dict.get(("ATK", ""), []))
         #修煉ATK
-        WeaponMasteryATK = sum(val for val, _ in effect_dict.get(("修煉ATK", ""), []))
+        globals()["WeaponMasteryATK"] = sum(val for val, _ in effect_dict.get(("修煉ATK", ""), []))
         #裝備MATK(不含武器)
         globals()["MATK_armor"] = sum(val for val, _ in effect_dict.get(("MATK", ""), []))
         #裝備ATK%
@@ -4088,9 +4090,9 @@ class ItemSearchApp(QWidget):
         #SMATK(裝備+精煉+特性素質)
         total_SMATK = SMATK + int(total_SPL/3) + int(total_CON/5) + smatk_refine_total + smatk_refine_total_L
         #============================魔法各增傷計算區============================
-        
-        
-        def apply_stepwise_percent_mode(base, *bonuses_with_mode):
+
+
+        def apply_stepwise_percent_mode(base, *items):
             """
             每層乘完取整，依據 mode 控制加/減/忽略：
             - mode = 1      → 加成百分比：乘 (1 + bonus / 100)
@@ -4101,37 +4103,58 @@ class ItemSearchApp(QWidget):
             - mode = "raw"  → 直接乘：value *= bonus（不除以 100）
             - mode = "+"    → 直接加：value += bonus
             """
-            
-            value = base
-            for bonus, mode ,steps_name in bonuses_with_mode:
-                if mode == 1.4:
-                    self.steps.append([steps_name,40+bonus])
-                else:
-                    self.steps.append([steps_name,bonus])
-                if mode is None:
-                    value -= bonus
-                elif mode == "raw":
-                    value = math.floor(value * bonus)
-                elif mode == "+":
-                    value += bonus
-                else:
-                    
-                    if mode == 1:
-                        multiplier = 1 + bonus / 100
-                    elif mode == 1.4:
-                        multiplier = 1.4 + bonus / 100                        
-                    elif mode == -1:
-                        multiplier = 1 - bonus / 100
-                    elif mode == 0:
-                        multiplier = bonus / 100                          
-                    else:  # mode == 0
-                        multiplier = bonus / 100
-                    #valueol = value * multiplier
-                    value = math.floor(value * multiplier + 1e-9)#避免浮點數誤差
-                #print(f"計算: {valueol} > {value} {steps_name}")
-                
-            return value
+            # base: 單值 或 (base, base_min)
+            is_pair = isinstance(base, (tuple, list)) and len(base) == 2
+            if is_pair:
+                value, value_min = base
+            else:
+                value, value_min = base, None
 
+            def apply_one(v, bonus, mode):
+                if mode is None:
+                    return v - bonus
+                elif mode == "raw":
+                    return math.floor(v * bonus + 1e-9)
+                elif mode == "+":
+                    return v + bonus
+                else:
+                    if mode == 1:
+                        m = 1 + bonus / 100
+                    elif mode == 1.4:
+                        m = 1.4 + bonus / 100
+                    elif mode == -1:
+                        m = 1 - bonus / 100
+                    else:  # mode == 0 或其他
+                        m = bonus / 100
+                    return math.floor(v * m + 1e-9)
+
+            for it in items:
+                if len(it) == 3:
+                    bonus, mode, name = it
+
+                    # 兼容：如果 bonus 本身就是 (bonus, bonus_min)
+                    if is_pair and isinstance(bonus, (tuple, list)) and len(bonus) == 2:
+                        bonus_main, bonus_min = bonus
+                    else:
+                        bonus_main, bonus_min = bonus, bonus  # 雙值時，沒給 min 就沿用同一個
+
+                elif len(it) == 4:
+                    bonus_main, bonus_min, mode, name = it  # 你要的攤平格式
+
+                else:
+                    raise ValueError("每個 step 必須是 (bonus, mode, name) 或 (bonus, bonus_min, mode, name)")
+
+                # steps 記錄：維持你原本 1.4 特殊顯示
+                if mode == 1.4:
+                    self.steps.append([name, 40 + bonus_main])
+                else:
+                    self.steps.append([name, bonus_main])
+
+                value = apply_one(value, bonus_main, mode)
+                if is_pair:
+                    value_min = apply_one(value_min, bonus_min, mode)
+
+            return (value, value_min) if is_pair else value
             
 
                 
@@ -4506,9 +4529,9 @@ class ItemSearchApp(QWidget):
                     print(f"[{i+1}/{repeat_count}] 技能公式結果: {skill_result}")
                     self.steps = []
                     if attack_type == "magic":                        
-                        final_damage = apply_stepwise_percent_mode(
+                        final_damage ,final_damage_min = apply_stepwise_percent_mode(
                             #初始值
-                            armorMATK_MAGICPOWER,
+                            (armorMATK_MAGICPOWER,armorMATK_MAGICPOWER_min),
                             #MATK%
                             (MATK_percent,1,"MATK%"),
                             #體型
@@ -4550,6 +4573,7 @@ class ItemSearchApp(QWidget):
                         
                     elif attack_type == "physical":
                         #先計算ATK%已利後續計算
+                        ATK_percent_sign_min = int(ATKC_Mweapon_ALL_min * (ATK_percent/100))
                         ATK_percent_sign = int(ATKC_Mweapon_ALL * (ATK_percent/100))
                         #爆傷+技能爆擊判斷
                         CRI_Critical_hit = (Damage_CRI * Critical_hit)
@@ -4584,9 +4608,9 @@ class ItemSearchApp(QWidget):
                             excel_Damage_HIT = Damage_HIT
                             CRI_Critical_hit = 0
 
-                        final_damage_1 = apply_stepwise_percent_mode(
+                        final_damage_1,final_damage_1_min = apply_stepwise_percent_mode(
                             #初始值 後武器ATK
-                            ATKC_Mweapon_ALL,
+                            (ATKC_Mweapon_ALL,ATKC_Mweapon_ALL_min),
                             #種族
                             (get_effect_multiplier('D_Race', target_race) + get_effect_multiplier('D_Race', 9999),1,"種族%"),
                             #體型
@@ -4600,26 +4624,24 @@ class ItemSearchApp(QWidget):
                             #特定魔物增傷
                             (target_monsterDamage,1,"特定魔物增傷%"),
                             #後總ATK
-                            (ATK_percent_sign,"+","ATK%"),
+                            (ATK_percent_sign,ATK_percent_sign_min,"+","ATK%"),
                             #敵人屬性耐性(1+萬紫+毒弱+彗星)
                             ((1 + skill_wanzih4_buff + skill_poison_weak_buff + magic_poison_buff),"raw","屬性耐受性%"),
 
                         )
-                        
                         #print(f"屬性倍率計算前: {final_damage_1}")
                         #屬性倍率
+                        final_damage_1_min = math.ceil(final_damage_1_min * get_damage_multiplier(user_attack_element, target_element, target_element_lv) / 100)
                         final_damage_1 = math.ceil(final_damage_1 * get_damage_multiplier(user_attack_element, target_element, target_element_lv) / 100)
                         self.steps.append(["屬性倍率%", math.ceil(get_damage_multiplier(user_attack_element, target_element, target_element_lv))])                        
                         #print(f"屬性倍率計算後: {final_damage_1}")
-                        #最終ATK
-                        final_damage_1 += ATKF
-                        self.steps.append(["前ATK", ATKF])
-                        #print(f"最終ATK: {final_damage_1}")
 
                         if weapon_class in (11,13,14,17,18,19,20,21):#DEX系
-                            final_damage = apply_stepwise_percent_mode(
+                            final_damage,final_damage_min = apply_stepwise_percent_mode(
                                 #最終ATK初始值
-                                final_damage_1,
+                                (final_damage_1,final_damage_1_min),
+                                #最終ATK
+                                (ATKF,"+","前ATK"),
                                 #P.ATK
                                 (total_PATK,1,"PATK"),
                                 #物理命中傷害
@@ -4649,11 +4671,13 @@ class ItemSearchApp(QWidget):
                             )
                             #print(f"技能爆擊最終傷害: {final_damage}")
                         else:#STR系
-                            final_damage = apply_stepwise_percent_mode(
+                            final_damage,final_damage_min = apply_stepwise_percent_mode(
                                 #最終ATK初始值
-                                final_damage_1,
+                                (final_damage_1,final_damage_1_min),
+                                #最終ATK
+                                (ATKF,"+","前ATK"),
                                 #P.ATK
-                                (total_PATK,1,"PATK%"),
+                                (total_PATK,1,"PATK"),
                                 #武器修煉ATK
                                 (WeaponMasteryATK,"+","武器修煉ATK"),
                                 #物理命中傷害
@@ -4721,19 +4745,32 @@ class ItemSearchApp(QWidget):
                     else:
                         raise ValueError(f"未知的攻擊類型: {attack_type}")
                     #最終隱藏段加算
+                    final_damage_min += skill_SpecialATK
                     final_damage += skill_SpecialATK
                     #最終怪物強制減傷(boss綠光)
+                    final_damage_min = int(final_damage_min * get_damage_reduction_value(self))
                     final_damage = int(final_damage * get_damage_reduction_value(self))
                     self.steps.append(["綠光減傷%", get_damage_reduction_value(self)*100])
 
+                    #武器值最大化/魔法省悟min = max
+                    if attack_type == "physical" and int(GUSklv(114)) == 1:
+                        final_damage_min = final_damage
+                    elif attack_type == "magic" and int(GUSklv(2206)) == 1:
+                        final_damage_min = final_damage
+                    elif attack_type == "d_b" and int(GUSklv(2206)) == 1:
+                        final_damage_min = final_damage
 
                     if skill_hits < 0:# skill_hits < 0 表示這段總傷害要「均分」為多次
                         times = abs(skill_hits)
-                        damage_by_hit = int(final_damage / times)
+                        damage_by_hit_min = int(final_damage_min / times)   
+                        damage_by_hit = int(final_damage / times)                     
+                        total_damage_min = damage_by_hit_min * times
                         total_damage = damage_by_hit * times
                     else:
                         times = skill_hits
+                        damage_by_hit_min = final_damage_min
                         damage_by_hit = final_damage
+                        total_damage_min = final_damage_min# * times
                         total_damage = final_damage# * times
 
                     results.append({
@@ -4741,7 +4778,9 @@ class ItemSearchApp(QWidget):
                         "label": label,
                         "formula": full_formula,
                         "skill_result": skill_result,
+                        "damage_by_hit_min": damage_by_hit_min,
                         "damage_by_hit": damage_by_hit,
+                        "total_damage_min": total_damage_min,
                         "total_damage": total_damage,
                         "times": times,
                         "user_attack_element": user_attack_element,
@@ -4834,16 +4873,7 @@ class ItemSearchApp(QWidget):
         else:
             self.skill_formula_result_input.setText("0%")
             self.custom_calc_box.setPlainText("錯誤：無選擇職業、無技能公式、公式錯誤計算結果為0！")
-        """
-        for r in results:
-            #print(f"=== 第 {r['round']} 次 ===")
-            print(f"公式: {r['formula']}")
-            #print(f"技能倍率: {r['skill_result']} %")
-            #print(f"單次傷害: {r['damage_by_hit']}")
-            #print(f"打擊次數: {r['times']} 次")
-            print(f"總傷害: {r['total_damage']}")
-            #print("--------------------------")
-        """
+
 
 
          
@@ -4856,6 +4886,7 @@ class ItemSearchApp(QWidget):
             return
 
         # 預備總傷害合計
+        all_total_damage_min = 0
         all_total_damage = 0
 
         # 判斷是否存在 combo 均分段（技能 times > 1 且每段是均分）
@@ -4867,42 +4898,70 @@ class ItemSearchApp(QWidget):
             r = results[0]
             main_element_name = element_map.get(r["user_attack_element"], f"未知({r['user_attack_element']})")
             result.append(f"【{main_element_name}】==================主技能總傷害===========================")
-            result.append(f"單次傷害:     {r['damage_by_hit']:,}")
-            result.append(f"打擊次數:     {r['times']} 次")
-            result.append(f"主技能總傷害: {r['total_damage']:,}")
+            if Critical_hit > 0:#吃爆擊顯示最大值
+                result.append(f"單次傷害:     {r['damage_by_hit']:,}")
+                result.append(f"打擊次數:     {r['times']} 次")
+                result.append(f"主技能總傷害: {r['total_damage']:,}")
+            else:
+                result.append(f"單次傷害:     {r['damage_by_hit_min']:,} ~ {r['damage_by_hit']:,}")
+                result.append(f"打擊次數:     {r['times']} 次")
+                result.append(f"主技能總傷害: {r['total_damage_min']:,} ~ {r['total_damage']:,}")
+            all_total_damage_min += r['total_damage_min']
             all_total_damage += r['total_damage']
 
             # 顯示 combo 均分段（只取第一段為代表）
             r = combo_split_results[0]
             combo_main_element_name = element_map.get(r["user_attack_element"], f"未知({r['user_attack_element']})")
+            combo_total_min = r["damage_by_hit_min"] * r["times"]
             combo_total = r["damage_by_hit"] * r["times"]
             result.append(f"【{combo_main_element_name}】===============COMBO 技能（均分）========================")
-            result.append(f"單次傷害(COMBO): {r['damage_by_hit']:,}")
-            result.append(f"打擊次數(COMBO): {r['times']} 次")
-            result.append(f"總傷害(COMBO):   {combo_total:,}")
+            if Critical_hit > 0:#吃爆擊顯示最大值
+                result.append(f"單次傷害(COMBO): {r['damage_by_hit']:,}")
+                result.append(f"打擊次數(COMBO): {r['times']} 次")
+                result.append(f"總傷害(COMBO):   {combo_total:,}")
+            else:
+                result.append(f"單次傷害(COMBO): {r['damage_by_hit_min']:,} ~ {r['damage_by_hit']:,}")
+                result.append(f"打擊次數(COMBO): {r['times']} 次")
+                result.append(f"總傷害(COMBO):   {combo_total_min:,} ~ {combo_total:,}")
+            all_total_damage_min += combo_total_min
             all_total_damage += combo_total
 
             # 顯示合計
             result.append(f" ")
             #result.append(f"============================總傷害合計=============================")
-            result.append(f"總傷害:   {all_total_damage:,}")
+            if Critical_hit > 0:#吃爆擊顯示最大值
+                result.append(f"總傷害:  {all_total_damage:,}")
+            else:
+                result.append(f"總傷害:  {all_total_damage_min:,} ~ {all_total_damage:,}")
 
         # === 正常多段技能（非均分）===
         elif len(results) > 1:
             result.append(f"【{element_map.get(User_attack_element, User_attack_element)}】===========以下總傷害數值（共 {len(results)} 次）====================")
             for idx, r in enumerate(results, start=1):
-                result.append(f"第 {idx}/{len(results)} 次傷害: {r['total_damage']:,}")
+                if Critical_hit > 0:#吃爆擊顯示最大值
+                    result.append(f"第 {idx}/{len(results)} 次傷害: {r['total_damage']:,}")
+                else:
+                    result.append(f"第 {idx}/{len(results)} 次傷害: {r['total_damage_min']:,} ~ {r['total_damage']:,}")
+                all_total_damage_min += r['total_damage_min']
                 all_total_damage += r['total_damage']
                 # result.append(f"------------------------------------------------------------------")
-            result.append(f"總傷害:   {all_total_damage:,}")
+            if Critical_hit > 0:#吃爆擊顯示最大值
+                result.append(f"總傷害:  {all_total_damage:,}")
+            else:
+                result.append(f"總傷害:  {all_total_damage_min:,} ~ {all_total_damage:,}")
 
         # === 單段技能 ===
         else:
             r = results[0]
             result.append(f"【{element_map.get(User_attack_element, User_attack_element)}】=================以下總傷害數值===========================")
-            result.append(f"單次傷害: {r['damage_by_hit']:,}")
-            result.append(f"打擊次數: {r['times']} 次")
-            result.append(f"總傷害:   {r['total_damage']:,}")
+            if Critical_hit > 0:#吃爆擊顯示最大值
+                result.append(f"單次傷害: {r['damage_by_hit']:,}")
+                result.append(f"打擊次數: {r['times']} 次")
+                result.append(f"總傷害:   {r['total_damage']:,}")
+            else:
+                result.append(f"單次傷害: {r['damage_by_hit_min']:,} ~ {r['damage_by_hit']:,}")
+                result.append(f"打擊次數: {r['times']} 次")
+                result.append(f"總傷害:   {r['total_damage_min']:,} ~ {r['total_damage']:,}")
 
         # ✅ 加上 decay_hits 顯示處理
         decay_hits = int(skill_row["decay_hits"]) if pd.notna(skill_row.get("decay_hits")) else 0
@@ -6961,11 +7020,14 @@ class ItemSearchApp(QWidget):
 
     def save_compare_base(self):
         self.auto_compare_checkbox.setChecked(False)
+        #對比時自動啟用數值最大化。
+        self.skill_checkboxes["魔法省悟"].setChecked(True)
+        self.skill_checkboxes["武器值最大化"].setChecked(True)
         self.trigger_total_effect_update()#儲存前強制運算
         text = self.custom_calc_box.toPlainText()
         with open("compare_base.txt", "w", encoding="utf-8") as f:
             f.write(text)
-        QMessageBox.information(self, "儲存成功", "已儲存目前數據作為比對基準。")
+        QMessageBox.information(self, "儲存成功", "已儲存目前數據作為比對基準，\n並自動啟用[魔法省悟]、[武器值最大化]。")
         self.auto_compare_checkbox.setChecked(True)
 
     def compare_with_base(self):
@@ -7506,19 +7568,24 @@ class ItemSearchApp(QWidget):
             checkbox.stateChanged.connect(self.clear_global_state)
             checkbox.stateChanged.connect(self.trigger_total_effect_update)
 
-            # exclusive 群組
-            if "exclusive" in data:
-                group = data["exclusive"]
 
-                if group not in self.exclusive_groups:
-                    self.exclusive_groups[group] = []
+            # exclusive 群組（支援多組，例如 "food_str,food_agi"）
+            if "exclusive" in data and data["exclusive"]:
+                raw = data["exclusive"]
 
-                self.exclusive_groups[group].append(checkbox)
+                # 允許：字串 "a,b,c" 或 list ["a","b","c"]
+                if isinstance(raw, str):
+                    groups = [g.strip() for g in raw.split(",") if g.strip()]
+                else:
+                    groups = [str(g).strip() for g in raw if str(g).strip()]
 
-                checkbox.toggled.connect(
-                    lambda checked, c=checkbox, g=group:
-                    self.handle_exclusive_toggle(c, g, checked)
-                )
+                for group in groups:
+                    self.exclusive_groups.setdefault(group, []).append(checkbox)
+
+                    checkbox.toggled.connect(
+                        lambda checked, c=checkbox, g=group:
+                        self.handle_exclusive_toggle(c, g, checked)
+                    )
 
         print("✓ Skill/料理區塊已根據最新資料重新生成")
 
@@ -9525,6 +9592,25 @@ class ItemSearchApp(QWidget):
         else:
             print("⚠️ 模板中沒有 Status 區塊。")
 
+        # === 根據 SkillOption_mapping 更新 SkillOption ===
+        skillopt_data = new_data.get("SkillOption", None)
+        if skillopt_data is None:
+            # 模板沒有就建立
+            new_data["SkillOption"] = {}
+            skillopt_data = new_data["SkillOption"]
+
+        if skillopt_data is not None:
+            for var_name, skillopt_key in SkillOption_mapping.items():
+                if var_name in context:
+                    new_value = context[var_name]
+                    old_value = skillopt_data.get(skillopt_key, None)
+                    skillopt_data[skillopt_key] = new_value
+                    print(f"🔄 SkillOption[{skillopt_key}] 從 {old_value} → {new_value}")
+                else:
+                    print(f"⚠️ 找不到變數：{var_name}（對應 SkillOption[{skillopt_key}]），略過。")
+        else:
+            print("⚠️ 模板中沒有 SkillOption 區塊。")
+
         # === 更新技能code ===
         if "Skill" in new_data and isinstance(new_data["Skill"], dict):
             old_value = new_data["Skill"].get("id", None)
@@ -9716,21 +9802,17 @@ class ItemSearchApp(QWidget):
         try:
             self.skill_filter_input.clear()
             self.load_saved_inputs(file_path)
-            #self.current_file = file_path # 不更新目前檔案路徑，保持為空
             self.update_window_title()
-            # self.display_all_effects()
-            # self.update_dex_int_half_note()
-            # self.jobsphp_display()
             self.refresh_skill_list()
-            # self.replace_custom_calc_content()
             self.trigger_total_effect_update()
-            #QMessageBox.information(self, "完成", f"已載入：{file_path}")
         except Exception as e:
             QMessageBox.critical(self, "錯誤", f"載入失敗：\n{str(e)}")
         # ★★★ 讀取成功 → 刪除 JSON 檔 ★★★
         try:
             os.remove(file_path)
             print(f"已刪除暫存 JSON：{file_path}")
+            self.setWindowTitle(f"RO物品查詢計算工具 {Version} - {file_path} ")
+            self.current_file = None
         except Exception as e:
             print(f"刪除 JSON 失敗：{e}")
 

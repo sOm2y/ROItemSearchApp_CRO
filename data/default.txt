@@ -118,7 +118,6 @@
   },
   "Consumable": [],
   "SupportSkill": [
-    "WL_RECOGNIZEDSPELL"
   ],
   "Damage": "0 ~ 0",
   "DamageDPS": 0,
