@@ -1,5 +1,5 @@
 #部分資料取自ROCalculator,搜尋 ROCalculator 可以知道哪些有使用
-Version = "v0.1.39-260209"
+Version = "v0.1.40-260227"
 
 import sys, builtins, time
 from PySide6.QtCore import QThread, Signal, Qt, QMetaObject, QTimer
@@ -387,6 +387,9 @@ stat_name_sets  = {#裝備基礎編碼
     ],
     "ammo": [
         "屬性", "箭矢/彈藥ATK"
+    ],
+    "Cannonball": [
+        "屬性", "砲彈ATK"
     ]
 }
 
@@ -3160,8 +3163,6 @@ def decompile_lub(lub_path, output_path):
 
 
 def parse_lub_file(filename):#字典化物品列表
-
-
     try:
         with open(filename, "r", encoding="utf-8") as file:
             content = file.read()
@@ -3177,15 +3178,11 @@ def parse_lub_file(filename):#字典化物品列表
 
     parsed_items = {}
     total = len(item_entries)
-    print(f"📦 開始讀取 {os.path.basename(filename)}，共 {total} 筆物品資料。")
-    
-    
+    print(f"📦 開始讀取 {os.path.basename(filename)}，共 {total} 筆物品資料。")      
     
     #for item_id, body in item_entries:
-    for index, (item_id, body) in enumerate(item_entries, start=1):
-        
-        try:
-            
+    for index, (item_id, body) in enumerate(item_entries, start=1):        
+        try:            
             print(f"  → 正在讀取第 {index}/{total} 筆", end="\r")
             item_id = int(item_id)
             identified_name = re.search(r'(?<!un)identifiedDisplayName\s*=\s*"([^"]+)"', body)
@@ -3207,8 +3204,6 @@ def parse_lub_file(filename):#字典化物品列表
                         desc_lines.append("")  # 保留空白行
                     else:
                         desc_lines.append(cleaned)
-
-
             else:
                 desc_lines = []
             
@@ -4090,11 +4085,9 @@ class ItemSearchApp(QWidget):
         smatk_refine_total = 0
         matk_refine_total, smatk_refine_total = self.calc_weapon_refine_matk(weaponR_Level, weaponRefineR, weaponGradeR)
         matk_refine_total_L, smatk_refine_total_L = self.calc_weapon_refine_matk(weaponL_Level, weaponRefineL, weaponGradeL)
-        #print(f"精煉加成 MATK: {matk_refine_total}")
-        #print(f"精煉加成 S.MATK: {smatk_refine_total}")
-        #============================魔法各增傷計算區============================
         #SMATK(裝備+精煉+特性素質)
         total_SMATK = SMATK + int(total_SPL/3) + int(total_CON/5) + smatk_refine_total + smatk_refine_total_L
+        #============================魔法各增傷計算區============================
         
         
         def apply_stepwise_percent_mode(base, *bonuses_with_mode):
@@ -4157,7 +4150,6 @@ class ItemSearchApp(QWidget):
 
         #物理===================     
         #浸透勁效果
-
         def_reduction_temp = int(100-def_reduction) #總階級種族破防-浸透勁破防100% 
         WPINVESTIGATEATK = max(0,int((target_def/2) + (target_def/2)*(def_reduction_temp/100))) if GUSklv(266) == 1 else 0 
         target_defc = 0 if GUSklv(266) == 1 else target_defc
@@ -4174,15 +4166,18 @@ class ItemSearchApp(QWidget):
         total_CRATE = CRATE + int(total_CRT/3)
         if weapon_class in (11,13,14,17,18,19,20,21):#DEX系
             #武器基礎ATK(dex)
+            BasicsWeaponATK_min = ATK_Mweapon * (1+ (total_DEX/200) - (weaponR_Level*0.05))
             BasicsWeaponATK = ATK_Mweapon * (1+ (total_DEX/200) + (weaponR_Level*0.05))
             
         else:#STR系
             #武器基礎ATK(STR)
+            BasicsWeaponATK_min = ATK_Mweapon * (1+ (total_STR/200) - (weaponR_Level*0.05))
             BasicsWeaponATK = ATK_Mweapon * (1+ (total_STR/200) + (weaponR_Level*0.05))
         
         #print(f"BasicsWeaponATK:{BasicsWeaponATK}")
         #精煉武器ATK
-        refineWeaponATK = int(BasicsWeaponATK + atk_refine_total)       
+        refineWeaponATK_min = int(BasicsWeaponATK_min + atk_refine_total)
+        refineWeaponATK = int(BasicsWeaponATK + atk_refine_total)  
         #print(f"refineWeaponATK:{refineWeaponATK}")
 
         #武器體型修正
@@ -4195,6 +4190,7 @@ class ItemSearchApp(QWidget):
         #print(f"Ignore_size:{Ignore_size}") 
         #print(f"武器體型修正:{Weaponpunish}")   
         #(精煉武器ATK*體型懲罰)+箭矢彈藥ATK
+        refineammoATK_min = int(refineWeaponATK_min * Weaponpunish) + ammoATK
         refineammoATK = int(refineWeaponATK * Weaponpunish) + ammoATK
         
         #怒爆或致命塗毒 1+(怒爆20%/致命塗毒25%)*屬性倍率 
@@ -4203,6 +4199,7 @@ class ItemSearchApp(QWidget):
         #怒爆
         MAGNUM = 1 + 0.2 * (get_damage_multiplier(3, target_element, target_element_lv)/100) if int(GUSklv(7)) == 1 else 1
         #print(f"EDP:{EDP},MAGNUM:{MAGNUM}")
+        specialATK_min = int(refineammoATK_min * EDP * MAGNUM)
         specialATK = int(refineammoATK * EDP * MAGNUM)
 
         #前素質總ATK
@@ -4213,6 +4210,7 @@ class ItemSearchApp(QWidget):
             ATKF = int((NATK*2) * (get_damage_multiplier(0, target_element, target_element_lv)/100)) #前段強制無屬 除非溫暖風轉屬
         
         #後武器總ATK
+        ATKC_Mweapon_ALL_min = (specialATK_min + ATK_armor + WPINVESTIGATEATK) 
         ATKC_Mweapon_ALL = (specialATK + ATK_armor + WPINVESTIGATEATK) 
         self.ATK_ALL = ATKC_Mweapon_ALL
         #print(f"ATKC_Mweapon_ALL:{ATKC_Mweapon_ALL}")
@@ -4224,9 +4222,11 @@ class ItemSearchApp(QWidget):
         #後MATK
         MATKC = MATK_armor + MATK_Mweapon + MATK_MweaponL + matk_refine_total + matk_refine_total_L
         #武器MATK
+        MATK_Mweapon_ALL_min = MATKF + ((matk_refine_total + matk_refine_total_L + MATK_Mweapon + MATK_MweaponL) * (1-(weaponR_Level*0.1)))
         MATK_Mweapon_ALL = MATKF + ((matk_refine_total + matk_refine_total_L + MATK_Mweapon + MATK_MweaponL) * (1+(weaponR_Level*0.1)))
         #print(f"武器MATK:{MATK_Mweapon_ALL}")
         #裝備MATK+魔力增幅+武器MATK
+        armorMATK_MAGICPOWER_min = int(MATK_Mweapon_ALL_min * (1+(SKILL_HW_MAGICPOWER*0.05)) + MATK_armor)
         armorMATK_MAGICPOWER = int(MATK_Mweapon_ALL * (1+(SKILL_HW_MAGICPOWER*0.05)) + MATK_armor)
         self.MATK_ALL = armorMATK_MAGICPOWER
         #print(f"裝備MATK+魔力增幅:{armorMATK_MAGICPOWER}")
@@ -4551,38 +4551,7 @@ class ItemSearchApp(QWidget):
                     elif attack_type == "physical":
                         #先計算ATK%已利後續計算
                         ATK_percent_sign = int(ATKC_Mweapon_ALL * (ATK_percent/100))
-                        final_damage_1 = apply_stepwise_percent_mode(
-                            #初始值 後武器ATK
-                            ATKC_Mweapon_ALL,
-                            #種族
-                            (get_effect_multiplier('D_Race', target_race) + get_effect_multiplier('D_Race', 9999),1,"種族%"),
-                            #體型
-                            (get_effect_multiplier('D_size', target_size),1,"體型%"),
-                            #致命塗毒
-                            (EDP_attack,1,"致命塗毒%"),
-                            #屬性敵人
-                            (get_effect_multiplier('D_element', target_element) + get_effect_multiplier('D_element', 10),1,"屬性敵人%"),
-                            #階級
-                            (get_effect_multiplier('D_class', target_class),1,"階級%"),
-                            #特定魔物增傷
-                            (target_monsterDamage,1,"特定魔物增傷%"),
-                            #後總ATK
-                            (ATK_percent_sign,"+","ATK%"),
-                            #敵人屬性耐性(1+萬紫+毒弱+彗星)
-                            ((1 + skill_wanzih4_buff + skill_poison_weak_buff + magic_poison_buff),"raw","屬性耐受性%"),
-
-                        )
-                        
-                        #print(f"屬性倍率計算前: {final_damage_1}")
-                        #屬性倍率
-                        final_damage_1 = math.ceil(final_damage_1 * get_damage_multiplier(user_attack_element, target_element, target_element_lv) / 100)
-                        self.steps.append(["屬性倍率%", math.ceil(get_damage_multiplier(user_attack_element, target_element, target_element_lv))])                        
-                        #print(f"屬性倍率計算後: {final_damage_1}")
-                        #最終ATK
-                        final_damage_1 += ATKF
-                        self.steps.append(["前ATK", ATKF])
-                        #print(f"最終ATK: {final_damage_1}")
-                        #爆傷+技能半全爆擊判斷
+                        #爆傷+技能爆擊判斷
                         CRI_Critical_hit = (Damage_CRI * Critical_hit)
                         #(潛擊)+(爪痕)+(撼動)
                         special_melee_BUFF = max(1, sneak_attack_buff + DARKCROW_attack_buff + RUSH_attack_buff)
@@ -4614,8 +4583,39 @@ class ItemSearchApp(QWidget):
                             Critical_hitmag = 0#不吃crate
                             excel_Damage_HIT = Damage_HIT
                             CRI_Critical_hit = 0
-                        #print(f"special_away_BUFF:{special_away_BUFF}")
-                        #print(f"special_melee_BUFF:{special_melee_BUFF}")
+
+                        final_damage_1 = apply_stepwise_percent_mode(
+                            #初始值 後武器ATK
+                            ATKC_Mweapon_ALL,
+                            #種族
+                            (get_effect_multiplier('D_Race', target_race) + get_effect_multiplier('D_Race', 9999),1,"種族%"),
+                            #體型
+                            (get_effect_multiplier('D_size', target_size),1,"體型%"),
+                            #致命塗毒
+                            (EDP_attack,1,"致命塗毒%"),
+                            #屬性敵人
+                            (get_effect_multiplier('D_element', target_element) + get_effect_multiplier('D_element', 10),1,"屬性敵人%"),
+                            #階級
+                            (get_effect_multiplier('D_class', target_class),1,"階級%"),
+                            #特定魔物增傷
+                            (target_monsterDamage,1,"特定魔物增傷%"),
+                            #後總ATK
+                            (ATK_percent_sign,"+","ATK%"),
+                            #敵人屬性耐性(1+萬紫+毒弱+彗星)
+                            ((1 + skill_wanzih4_buff + skill_poison_weak_buff + magic_poison_buff),"raw","屬性耐受性%"),
+
+                        )
+                        
+                        #print(f"屬性倍率計算前: {final_damage_1}")
+                        #屬性倍率
+                        final_damage_1 = math.ceil(final_damage_1 * get_damage_multiplier(user_attack_element, target_element, target_element_lv) / 100)
+                        self.steps.append(["屬性倍率%", math.ceil(get_damage_multiplier(user_attack_element, target_element, target_element_lv))])                        
+                        #print(f"屬性倍率計算後: {final_damage_1}")
+                        #最終ATK
+                        final_damage_1 += ATKF
+                        self.steps.append(["前ATK", ATKF])
+                        #print(f"最終ATK: {final_damage_1}")
+
                         if weapon_class in (11,13,14,17,18,19,20,21):#DEX系
                             final_damage = apply_stepwise_percent_mode(
                                 #最終ATK初始值
@@ -4724,6 +4724,7 @@ class ItemSearchApp(QWidget):
                     final_damage += skill_SpecialATK
                     #最終怪物強制減傷(boss綠光)
                     final_damage = int(final_damage * get_damage_reduction_value(self))
+                    self.steps.append(["綠光減傷%", get_damage_reduction_value(self)*100])
 
 
                     if skill_hits < 0:# skill_hits < 0 表示這段總傷害要「均分」為多次
@@ -5746,6 +5747,9 @@ class ItemSearchApp(QWidget):
         return None
         
     def update_stat_bonus_display(self):
+        '''
+        素質加成顯示 = 基礎值 + 職業加成 + 裝備加成
+        '''
         try:
             job_id = self.input_fields["JOB"].currentData()
             tjob_bonus = job_dict.get(job_id, {}).get("TJobMaxPoint", [])
@@ -5765,10 +5769,13 @@ class ItemSearchApp(QWidget):
                 entries = raw_effects.get((stat, ""), [])
                 equip = sum(val for val, _ in entries)
                 total = base + job + equip
-
+                job_equip = job + equip
                 if stat in self.stat_bonus_labels:
                     self.stat_bonus_labels[stat].setFont(QFont("Consolas", 14))
-                    self.stat_bonus_labels[stat].setText(f"{base:>3} +{job:>3} +{equip:>3} = {total:>3}")
+                    if self.job_equip_checkbox.isChecked():                        
+                        self.stat_bonus_labels[stat].setText(f"{base:>3} +{job_equip:>8} = {total:>3}")                        
+                    else:
+                        self.stat_bonus_labels[stat].setText(f"{base:>3} +{job:>3} +{equip:>3} = {total:>3}")
         except Exception as e:
             print("顯示職業加成錯誤：", e)
 
@@ -6596,6 +6603,36 @@ class ItemSearchApp(QWidget):
         return blocks
 
 
+    def load_equipment_incremental(self, equipment_lua_path: str, *, overwrite: bool = True):
+        # 確保舊資料存在
+        if not hasattr(self, "equipment_data") or self.equipment_data is None:
+            self.equipment_data = {}
+
+        with open(equipment_lua_path, "r", encoding="utf-8") as f:
+            content = f.read()
+
+        new_blocks = self.parse_equipment_blocks(content)
+
+        added = 0
+        updated = 0
+        skipped = 0
+
+        for item_id, block in new_blocks.items():
+            if item_id not in self.equipment_data:
+                self.equipment_data[item_id] = block
+                added += 1
+            else:
+                if overwrite:
+                    if self.equipment_data[item_id] != block:
+                        self.equipment_data[item_id] = block
+                        updated += 1
+                    else:
+                        skipped += 1
+                else:
+                    skipped += 1
+
+        print(f"✅ 增量更新完成：新增 {added} / 更新 {updated} / 跳過 {skipped} / 總計 {len(self.equipment_data)}")
+        return {"added": added, "updated": updated, "skipped": skipped, "total": len(self.equipment_data)}
 
 
         
@@ -7043,6 +7080,7 @@ class ItemSearchApp(QWidget):
         # === 線上來源（已整理好的 Lua） ===
         ONLINE_ITEMINFO_URL = "https://z2911902.github.io/ROItemSearchApp/data/iteminfo_new.lua"
         ONLINE_EQUIP_URL    = "https://z2911902.github.io/ROItemSearchApp/data/EquipmentProperties.lua"
+        ONLINE_User_EQUIP_URL    = "https://z2911902.github.io/ROItemSearchApp/data/User_EquipmentProperties.lua"
         ONLINE_EnchantList_URL = "https://z2911902.github.io/ROItemSearchApp/data/EnchantList.lua"
         ONLINE_ItemDBNameTbl_URL = "https://z2911902.github.io/ROItemSearchApp/data/ItemDBNameTbl.lua"
         ONLINE_ItemReformSystem_URL = "https://z2911902.github.io/ROItemSearchApp/data/ItemReformSystem.lua"
@@ -7064,6 +7102,7 @@ class ItemSearchApp(QWidget):
         os.makedirs(data_dir, exist_ok=True)
         iteminfo_path      = os.path.join(data_dir, "iteminfo_new.lua")
         equipment_lua_path = os.path.join(data_dir, "EquipmentProperties.lua")
+        user_equipment_lua_path = os.path.join(data_dir, "User_EquipmentProperties.lua")
         EnchantList_path  = os.path.join(data_dir, "EnchantList.lua")
         ItemDBNameTbl_path  = os.path.join(data_dir, "ItemDBNameTbl.lua")
         ItemReformSystem_path  = os.path.join(data_dir, "ItemReformSystem.lua")
@@ -7356,6 +7395,7 @@ class ItemSearchApp(QWidget):
         # === 判斷缺檔 ===
         miss_item  = not os.path.exists(iteminfo_path)
         miss_equip = not os.path.exists(equipment_lua_path)
+        miss_user_equip = not os.path.exists(user_equipment_lua_path)
         miss_EnchantList  = not os.path.exists(EnchantList_path)
         miss_ItemDBNameTbl  = not os.path.exists(ItemDBNameTbl_path)
         miss_ItemReformSystem  = not os.path.exists(ItemReformSystem_path)
@@ -7381,6 +7421,7 @@ class ItemSearchApp(QWidget):
             targets = []
             if miss_item:  targets.append((ONLINE_ITEMINFO_URL, iteminfo_path))
             if miss_equip: targets.append((ONLINE_EQUIP_URL,    equipment_lua_path))
+            if miss_user_equip: targets.append((ONLINE_User_EQUIP_URL,    user_equipment_lua_path))
             if miss_EnchantList: targets.append((ONLINE_EnchantList_URL,    EnchantList_path))
             if miss_ItemDBNameTbl: targets.append((ONLINE_ItemDBNameTbl_URL,    ItemDBNameTbl_path))
             if miss_ItemReformSystem: targets.append((ONLINE_ItemReformSystem_URL,    ItemReformSystem_path))
@@ -7404,6 +7445,7 @@ class ItemSearchApp(QWidget):
             required_files = [
                 iteminfo_path,
                 equipment_lua_path,
+                user_equipment_lua_path,
                 EnchantList_path,
                 ItemDBNameTbl_path,
                 skill_tree_path,
@@ -7422,10 +7464,12 @@ class ItemSearchApp(QWidget):
 
         print("📖 載入 物品列表 ...")
         self.parsed_items = parse_lub_file(iteminfo_path)
-        print("📖 載入 載入物品效果...")
+        print("📖 載入 物品效果...")
         with open(equipment_lua_path, "r", encoding="utf-8") as f:
             content = f.read()
         self.equipment_data = self.parse_equipment_blocks(content)
+        print("📖 載入 自定義物品效果...")
+        self.load_equipment_incremental(user_equipment_lua_path, overwrite=True) 
         print("📖 載入 技能清單...")
         load_skill_map("data/skillneme.csv") #讀取SKILL列表
         self.lua_text = load_skill_delay_lua("data/skilldelaylist.lua")#讀取技能延遲
@@ -7779,10 +7823,21 @@ class ItemSearchApp(QWidget):
         # === 分頁1：角色能力值 ===
         char_scroll = QScrollArea()
         char_scroll.setWidgetResizable(True)
+
         char_inner = QWidget()
         char_layout = QVBoxLayout(char_inner)
         char_scroll.setWidget(char_inner)
-        char_layout.addWidget(QLabel("角色能力值"))
+
+        # 角色能力值 + 勾選按鈕（同一行）
+        row = QHBoxLayout()
+        row.addWidget(QLabel("角色能力值  "))
+
+        self.job_equip_checkbox = QCheckBox("合併職業跟裝備加成點數")  # ✅ 存成 self.xxx
+        row.addWidget(self.job_equip_checkbox)
+        self.job_equip_checkbox.toggled.connect(self.update_stat_bonus_display)
+
+        row.addStretch()
+        char_layout.addLayout(row)
         # 儲存加成顯示欄位
         self.stat_bonus_labels = {}
 
