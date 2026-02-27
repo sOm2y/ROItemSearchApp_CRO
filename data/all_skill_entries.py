@@ -70,8 +70,8 @@ all_skill_entries = {#範例[    "": {"type": "技能/料理","code":["",""]},
     "慈悲術": {"id": "AB","type": "技能","code": ["temp = 70 / 10","AddExtParam(0,103,10 + math.floor(temp))","AddExtParam(0,106,10 + math.floor(temp)","AddExtParam(0,107,10 + math.floor(temp)","AddExtParam(0,49,20)"]},
     "純白百合花": {"id": "AB","type": "技能","code":["temp = 70 / 10","AddExtParam(0,104,12 + math.floor(temp))","AddExtParam(0,167,10 + math.floor(temp))"]},
     "神聖權能": {"id": "AB","type": "技能","code":["AddExtParam(1, 242, 50)","AddExtParam(1, 243, 50)"]},
-    "全心奉獻": {"id": "AB","type": "技能","code":["AddExtParam(1, 235, 10)","AddExtParam(1, 236, 10)","AddExtParam(1, 237, 10)"]},
-    "祝福讚歌": {"id": "AB","type": "技能","code":["AddExtParam(1, 234, 10)","AddExtParam(1, 238, 10)","AddExtParam(1, 239, 10)"]},
+    "全心奉獻": {"id": "AB","type": "技能","code":["AddExtParam(1, 235, 10)","AddExtParam(1, 236, 10)","AddExtParam(1, 237, 10)"],"exclusive": "STA.WIS.SPL"},
+    "祝福讚歌": {"id": "AB","type": "技能","code":["AddExtParam(1, 234, 10)","AddExtParam(1, 238, 10)","AddExtParam(1, 239, 10)"],"exclusive": "POW.CON.CRT"},
     "神聖防護/光耀天命": {"id": "AB","type": "技能","code":["AddIgnore_MRES_RacePercent(9999, 25)","AddIgnore_RES_RacePercent(9999, 25)"]},
     "爆裂聖光": {"id": "AB","type": "技能","code":["AddExtParam(1, 253, 10)"]},
     "贖罪": {"id": "AB","type": "技能","code":["SetIgnoreDefRace_Percent(9999, 25)","SetIgnoreMdefRace(9999, 25)"]},
@@ -139,6 +139,7 @@ all_skill_entries = {#範例[    "": {"type": "技能/料理","code":["",""]},
     
     #終初
     #心神凝聚跟風鷹重複
+    "突破極限": {"id": "SN","type": "技能","code":["UseSkill(5461)"]},
     "突破規矩": {"id": "SN","type": "技能","code":["UseSkill(5462)"]},
     #忍者
     "四色符": {"id": ["OB","KO"],"type": "技能","code":["UseSkill(5499)"]},
@@ -150,4 +151,8 @@ all_skill_entries = {#範例[    "": {"type": "技能/料理","code":["",""]},
     "格林狂熱": {"id": "RE","type": "技能","code":["temp = GetSkillLevel(517)","AddExtParam(1, 41, temp * 10 + 20)"]},    
     "瘋狂凱斯樂": {"id": "RE","type": "技能","code":["AddExtParam(1, 41, 100)"],"exclusive": "ALTER_MADNESSCANCEL"},
     "白金祭壇": {"id": "RE","type": "技能","code":["temp = GetSkillLevel(2563)","AddExtParam(1, 41, temp * 10 + 100)"],"exclusive": "ALTER_MADNESSCANCEL"},
+    #魂鈴師
+    "突破極限": {"id": "SUM","type": "技能","code":["UseSkill(5443)"]},
+    "神龜沙雕節": {"id": "SUM","type": "技能","code":["AddExtParam(1, 235, 10)","AddExtParam(1, 236, 10)","AddExtParam(1, 237, 10)"],"exclusive": "STA.WIS.SPL"},
+    "神龜海洋慶典": {"id": "SUM","type": "技能","code":["AddExtParam(1, 234, 10)","AddExtParam(1, 238, 10)","AddExtParam(1, 239, 10)"],"exclusive": "POW.CON.CRT"},
 }   
