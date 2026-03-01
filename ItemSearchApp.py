@@ -1,5 +1,5 @@
 #部分資料取自ROCalculator,搜尋 ROCalculator 可以知道哪些有使用
-Version = "v0.1.42-260227"
+Version = "v0.1.43-260301"
 
 import sys, builtins, time
 from PySide6.QtCore import QThread, Signal, Qt, QMetaObject, QTimer
@@ -1941,6 +1941,7 @@ def parse_lua_effects_with_variables(
     block_stack = []  # 用來追蹤 if-elseif-else 區塊狀態
     safe_globals = {"__builtins__": None}
     safe_locals = {"math": __import__("math")}
+
     def safe_eval_expr(expr, variables, get_values, refine_inputs, grade):
         expr = re.sub(r"get\((\d+)\)", lambda m: str(get_values.get(int(m.group(1)), 0)), expr)
         expr = re.sub(r"GetRefineLevel\((\d+)\)", lambda m: str(refine_inputs.get(int(m.group(1)), 0)), expr)
@@ -2336,11 +2337,11 @@ def parse_lua_effects_with_variables(
                 r"GetSkillLevel\((\d+)\)",
                 lambda m: str(enabled_skill_levels.get(int(m.group(1)), 0)),
                 expr
-            )
-            
-            variables.update({#給心神凝聚處理的
-                "skill_focus_AGI": skill_focus_AGI,
-                "skill_focus_DEX": skill_focus_DEX,
+            )            
+            variables.update({
+                "target_element": target_element,#給機匠被動
+                "skill_focus_AGI": skill_focus_AGI,#給心神凝聚處理的
+                "skill_focus_DEX": skill_focus_DEX,#給心神凝聚處理的
             })
 
             # ✅ 改用 eval + variables 做上下文，不再手動替換
@@ -3629,7 +3630,7 @@ class ItemSearchApp(QWidget):
         mres = self.mres_input.text() or "0"
         skill_formula = self.skill_formula_input.text()
         # 組合新的 state_key
-        state_key = f"{BaseLv}|{Use_skill_levels}|{skill_formula}|{skill_key}|{skill_lv}|{equip_state}|{special_state}|{size_key}|{element_key}|{race_key}|{class_key}|{d_ef}|{defc}|{res}|{mdef}|{mdefc}|{mres}|{element_lv_key}|{user_element_key}|{total_STR}|{total_AGI}|{total_VIT}|{total_INT}|{total_DEX}|{total_LUK}|{total_POW}|{total_STA}|{total_WIS}|{total_SPL}|{total_CON}|{total_CRT}"
+        state_key = f"{MHP_NOW}|{MSP_NOW}|{BaseLv}|{Use_skill_levels}|{skill_formula}|{skill_key}|{skill_lv}|{equip_state}|{special_state}|{size_key}|{element_key}|{race_key}|{class_key}|{d_ef}|{defc}|{res}|{mdef}|{mdefc}|{mres}|{element_lv_key}|{user_element_key}|{total_STR}|{total_AGI}|{total_VIT}|{total_INT}|{total_DEX}|{total_LUK}|{total_POW}|{total_STA}|{total_WIS}|{total_SPL}|{total_CON}|{total_CRT}"
 
 
         if getattr(self, "_last_calc_state", None) == state_key:
@@ -3713,7 +3714,7 @@ class ItemSearchApp(QWidget):
 
         # 從下拉選單與欄位取得目標資訊
         target_size    = self.size_box.currentData()
-        target_element = self.element_box.currentData()
+        target_element = self.element_box.currentData()#複製到trigger_total_effect_update先取得
         target_race    = self.race_box.currentData()
         target_class   = self.class_box.currentData()
         User_attack_element = self.attack_element_box.currentData()
@@ -3873,7 +3874,7 @@ class ItemSearchApp(QWidget):
         
         """
         target_size       # 來自 體型 的數值
-        C    # 屬性編號
+        target_element    # 屬性編號
         target_element_lv # 目標屬性等級
         target_race       # 種族代碼C
         target_class      # 階級代碼
@@ -4726,6 +4727,7 @@ class ItemSearchApp(QWidget):
 
 
                         default = 1#龍火只吃技能倍率 給他個1做基礎
+                        final_damage_min = 0
                         final_damage = apply_stepwise_percent_mode(
                             default,
                             #技能倍率
@@ -4765,7 +4767,9 @@ class ItemSearchApp(QWidget):
                         final_damage_min = final_damage
                     elif attack_type == "magic" and int(GUSklv(2206)) == 1:
                         final_damage_min = final_damage
-                    elif attack_type == "d_b" and int(GUSklv(2206)) == 1:
+                    # elif attack_type == "d_b" and int(GUSklv(2206)) == 1:
+                    #     final_damage_min = final_damage
+                    else:
                         final_damage_min = final_damage
 
                     if skill_hits < 0:# skill_hits < 0 表示這段總傷害要「均分」為多次
@@ -6636,6 +6640,8 @@ class ItemSearchApp(QWidget):
         '''
         計算統一處理，除非特殊狀態不然不要單獨處理效果
         '''        
+        globals()["target_element"] = self.element_box.currentData()#先取得怪物屬性給機匠被動使用。
+
         self.display_all_effects()
         self.display_item_info()        
         self.replace_custom_calc_content()
@@ -9393,7 +9399,7 @@ class ItemSearchApp(QWidget):
         
         # ComboBox 的綁定 修改觸發計算
         self.size_box.currentIndexChanged.connect(self.replace_custom_calc_content)
-        self.element_box.currentIndexChanged.connect(self.replace_custom_calc_content)
+        self.element_box.currentIndexChanged.connect(lambda: (setattr(self, "_last_calc_state", None), self.trigger_total_effect_update()))
         self.race_box.currentIndexChanged.connect(self.replace_custom_calc_content)
         self.class_box.currentIndexChanged.connect(self.replace_custom_calc_content)
         self.attack_element_box.currentIndexChanged.connect(self.replace_custom_calc_content)

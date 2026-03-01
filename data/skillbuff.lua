@@ -52,7 +52,18 @@
 		AddExtParam(1, 52, temp)
 	end
 }
-
+[105] = {
+	temp = GSklv(105)
+	if temp == 1 then
+		WeaponMasteryATK(4)
+		AddExtParam(1, 103, 1)
+	end
+}
+[107] = {
+	temp = GSklv(107)
+	WeaponMasteryATK(temp * 2)
+	AddExtParam(1, 49, temp * 2)
+}
 [134] = {
 	temp = GSklv(134)
 	temp_wp = GetWeaponClass(4)
@@ -125,6 +136,14 @@
 		WeaponMasteryATK(temp * 5)
 		AddExtParam(1, 49, temp * 3)
 	end
+}
+
+[2277] = {
+	temp = GSklv(2277)
+	if target_element == 2 or target_element == 3 then
+		WeaponMasteryATK(temp * 10)
+	end
+
 }
 
 [2412] = {

@@ -19,9 +19,26 @@ Item = {
     Type = "Cannonball",
     Stat = {0, 250}
   },
+  [18005] = {
+    Type = "Cannonball",
+    Stat = {1, 120}
+  },
+  [18006] = {
+    Type = "Cannonball",
+    Stat = {4, 120}
+  },
+  [18007] = {
+    Type = "Cannonball",
+    Stat = {2, 120}
+  },
+  [18008] = {
+    Type = "Cannonball",
+    Stat = {3, 120}
+  },
+  [18009] = {
+    Type = "Cannonball",
+    Stat = {5, 120}
+  }
 }
-Combiitem = {
-}
-
 
 

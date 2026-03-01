@@ -130,6 +130,8 @@ all_skill_entries = {#範例[    "": {"type": "技能/料理","code":["",""]},
     "速度激發": {"id": "ME","type": "技能","code":["temp_wp = GetWeaponClass(4)","if temp_wp == 6 or temp_wp == 7 or temp_wp == 8 or temp_wp == 15 then","AddExtParam(1, 301, 30)","end"]},
     "無視體型攻擊": {"id": "ME","type": "技能","code":["PerfectDamage(1)"]},
     "武器值最大化": {"id": "ME","type": "技能","code":["UseSkill(114)"]},
+    "騎乘魔導機甲": {"id": "ME","type": "技能","code":["temp = GetSkillLevel(2255)","WeaponMasteryATK(temp * 15)"]},
+    
     
     #禁咒
     "魔力增幅": {"id": "WL","type": "技能","code":["UseSkill(366)"]},

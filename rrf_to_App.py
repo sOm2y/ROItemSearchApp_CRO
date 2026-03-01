@@ -52,7 +52,7 @@ Shadow_GROUP_NAME_MAP = {
     9: '服飾頭上',
     10: '服飾頭中',
 }
-
+NAME_MAP = {}
 
 def load_python_dict(path, var_name):
     """
@@ -730,8 +730,8 @@ def extract_equip_chunk(filepath, json_data, get_itemname,
                 (slot_name == '2B01' and SHOW_2B01)
             )
 
-            if SHOW_ONLY_PARSED_SLOTS and not should_parse:
-                continue
+            # if SHOW_ONLY_PARSED_SLOTS and not should_parse:
+            #     continue
 
             next_idx = None
             for ni in range(si + 1, len(slot_offsets)):
@@ -773,7 +773,7 @@ def extract_equip_chunk(filepath, json_data, get_itemname,
 
                 except:
                     slot_content.append('解析2201失敗')
-
+            
             # === 2301 裝備ID ===
             elif slot_name == '2301':
                 try:
@@ -972,6 +972,8 @@ def run_rrf_main():
     # 4. 用 temp.txt 開始解析
     extract_equip_chunk(txt_path, json_data, get_itemname,'EquippedItems', GROUP_NAME_MAP)
     extract_equip_chunk(txt_path, json_data, get_itemname,'EquippedShadowItems', Shadow_GROUP_NAME_MAP)
+    #投擲物品查詢 找到EquipArrowIndex的開頭序號 到InventoryItems物品內的1D01內的第五組就是代號 要反查出物品名稱再匯入json，但是我懶得寫了
+    #extract_equip_chunk(txt_path, json_data, get_itemname,'InventoryItems', NAME_MAP)
 
 
     # 5. 解析完畢 → 刪除 temp.txt
