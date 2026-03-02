@@ -1,5 +1,5 @@
 #部分資料取自ROCalculator,搜尋 ROCalculator 可以知道哪些有使用
-Version = "v0.1.44-260302"
+Version = "v0.1.45-260302"
 
 import sys, builtins, time
 from PySide6.QtCore import QThread, Signal, Qt, QMetaObject, QTimer
@@ -106,6 +106,9 @@ class UpdateDialog(QDialog):#顯示更新內容
         btn_row.addWidget(self.btn_cancel)
         layout.addLayout(btn_row)
 
+
+from PySide6.QtWidgets import QProgressDialog, QMessageBox, QDialog
+from recompile_service import RecompileService
 
 
 class LoadingDialog(QDialog):
@@ -1862,7 +1865,7 @@ class FileSelectionDialog(QDialog):#刪除清單
         layout = QVBoxLayout(self)
         # === 說明輸入框（新增） ===
         desc_label = QLabel(
-            "有勾選代表本機資料已經過期，若有特殊需求再手動勾選。"
+            "有勾選代表本機資料過期，若有特殊需求再手動勾選。"
         )
         desc_label.setWordWrap(True)
         #self.description_edit = QLineEdit()
@@ -6058,161 +6061,94 @@ class ItemSearchApp(QWidget):
 
 
 
+
+
     def recompile(self):
-        
-        def github_file_last_commit_dt(owner, repo, path, branch="main", token=None, timeout=10):
-            """
-            回傳該檔案在 GitHub 上最後一次 commit 的時間 (datetime, timezone-aware UTC)。
-            失敗回 None。
-            """
-            url = f"https://api.github.com/repos/{owner}/{repo}/commits"
-            params = {"path": path, "sha": branch, "per_page": 1}
+        data_folder = os.path.join(os.getcwd(), "data")
 
-            headers = {"Accept": "application/vnd.github+json"}
-            if token:
-                headers["Authorization"] = f"Bearer {token}"
+        items = [
+            ("EquipmentProperties.lua", "data/EquipmentProperties.lua"),
+            ("iteminfo_new.lua",        "data/iteminfo_new.lua"),
+            ("EnchantList.lua",         "data/EnchantList.lua"),
+            ("ItemDBNameTbl.lua",       "data/ItemDBNameTbl.lua"),
+            ("ItemReformSystem.lua",    "data/ItemReformSystem.lua"),
+            ("User_EquipmentProperties.lua","data/User_EquipmentProperties.lua"),
+            ("skill_tree.yml",          "data/skill_tree.yml"),
+            ("skilltreeview.lub",       "data/skilltreeview.lub"),
+            ("skillneme.csv",           "data/skillneme.csv"),
+            ("skillbuff.lua",           "data/skillbuff.lua"),
+            ("all_skill_entries.py",    "data/all_skill_entries.py"),
+            ("job_dict.py",             "data/job_dict.py"),
+            ("EnchantName.lua",         "data/EnchantName.lua"),
+        ]
 
-            r = requests.get(url, params=params, headers=headers, timeout=timeout)
-            if r.status_code != 200:
-                return None
+        # 建一次 service 重用：放成 self 屬性，避免被 GC
+        if not hasattr(self, "_recompile_service"):
+            self._recompile_service = RecompileService(self)
 
-            data = r.json()
-            if not data:
-                return None
+        svc = self._recompile_service
 
-            # 一般用 committer date 比較不會被作者時區/重寫影響
-            iso = data[0]["commit"]["committer"]["date"]  # e.g. "2026-03-02T10:11:12Z"
-            # Python 3.11+：fromisoformat 不吃 Z，要轉成 +00:00
-            dt = datetime.fromisoformat(iso.replace("Z", "+00:00"))
-            return dt.astimezone(timezone.utc)
+        progress = QProgressDialog("正在取得 GitHub 檔案資訊…", "取消", 0, 0, self)
+        progress.setWindowTitle("請稍候")
+        progress.setMinimumDuration(0)
+        progress.setAutoClose(False)
+        progress.setAutoReset(False)
+        progress.show()
 
-        def local_file_mtime_dt(full_path):
-            """
-            回傳本機檔案最後修改時間 (datetime, timezone-aware UTC)。
-            檔案不存在回 None。
-            """
-            if not os.path.exists(full_path):
-                return None
-            ts = os.path.getmtime(full_path)  # epoch seconds
-            return datetime.fromtimestamp(ts, tz=timezone.utc)
+        progress.canceled.connect(svc.cancel)
 
-        def should_check_by_remote_newer(local_dt, remote_dt):
-            """
-            遠端較新 -> True
-            本機不存在、遠端存在 -> True（建議也勾）
-            遠端取不到 -> False（保守）
-            """
-            if remote_dt is None:
-                return False
-            if local_dt is None:
-                return True
-            return remote_dt > local_dt
+        def on_progress(done, total):
+            progress.setLabelText(f"正在取得檔案資訊…({done}/{total})")
 
-        def build_files_to_delete(data_folder):
-            # ===== 你要設定的 repo 資訊 =====
-            OWNER = "z2911902"
-            REPO  = "ROItemSearchApp"
-            BRANCH = "main"   # 或 master / 或你的分支
+        def on_error(msg):
+            progress.close()
+            QMessageBox.critical(self, "錯誤", f"取得 GitHub 資訊失敗：{msg}")
+
+        def on_finished(files_to_delete):
+            progress.close()
+            if not files_to_delete:
+                return  # 取消或無資料
+
+            dialog = FileSelectionDialog(files_to_delete, data_folder, self)
+            if dialog.exec() != QDialog.Accepted:
+                return
+
+            selected_files = dialog.get_selected_files()
+            if not selected_files:
+                QMessageBox.information(self, "取消", "沒有選擇任何檔案。")
+                return
+
             try:
-                from dotenv import load_dotenv
-            except ImportError:
-                load_dotenv = None
+                for filename in selected_files:
+                    path = os.path.join(data_folder, filename)
+                    if os.path.exists(path):
+                        os.remove(path)
 
+                QMessageBox.information(self, "完成", "檔案已刪除，程式將重新啟動。")
+                python = sys.executable
+                os.execl(python, python, *sys.argv)
+            except Exception as e:
+                QMessageBox.critical(self, "錯誤", f"發生錯誤：{str(e)}")
 
-            def _load_env_if_possible() -> None:
-                """Load .env from reasonable locations for both .py and PyInstaller."""
-                if load_dotenv is None:
-                    return
-
-                candidates = []
-
-                # 1) current working directory (nice for dev / running from project root)
-                candidates.append(Path.cwd() / ".env")
-
-                # 2) script directory (robust when running python path/to/app.py)
-                if "__file__" in globals():
-                    candidates.append(Path(__file__).resolve().parent / ".env")
-
-                # 3) PyInstaller exe directory (works for onefile/onedir)
-                candidates.append(Path(sys.executable).resolve().parent / ".env")
-
-                for p in candidates:
-                    if p.is_file():
-                        load_dotenv(p, override=False)
-                        break
-
-
-            def get_github_pat() -> str:
-                _load_env_if_possible()
-
-                token = os.environ.get("GITHUB_PAT")
-                if not token:
-                    raise RuntimeError(
-                        "找不到 GITHUB_PAT：請設定環境變數，或放 .env（內容：GITHUB_PAT=...）在專案根/腳本旁/exe 旁。"
-                    )
-                return token
-
-
-            # 用法
-            TOKEN = get_github_pat()
-
-            # 你的清單： (本機檔名, GitHub 上對應路徑)
-            items = [
-                ("EquipmentProperties.lua", "data/EquipmentProperties.lua"),
-                ("iteminfo_new.lua",        "data/iteminfo_new.lua"),
-                ("EnchantList.lua",         "data/EnchantList.lua"),
-                ("ItemDBNameTbl.lua",       "data/ItemDBNameTbl.lua"),
-                ("ItemReformSystem.lua",    "data/ItemReformSystem.lua"),
-                ("User_EquipmentProperties.lua","data/User_EquipmentProperties.lua"),
-                ("skill_tree.yml",          "data/skill_tree.yml"),
-                ("skilltreeview.lub",       "data/skilltreeview.lub"),
-                ("skillneme.csv",           "data/skillneme.csv"),
-                ("skillbuff.lua",           "data/skillbuff.lua"),
-                ("all_skill_entries.py",    "data/all_skill_entries.py"),
-                ("job_dict.py",             "data/job_dict.py"),
-                ("EnchantName.lua",         "data/EnchantName.lua"),
-            ]
-
-            files_to_delete = []
-            for filename, github_path in items:
-                local_path = os.path.join(data_folder, filename)
-
-                local_dt = local_file_mtime_dt(local_path)
-                remote_dt = github_file_last_commit_dt(
-                    OWNER, REPO, github_path, branch=BRANCH, token=TOKEN
-                )
-
-                default_checked = should_check_by_remote_newer(local_dt, remote_dt)
-                files_to_delete.append((filename, default_checked))
-
-            return files_to_delete
-
-        data_folder = os.path.join(os.getcwd(), "DATA")
-
-        files_to_delete = build_files_to_delete(data_folder)
-
-        dialog = FileSelectionDialog(files_to_delete, data_folder, self)
-        if dialog.exec() != QDialog.Accepted:
-            return
-
-        selected_files = dialog.get_selected_files()
-        if not selected_files:
-            QMessageBox.information(self, "取消", "沒有選擇任何檔案。")
-            return
-
+        # 避免重複連線：先斷再接（Qt/PySide 允許多次 connect，會重複觸發）
         try:
-            for filename in selected_files:
-                path = os.path.join(data_folder, filename)
-                if os.path.exists(path):
-                    os.remove(path)
+            svc.progress.disconnect()
+            svc.error.disconnect()
+            svc.finished.disconnect()
+        except Exception:
+            pass
 
-            QMessageBox.information(self, "完成", "檔案已刪除，程式將重新啟動。")
-            python = sys.executable
-            os.execl(python, python, *sys.argv)
+        svc.progress.connect(on_progress)
+        svc.error.connect(on_error)
+        svc.finished.connect(on_finished)
 
-        except Exception as e:
-            QMessageBox.critical(self, "錯誤", f"發生錯誤：{str(e)}")
-
+        svc.start(
+            data_folder=data_folder,
+            items=items,
+            owner="z2911902",
+            repo="ROItemSearchApp",
+            branch="main",
+        )
 
 
     def update_total_effect_display(self):
@@ -8888,7 +8824,7 @@ class ItemSearchApp(QWidget):
         middle_layout.addWidget(self.Combi_text)
         self.btn_recompile = QPushButton("重新取得物品列表(依照網路速度可能會延遲顯示。)")
         self.btn_recompile.clicked.connect(self.recompile)
-        middle_layout.addWidget(self.btn_recompile)
+        #middle_layout.addWidget(self.btn_recompile)
         #self.btn_recompile.setVisible(False)#重新編譯先隱藏
         
        
@@ -9654,15 +9590,18 @@ class ItemSearchApp(QWidget):
         
         menu_update = menubar.addMenu("更新")
 
-        self.action_check_update = QAction("檢查更新", self)
+        self.action_check_update = QAction("檢查主程式更新", self)
+        self.action_check_data_update = QAction("檢查物品職業技能資料更新", self)
         self.action_do_update = QAction("立即更新", self)
         self.action_do_update.setEnabled(False)  # 預設不能按
 
         menu_update.addAction(self.action_check_update)
+        menu_update.addAction(self.action_check_data_update)
         #menu_update.addAction(self.action_do_update)
 
         self.action_check_update.triggered.connect(self.check_update)
         self.action_do_update.triggered.connect(self.do_update)
+        self.action_check_data_update.triggered.connect(self.recompile)
 
         menu_debug = menubar.addMenu("偵錯")
         
