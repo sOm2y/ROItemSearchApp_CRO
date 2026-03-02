@@ -6113,28 +6113,64 @@ class ItemSearchApp(QWidget):
             OWNER = "z2911902"
             REPO  = "ROItemSearchApp"
             BRANCH = "main"   # 或 master / 或你的分支
-            # 讀取 exe 同層的 .env
-            load_dotenv(Path(sys.executable).resolve().parent / ".env")
+            try:
+                from dotenv import load_dotenv
+            except ImportError:
+                load_dotenv = None
 
-            TOKEN = os.environ.get("GITHUB_PAT")
-            if not TOKEN:
-                raise RuntimeError("找不到 GITHUB_PAT：請設定環境變數，或在 exe 旁放 .env")
+
+            def _load_env_if_possible() -> None:
+                """Load .env from reasonable locations for both .py and PyInstaller."""
+                if load_dotenv is None:
+                    return
+
+                candidates = []
+
+                # 1) current working directory (nice for dev / running from project root)
+                candidates.append(Path.cwd() / ".env")
+
+                # 2) script directory (robust when running python path/to/app.py)
+                if "__file__" in globals():
+                    candidates.append(Path(__file__).resolve().parent / ".env")
+
+                # 3) PyInstaller exe directory (works for onefile/onedir)
+                candidates.append(Path(sys.executable).resolve().parent / ".env")
+
+                for p in candidates:
+                    if p.is_file():
+                        load_dotenv(p, override=False)
+                        break
+
+
+            def get_github_pat() -> str:
+                _load_env_if_possible()
+
+                token = os.environ.get("GITHUB_PAT")
+                if not token:
+                    raise RuntimeError(
+                        "找不到 GITHUB_PAT：請設定環境變數，或放 .env（內容：GITHUB_PAT=...）在專案根/腳本旁/exe 旁。"
+                    )
+                return token
+
+
+            # 用法
+            TOKEN = get_github_pat()
 
             # 你的清單： (本機檔名, GitHub 上對應路徑)
             items = [
-                ("EquipmentProperties.lua", "DATA/EquipmentProperties.lua"),
-                ("iteminfo_new.lua",        "DATA/iteminfo_new.lua"),
-                ("EnchantList.lua",         "DATA/EnchantList.lua"),
-                ("ItemDBNameTbl.lua",       "DATA/ItemDBNameTbl.lua"),
-                ("ItemReformSystem.lua",    "DATA/ItemReformSystem.lua"),
-                ("User_EquipmentProperties.lua","DATA/User_EquipmentProperties.lua"),
-                ("skill_tree.yml",          "DATA/skill_tree.yml"),
-                ("skilltreeview.lub",       "DATA/skilltreeview.lub"),
-                ("skillneme.csv",           "DATA/skillneme.csv"),
-                ("skillbuff.lua",           "DATA/skillbuff.lua"),
-                ("all_skill_entries.py",    "DATA/all_skill_entries.py"),
-                ("job_dict.py",             "DATA/job_dict.py"),
-                ("EnchantName.lua",         "DATA/EnchantName.lua"),
+                ("EquipmentProperties.lua", "data/EquipmentProperties.lua"),
+                ("iteminfo_new.lua",        "data/iteminfo_new.lua"),
+                ("EnchantList.lua",         "data/EnchantList.lua"),
+                ("ItemDBNameTbl.lua",       "data/ItemDBNameTbl.lua"),
+                ("ItemReformSystem.lua",    "data/ItemReformSystem.lua"),
+                ("User_EquipmentProperties.lua","data/User_EquipmentProperties.lua"),
+                ("skill_tree.yml",          "data/skill_tree.yml"),
+                ("skilltreeview.lub",       "data/skilltreeview.lub"),
+                ("skillneme.csv",           "data/skillneme.csv"),
+                ("skillbuff.lua",           "data/skillbuff.lua"),
+                ("all_skill_entries.py",    "data/all_skill_entries.py"),
+                ("job_dict.py",             "data/job_dict.py"),
+                ("EnchantName.lua",         "data/EnchantName.lua"),
             ]
 
             files_to_delete = []
