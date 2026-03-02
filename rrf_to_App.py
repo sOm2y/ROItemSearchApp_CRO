@@ -132,7 +132,7 @@ DataRegistry.register(
     path="data/job_dict.py",
     var_name="job_dict",
     default={
-    0: {"id": "","id_jobneme": "","id_jobneme_OL": "","selectskill": "", "name": "", "TJobMaxPoint": [0,0,0,0,0,0,0,0,0,0,0,0],"point":"0"}},    # 你也可以做一個小預設值
+    0: {"GetPureJob": [0],"id": "","id_jobneme": "","id_jobneme_OL": "","selectskill": "", "name": "", "TJobMaxPoint": [0,0,0,0,0,0,0,0,0,0,0,0],"point":"0"}},    # 你也可以做一個小預設值
     on_reload=lambda win: win.update_combobox()  # 若職業列表要更新
 )
 DataRegistry.reload_all()
@@ -877,7 +877,17 @@ def extract_equip_chunk(filepath, json_data, get_itemname,
     print("Done.\n")
 
 
+def get_job_info(job_dict, job_id):
+    # 先直接找 key
+    if job_id in job_dict:
+        return job_id, job_dict[job_id]
 
+    # 找不到就去 GetPureJob 裡找
+    for key, info in job_dict.items():
+        if job_id in info.get("GetPureJob", []):
+            return key, info
+
+    return None, None
 
 def run_rrf_main():
        # 0. 載入 iteminfo
@@ -939,21 +949,21 @@ def run_rrf_main():
     json_data["BaseLv"] = str(session_data.get("Level", ""))
     json_data["JobLv"] = str(session_data.get("JobLevel", ""))
     job_id = session_data.get("Job")
-    job_info = job_dict.get(job_id)
-    json_data["JOB"] = str(job_info["name"]) if job_info else ""
+    main_job_id, job_info = get_job_info(job_dict, job_id)    
+    json_data["JOB"] = str(job_info["name"]) if main_job_id else ""
 
     for k in ["Str","Agi","Vit","Int","Dex","Luk","POW","STA","WIS","SPL","CON","CRT"]:
         if k in session_data:
             json_data[k.upper()] = str(session_data[k])
-
+    
     print("========== 角色資訊 ==========")
     if "Charactername" in session_data:
         print(f"角色名稱：{session_data['Charactername']}")
     if "Job" in session_data:
         job_id = session_data["Job"]
-        job_info = job_dict.get(job_id)
+        main_job_id, job_info = get_job_info(job_dict, job_id)   
 
-        if job_info:
+        if main_job_id:
             job_name = job_info.get("name", f"未知職業({job_id})")
             print(f"職業：{job_name}")
         else:
@@ -985,7 +995,8 @@ def run_rrf_main():
         print(f"刪除 {txt_path} 時發生錯誤：{e}")
 
     # 依照輸入的 RRF 自動命名 json
-    rrf_filename = os.path.basename(rrf_path)        # 例：abc.rrf
+    rrfname = session_data['Charactername'] + "_" + job_info["name"] if main_job_id == job_id else session_data['Charactername'] + "_" + job_info["name"] + "(非4轉)"
+    rrf_filename = os.path.basename(rrfname)        # 例：abc.rrf
     json_name = os.path.splitext(rrf_filename)[0] + ".json"
     json_output_path = os.path.join("tmp", json_name)
 

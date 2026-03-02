@@ -1,5 +1,5 @@
 #部分資料取自ROCalculator,搜尋 ROCalculator 可以知道哪些有使用
-Version = "v0.1.43-260301"
+Version = "v0.1.44-260302"
 
 import sys, builtins, time
 from PySide6.QtCore import QThread, Signal, Qt, QMetaObject, QTimer
@@ -10,7 +10,9 @@ import reform_viewer #載入改造工具
 from rrf_to_App import run_rrf_main#載入rrf轉換
 from monster_lookup_dialog import MonsterLookupDialog#查詢怪物
 from Damage_view import DamageCalculator
-
+from pathlib import Path
+from dotenv import load_dotenv
+from datetime import datetime, timezone
 import requests
 class InitWorker(QThread):
     log_signal = Signal(str)
@@ -1852,7 +1854,7 @@ class FileSelectionDialog(QDialog):#刪除清單
     def __init__(self, files, base_path, parent=None):
         super().__init__(parent)
         self.setWindowTitle("選擇要刪除的檔案")
-        self.resize(480, 400)
+        self.resize(500, 500)
 
         self.base_path = base_path
         self.checkboxes = []
@@ -1860,8 +1862,7 @@ class FileSelectionDialog(QDialog):#刪除清單
         layout = QVBoxLayout(self)
         # === 說明輸入框（新增） ===
         desc_label = QLabel(
-            "每週更新預設只取得物品名稱、物品能力、附魔工具，\n"
-            "除非你需要更新技能、技能被動效果、技能樹相關資料。"
+            "有勾選代表本機資料已經過期，若有特殊需求再手動勾選。"
         )
         desc_label.setWordWrap(True)
         #self.description_edit = QLineEdit()
@@ -4045,10 +4046,10 @@ class ItemSearchApp(QWidget):
         Mdamage_nomdef = calc_final_mdef_damage(target_mdef, mdef_reduction)       
 
         #res        
-        res_reduction = ((get_effect_multiplier('D_Race_res', target_race))+(get_effect_multiplier('D_Race_res', 9999)))
+        res_reduction = 50 if half_bypass_res == 1 else ((get_effect_multiplier('D_Race_res', target_race))+(get_effect_multiplier('D_Race_res', 9999)))
         res_reduction = min(res_reduction, 50)#破抗性最大50%
         #無視res判斷
-        damage_nores = 1 if half_bypass_res == 1 else calc_final_res_damage(target_res, res_reduction)
+        damage_nores = calc_final_res_damage(target_res, res_reduction)
 
         
         #MRES
@@ -5042,6 +5043,7 @@ class ItemSearchApp(QWidget):
                 result.append(f"{pad_label('前ATK(STR系):')}{NATK:,}")
             result.append(f"{pad_label('後ATK:')}{AKTC:,}")
             result.append(f"{pad_label('武器ATK:')}{ATK_Mweapon:,}")
+            result.append(f"{pad_label('修煉ATK:')}{WeaponMasteryATK:,}")
             result.append(f"{pad_label('物理ATK%:')}{round(ATK_percent)}%")
             result.append(f"{pad_label('物理體型:')}{round(get_effect_multiplier('D_size', target_size))}%")
             result.append(f"{pad_label('物理種族:')}{round(get_effect_multiplier('D_Race', target_race) + get_effect_multiplier('D_Race', 9999))}%")
@@ -6056,36 +6058,112 @@ class ItemSearchApp(QWidget):
 
 
 
-
     def recompile(self):
+        
+        def github_file_last_commit_dt(owner, repo, path, branch="main", token=None, timeout=10):
+            """
+            回傳該檔案在 GitHub 上最後一次 commit 的時間 (datetime, timezone-aware UTC)。
+            失敗回 None。
+            """
+            url = f"https://api.github.com/repos/{owner}/{repo}/commits"
+            params = {"path": path, "sha": branch, "per_page": 1}
+
+            headers = {"Accept": "application/vnd.github+json"}
+            if token:
+                headers["Authorization"] = f"Bearer {token}"
+
+            r = requests.get(url, params=params, headers=headers, timeout=timeout)
+            if r.status_code != 200:
+                return None
+
+            data = r.json()
+            if not data:
+                return None
+
+            # 一般用 committer date 比較不會被作者時區/重寫影響
+            iso = data[0]["commit"]["committer"]["date"]  # e.g. "2026-03-02T10:11:12Z"
+            # Python 3.11+：fromisoformat 不吃 Z，要轉成 +00:00
+            dt = datetime.fromisoformat(iso.replace("Z", "+00:00"))
+            return dt.astimezone(timezone.utc)
+
+        def local_file_mtime_dt(full_path):
+            """
+            回傳本機檔案最後修改時間 (datetime, timezone-aware UTC)。
+            檔案不存在回 None。
+            """
+            if not os.path.exists(full_path):
+                return None
+            ts = os.path.getmtime(full_path)  # epoch seconds
+            return datetime.fromtimestamp(ts, tz=timezone.utc)
+
+        def should_check_by_remote_newer(local_dt, remote_dt):
+            """
+            遠端較新 -> True
+            本機不存在、遠端存在 -> True（建議也勾）
+            遠端取不到 -> False（保守）
+            """
+            if remote_dt is None:
+                return False
+            if local_dt is None:
+                return True
+            return remote_dt > local_dt
+
+        def build_files_to_delete(data_folder):
+            # ===== 你要設定的 repo 資訊 =====
+            OWNER = "z2911902"
+            REPO  = "ROItemSearchApp"
+            BRANCH = "main"   # 或 master / 或你的分支
+            # 讀取 exe 同層的 .env
+            load_dotenv(Path(sys.executable).resolve().parent / ".env")
+
+            TOKEN = os.environ.get("GITHUB_PAT")
+            if not TOKEN:
+                raise RuntimeError("找不到 GITHUB_PAT：請設定環境變數，或在 exe 旁放 .env")
+
+            # 你的清單： (本機檔名, GitHub 上對應路徑)
+            items = [
+                ("EquipmentProperties.lua", "DATA/EquipmentProperties.lua"),
+                ("iteminfo_new.lua",        "DATA/iteminfo_new.lua"),
+                ("EnchantList.lua",         "DATA/EnchantList.lua"),
+                ("ItemDBNameTbl.lua",       "DATA/ItemDBNameTbl.lua"),
+                ("ItemReformSystem.lua",    "DATA/ItemReformSystem.lua"),
+                ("User_EquipmentProperties.lua","DATA/User_EquipmentProperties.lua"),
+                ("skill_tree.yml",          "DATA/skill_tree.yml"),
+                ("skilltreeview.lub",       "DATA/skilltreeview.lub"),
+                ("skillneme.csv",           "DATA/skillneme.csv"),
+                ("skillbuff.lua",           "DATA/skillbuff.lua"),
+                ("all_skill_entries.py",    "DATA/all_skill_entries.py"),
+                ("job_dict.py",             "DATA/job_dict.py"),
+                ("EnchantName.lua",         "DATA/EnchantName.lua"),
+            ]
+
+            files_to_delete = []
+            for filename, github_path in items:
+                local_path = os.path.join(data_folder, filename)
+
+                local_dt = local_file_mtime_dt(local_path)
+                remote_dt = github_file_last_commit_dt(
+                    OWNER, REPO, github_path, branch=BRANCH, token=TOKEN
+                )
+
+                default_checked = should_check_by_remote_newer(local_dt, remote_dt)
+                files_to_delete.append((filename, default_checked))
+
+            return files_to_delete
+
         data_folder = os.path.join(os.getcwd(), "DATA")
 
-        # ===== 你要的完整清單 + 預設勾選 =====
-        files_to_delete = [
-            ("EquipmentProperties.lua", True),
-            ("iteminfo_new.lua", True),
-            ("EnchantList.lua", True),
-            ("ItemDBNameTbl.lua", True),
-            ("ItemReformSystem.lua", True),
-            ("skill_tree.yml", False),
-            ("skilltreeview.lub", False),
-            ("skillneme.csv", False),
-            ("skillbuff.lua", False),
-            ("all_skill_entries.py", False),
-            ("job_dict.py", False),
-            ("EnchantName.lua", False),
-        ]
+        files_to_delete = build_files_to_delete(data_folder)
 
         dialog = FileSelectionDialog(files_to_delete, data_folder, self)
         if dialog.exec() != QDialog.Accepted:
-            return  # 使用者取消
+            return
 
         selected_files = dialog.get_selected_files()
         if not selected_files:
             QMessageBox.information(self, "取消", "沒有選擇任何檔案。")
             return
 
-        # ===== 刪除檔案 =====
         try:
             for filename in selected_files:
                 path = os.path.join(data_folder, filename)
@@ -6093,7 +6171,6 @@ class ItemSearchApp(QWidget):
                     os.remove(path)
 
             QMessageBox.information(self, "完成", "檔案已刪除，程式將重新啟動。")
-
             python = sys.executable
             os.execl(python, python, *sys.argv)
 
@@ -7853,7 +7930,10 @@ class ItemSearchApp(QWidget):
             "POW": 255, "STA": 256, "WIS": 257, "SPL": 258, "CON": 259, "CRT": 260,"石碑開啟格數": 263 ,"石碑精煉": 264
             
         }
-
+        default_values = {
+            "BaseLv": 260,"STR": 1,"AGI": 1,"AGI": 1,"VIT": 1,"INT": 1,"DEX": 1,"LUK": 1,
+            "POW": 0,"STA": 0,"WIS": 0,"SPL": 0,"CON": 0,"CRT": 0,
+        }
         self.refine_parts = {
             # === 裝備部位 ===
             "頭上":   {"slot": 10, "type": "裝備"},
@@ -8155,6 +8235,8 @@ class ItemSearchApp(QWidget):
                 row_layout.addWidget(self.skill_btn)
             else:
                 field = QLineEdit()
+                if label in default_values:
+                    field.setText(str(default_values[label]))
                 field.setPlaceholderText(f"{label} (get({gid}))")
                 field.textChanged.connect(self.trigger_total_effect_update)
                 field.setMaximumWidth(50)#調整寬度
@@ -8768,7 +8850,7 @@ class ItemSearchApp(QWidget):
         middle_layout.addWidget(QLabel("套裝清單："))
         self.Combi_text.setFixedHeight(160)
         middle_layout.addWidget(self.Combi_text)
-        self.btn_recompile = QPushButton("重新取得物品列表")
+        self.btn_recompile = QPushButton("重新取得物品列表(依照網路速度可能會延遲顯示。)")
         self.btn_recompile.clicked.connect(self.recompile)
         middle_layout.addWidget(self.btn_recompile)
         #self.btn_recompile.setVisible(False)#重新編譯先隱藏
@@ -9759,18 +9841,27 @@ class ItemSearchApp(QWidget):
         
         
     def save_as_file(self):
-        # 預設開啟的資料夾
-        default_dir = os.path.join(os.getcwd(),"裝備")
+        # 預設資料夾
+        default_dir = os.path.join(os.getcwd(), "裝備")
+
+        # 預設檔名
+        full_title = self.windowTitle().strip() or "RO物品查詢計算工具 - 未命名"
+        if " - " in full_title:
+            filename_part = full_title.split(" - ", 1)[1]
+        else:
+            filename_part = "未命名"
+
+        # 路徑 + 檔名
+        default_path = os.path.join(default_dir, filename_part)
 
         file_path, _ = QFileDialog.getSaveFileName(
             self,
             "另存新檔",
-            default_dir,  # ✅ 預設路徑
+            default_path,          # ⭐ 關鍵在這
             "JSON Files (*.json)"
         )
 
         if file_path:
-            # 確保副檔名是 .json
             if not file_path.lower().endswith(".json"):
                 file_path += ".json"
 
@@ -9828,7 +9919,7 @@ class ItemSearchApp(QWidget):
         try:
             self.skill_filter_input.clear()
             self.load_saved_inputs(file_path)
-            self.update_window_title()
+            #self.update_window_title()
             self.refresh_skill_list()
             self.trigger_total_effect_update()
         except Exception as e:
@@ -9837,7 +9928,8 @@ class ItemSearchApp(QWidget):
         try:
             os.remove(file_path)
             print(f"已刪除暫存 JSON：{file_path}")
-            self.setWindowTitle(f"RO物品查詢計算工具 {Version} - {file_path} ")
+            name = file_path.replace("tmp", "").replace("\\", "")
+            self.setWindowTitle(f"RO物品查詢計算工具 {Version} - {name} ")
             self.current_file = None
         except Exception as e:
             print(f"刪除 JSON 失敗：{e}")
@@ -9882,6 +9974,7 @@ class ItemSearchApp(QWidget):
             return
 
         try:
+
             self.skill_filter_input.clear()
             self.clear_global_state()
             self.load_saved_inputs(file_path)
