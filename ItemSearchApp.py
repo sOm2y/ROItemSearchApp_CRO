@@ -4771,10 +4771,10 @@ class ItemSearchApp(QWidget):
                         final_damage_min = final_damage
                     elif attack_type == "magic" and int(GUSklv(2206)) == 1:
                         final_damage_min = final_damage
-                    # elif attack_type == "d_b" and int(GUSklv(2206)) == 1:
-                    #     final_damage_min = final_damage
-                    else:
+                    elif attack_type == "d_b":
                         final_damage_min = final_damage
+                    # else:
+                    #     final_damage_min = final_damage
 
                     if skill_hits < 0:# skill_hits < 0 表示這段總傷害要「均分」為多次
                         times = abs(skill_hits)
@@ -6564,9 +6564,9 @@ class ItemSearchApp(QWidget):
                     source_label = "、".join(combo_item_names) if combo_item_names else f"套裝ID {combi_id}"
 
                     if show_source:
-                        combo_effects_all.append(f"🧩 套裝來源：{source_label}")
+                        combo_effects_all.append(f"🧩套裝來源：{source_label}")
                         for line in filtered:
-                            combo_effects_all.append(f"  {line}")
+                            combo_effects_all.append(f"　　{line}")
                             
                     else:
                         combo_effects_all.extend(filtered)# 加入縮排以便辨識
@@ -6663,6 +6663,7 @@ class ItemSearchApp(QWidget):
                     val_str = f"{val:.1f}{unit}" if unit == "秒" else f"{val:+g}{unit}"
                     combined.append(f"{key} {val_str}  ← 〔{source}〕")
                 combined.append(f"🧮↳ {key} {value_str}  ← 〔總和〕🧮")
+                combined.append(f" ")
             else:
                 combined.append(f"{key} {value_str}")
         
