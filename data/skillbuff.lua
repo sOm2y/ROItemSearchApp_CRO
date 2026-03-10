@@ -191,6 +191,11 @@
 		end
 	end
 }
+[5276] = {
+	temp = GSklv(5276)	
+	AddSkillMDamage(6, temp * 1.5)
+}
+
 [5311] = {
 	temp = GSklv(5311)
 	temp_wp = GetWeaponClass(4)

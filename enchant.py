@@ -146,13 +146,14 @@ def parse_enchant_list(filename):
     # --------------------------------------------------
     all_requires = re.findall(
         r'Table\[(\d+)\]\.Slot\[(\d+)\]\:SetRequire'
-        r'\(\s*(\d+)\s*,\s*((?:\{[^}]+\}\s*,?\s*)+)\)',
+        r'\(\s*(\d+)(?:\s*,\s*((?:\{[^}]+\}\s*,?\s*)*))?\s*\)',
         content
     )
 
     for tid, sid, zeny, mats_raw in all_requires:
         tid = int(tid)
         sid = int(sid)
+        zeny = int(zeny)
 
         if tid not in parsed:
             continue
@@ -165,12 +166,12 @@ def parse_enchant_list(filename):
             "random_upgrade": []
         })
 
-        # 找出多組 {"Name", 1}
+        mats_raw = mats_raw or ""
         mats = re.findall(r'\{\s*"([^"]+)"\s*,\s*(\d+)\s*\}', mats_raw)
         materials = [(m_name, int(m_cnt)) for m_name, m_cnt in mats]
 
         parsed[tid]["slots"][sid]["require"] = {
-            "zeny": int(zeny),
+            "zeny": zeny,
             "materials": materials
         }
 
@@ -211,10 +212,10 @@ def parse_enchant_list(filename):
         re.DOTALL
     )
 
-    for tid, sid, name, rate, mats_raw in all_perfects:
+    for tid, sid, name, zeny, mats_raw in all_perfects:
         tid = int(tid)
         sid = int(sid)
-        rate = int(rate)
+        zeny = int(zeny)
 
         if tid not in parsed:
             continue
@@ -230,7 +231,7 @@ def parse_enchant_list(filename):
 
         parsed[tid]["slots"][sid]["perfect"].append({
             "name": name,
-            "rate": rate,
+            "zeny": zeny,
             "materials": materials
         })
 
@@ -244,10 +245,10 @@ def parse_enchant_list(filename):
         re.DOTALL
     )
 
-    for tid, sid, src, dst, rate, mats_raw in all_upgrades:
+    for tid, sid, src, dst, zeny, mats_raw in all_upgrades:
         tid = int(tid)
         sid = int(sid)
-        rate = int(rate)
+        zeny = int(zeny)
 
         if tid not in parsed:
             continue
@@ -268,7 +269,7 @@ def parse_enchant_list(filename):
         parsed[tid]["slots"][sid]["upgrade"].append({
             "from": src,
             "to": dst,
-            "rate": rate,
+            "zeny": zeny,
             "materials": materials
         })
 
@@ -282,10 +283,10 @@ def parse_enchant_list(filename):
         re.DOTALL
     )
 
-    for tid, sid, src, dst, rate, mats_raw in all_perfect_upgrades:
+    for tid, sid, src, dst, zeny, mats_raw in all_perfect_upgrades:
         tid = int(tid)
         sid = int(sid)
-        rate = int(rate)
+        zeny = int(zeny)
 
         if tid not in parsed:
             continue
@@ -308,7 +309,7 @@ def parse_enchant_list(filename):
         parsed[tid]["slots"][sid]["perfect_upgrade"].append({
             "from": src,
             "to": dst,
-            "rate": rate,
+            "zeny": zeny,
             "materials": materials
         })
     # --------------------------------------------------
@@ -320,10 +321,10 @@ def parse_enchant_list(filename):
         content
     )
 
-    for tid, sid, src, rate, mats_raw in all_random_require:
+    for tid, sid, src, zeny, mats_raw in all_random_require:
         tid = int(tid)
         sid = int(sid)
-        rate = int(rate)
+        zeny = int(zeny)
 
         if tid not in parsed:
             continue
@@ -343,7 +344,7 @@ def parse_enchant_list(filename):
         parsed[tid]["slots"][sid].setdefault("random_require", {})
 
         parsed[tid]["slots"][sid]["random_require"][src] = {
-            "rate": rate,
+            "zeny": zeny,
             "materials": materials
         }
     # --------------------------------------------------
@@ -377,7 +378,11 @@ def parse_enchant_list(filename):
         parsed[tid]["slots"][sid]["random_upgrade"].append({
             "from": src,
             "to": dst,
-            "rate": rate,
+            "rate": rate,   # 這個才是真的機率
+            "zeny": parsed[tid]["slots"][sid]
+                .get("random_require", {})
+                .get(src, {})
+                .get("zeny", 0),
             "materials": parsed[tid]["slots"][sid]
                 .get("random_require", {})
                 .get(src, {})
@@ -520,16 +525,25 @@ class EnchantUI(QWidget):
         # ---------------------------------------------------------
         mlist = []
 
-        # 如果是機率附魔（enchant）還要加上 SetRequire 裡的材料
+        # 如果是機率附魔（enchant）還要加上 SetRequire 裡的材料與 zeny
         tid = self.all_target_items[equip_name]
         info = self.parsed[tid]
         slot_order = list(reversed(info["slot_order"]))
         sid = slot_order[tab_index]
         slot_info = info["slots"].get(sid)
 
-        if data["type"] == "enchant" and slot_info and "require" in slot_info:
-            for name, cnt in slot_info["require"]["materials"]:
+        if slot_info and "require" in slot_info:
+            req = slot_info["require"]
+
+            if req.get("zeny", 0) > 0:
+                mlist.append(("Zeny", req["zeny"]))
+
+            for name, cnt in req.get("materials", []):
                 mlist.append((self.resolve_item_name(name), cnt))
+
+        # 各類附魔 / 升階自己的金額
+        if data.get("zeny", 0) > 0:
+            mlist.append(("Zeny", data["zeny"]))
 
         # 加上附魔自身材料
         for name, cnt in data.get("materials", []):
@@ -546,7 +560,10 @@ class EnchantUI(QWidget):
         else:
             msg += "附魔材料：\n"
             for name, cnt in mlist:
-                msg += f"● {name} × {cnt}\n"
+                if name == "Zeny":
+                    msg += f"● {name}: {cnt:,}\n"
+                else:
+                    msg += f"● {name} × {cnt}\n"
 
         msg = msg.rstrip()
 
@@ -715,6 +732,7 @@ class EnchantUI(QWidget):
                 item.setData(Qt.UserRole, {
                     "type": "perfect",
                     "name": p["name"],
+                    "zeny": p.get("zeny", 0),
                     "materials": p["materials"],
                 })
                 table.setItem(row, 1, item)
@@ -732,6 +750,7 @@ class EnchantUI(QWidget):
                     "type": "upgrade",
                     "from": up["from"],
                     "to": up["to"],
+                    "zeny": up.get("zeny", 0),
                     "materials": up["materials"],
                 })
                 table.setItem(row, 1, item)
@@ -750,10 +769,10 @@ class EnchantUI(QWidget):
                     "type": "perfect_upgrade",
                     "from": up["from"],
                     "to": up["to"],
-                    "materials": up["materials"],
+                    "zeny": up.get("zeny", 0),
+                    "materials": up.get("materials", [])
                 })
                 table.setItem(row, 1, item)
-
                 table.setItem(row, 2, QTableWidgetItem("100%"))
                 row += 1
 
@@ -768,6 +787,7 @@ class EnchantUI(QWidget):
                     "from": up["from"],
                     "to": up["to"],
                     "rate": up["rate"],
+                    "zeny": up.get("zeny", 0),
                     "materials": up.get("materials", [])
                 })
                 table.setItem(row, 1, item)

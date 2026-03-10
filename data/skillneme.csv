@@ -1036,7 +1036,7 @@
 5270,CD_MACE_BOOK_M,鈍器&書籍精熟,,,,,,,0,0,,,,,,,,,,,,,,,
 5271,CD_ARGUTUS_VITA,光耀天命,,,,,,,0,0,,,,,,,,,,,,,,,
 5272,CD_ARGUTUS_TELUM,神聖防護,,,,,,,0,0,,,,,,,,,,,,,,,
-5273,CD_ARBITRIUM,制裁謳歌,magic,,,,10,((1000+10*GSklv(5276))*Sklv+total_SPL*7)*BaseLv/100,6,1,,((1750+50*GSklv(5276))*Sklv+total_SPL*10)*BaseLv/100,6,1,,,,,,,,,,,
+5273,CD_ARBITRIUM,制裁謳歌,magic,0,0,,10,((1000+10*GSklv(5276))*Sklv+total_SPL*7)*BaseLv/100,6,1,,((1750+50*GSklv(5276))*Sklv+total_SPL*10)*BaseLv/100,6,1,,,,,,,0,0,,,
 5274,CD_ARBITRIUM_ATK,制裁謳歌_ATK,magic,,,,,((1000+10*GSklv(5276))*Sklv+total_SPL*7)*BaseLv/100,6,1,,((1750+50*GSklv(5276))*Sklv+total_SPL*10)*BaseLv/100,6,1,,,,,,,,,,,
 5275,CD_PRESENS_ACIES,爆裂聖光,,,,,,,0,0,,,,,,,,,,,,,,,
 5276,CD_FIDUS_ANIMUS,靈魂忠誠,,,,,,,0,0,,,,,,,,,,,,,,,
