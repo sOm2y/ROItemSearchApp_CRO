@@ -1,5 +1,5 @@
 #部分資料取自ROCalculator,搜尋 ROCalculator 可以知道哪些有使用
-Version = "v0.1.46-260312"
+Version = "v0.1.48-260315"
 
 import sys, builtins, time
 from PySide6.QtCore import QThread, Signal, Qt, QMetaObject, QTimer
@@ -3167,13 +3167,13 @@ def decompile_lub(lub_path, output_path):
         return False
 
 
-def parse_lub_file(filename):#字典化物品列表
+def parse_lub_file(filename, existing_items=None, duplicate_mode="skip"):  # 字典化物品列表
     try:
         with open(filename, "r", encoding="utf-8") as file:
             content = file.read()
     except FileNotFoundError:
         QMessageBox.critical(None, "錯誤", f"找不到檔案：{filename}")
-        return {}
+        return existing_items if existing_items is not None else {}
 
     item_entries = re.findall(
         r"\[(\d+)\]\s*=\s*{(.*?)}(?=,\s*\[\d+\]|\s*\[\d+\]|\s*$)",
@@ -3181,21 +3181,35 @@ def parse_lub_file(filename):#字典化物品列表
         re.DOTALL
     )
 
-    parsed_items = {}
+    # 如果有傳入舊資料就複製一份來疊加，避免直接改到原本的 dict
+    parsed_items = existing_items.copy() if existing_items is not None else {}
+
     total = len(item_entries)
-    print(f"📦 開始讀取 {os.path.basename(filename)}，共 {total} 筆物品資料。")      
-    
-    #for item_id, body in item_entries:
-    for index, (item_id, body) in enumerate(item_entries, start=1):        
-        try:            
+    print(f"📦 開始讀取 {os.path.basename(filename)}，共 {total} 筆物品資料。")
+
+    added_count = 0
+    overwritten_count = 0
+    skipped_count = 0
+
+    for index, (item_id, body) in enumerate(item_entries, start=1):
+        try:
             print(f"  → 正在讀取第 {index}/{total} 筆", end="\r")
             item_id = int(item_id)
-            identified_name = re.search(r'(?<!un)identifiedDisplayName\s*=\s*"([^"]+)"', body)
 
-            kr_name = re.search(r'(?<!un)identifiedResourceName\s*=\s*"([^"]+)"', body)
+            identified_name = re.search(
+                r'(?<!un)identifiedDisplayName\s*=\s*"([^"]+)"', body
+            )
+            kr_name = re.search(
+                r'(?<!un)identifiedResourceName\s*=\s*"([^"]+)"', body
+            )
             slot = re.search(r'slotCount\s*=\s*(\d+)', body)
 
-            desc_match = re.search(r'(?<!un)identifiedDescriptionName\s*=\s*{(.*?)}', body, re.DOTALL)
+            desc_match = re.search(
+                r'(?<!un)identifiedDescriptionName\s*=\s*{(.*?)}',
+                body,
+                re.DOTALL
+            )
+
             if desc_match:
                 desc_body = desc_match.group(1)
                 desc_lines_raw = re.findall(r'"([^"]*)"', desc_body)
@@ -3206,33 +3220,48 @@ def parse_lub_file(filename):#字典化物品列表
                     if re.fullmatch(r"\^?[a-fA-F0-9]+", cleaned):
                         continue
                     elif cleaned == "":
-                        desc_lines.append("")  # 保留空白行
+                        desc_lines.append("")
                     else:
                         desc_lines.append(cleaned)
             else:
                 desc_lines = []
-            
+
             if identified_name and kr_name and slot:
                 base_name = identified_name.group(1).strip()
                 slot_count = int(slot.group(1))
 
-                # ✅ 名稱加上孔數
-                if slot_count > 0:
-                    display_name = f"{base_name} [{slot_count}]"
-                else:
-                    display_name = base_name
+                # 名稱加上孔數
+                display_name = f"{base_name} [{slot_count}]" if slot_count > 0 else base_name
 
-                parsed_items[item_id] = {
-                    "name": display_name,           # 已經含孔數
-                    "base_name": base_name,         # 如果以後要用純名稱，可以保留
+                new_item = {
+                    "name": display_name,
+                    "base_name": base_name,
                     "kr_name": kr_name.group(1).strip(),
                     "description": desc_lines,
                     "slot": slot_count
                 }
 
+                # --- 重複處理邏輯 ---
+                if item_id in parsed_items:
+                    if duplicate_mode == "overwrite":
+                        parsed_items[item_id] = new_item
+                    elif duplicate_mode == "skip":
+                        continue
+                else:
+                    parsed_items[item_id] = new_item
+                    added_count += 1
+
         except Exception:
             continue
+
+    print()
+    print(f"✅ 完成讀取 {os.path.basename(filename)}")
+    print(f"   新增：{added_count} 筆")
+    print(f"   覆蓋：{overwritten_count} 筆")
+    print(f"   略過：{skipped_count} 筆")
+
     return parsed_items
+
 
 def load_skill_delay_lua(filename) -> str:
     try:
@@ -6095,10 +6124,11 @@ class ItemSearchApp(QWidget):
 
         items = [
             ("EquipmentProperties.lua", "data/EquipmentProperties.lua"),
-            ("iteminfo_new.lua",        "data/iteminfo_new.lua"),
+            ("iteminfo_new.lua",        "data/iteminfo_new.lua"),            
             ("EnchantList.lua",         "data/EnchantList.lua"),
             ("ItemDBNameTbl.lua",       "data/ItemDBNameTbl.lua"),
             ("ItemReformSystem.lua",    "data/ItemReformSystem.lua"),
+            ("User_iteminfo_new.lua",        "data/User_iteminfo_new.lua"),
             ("User_EquipmentProperties.lua","data/User_EquipmentProperties.lua"),
             ("skill_tree.yml",          "data/skill_tree.yml"),
             ("skilltreeview.lub",       "data/skilltreeview.lub"),
@@ -7232,6 +7262,7 @@ class ItemSearchApp(QWidget):
 
         # === 線上來源（已整理好的 Lua） ===
         ONLINE_ITEMINFO_URL = "https://z2911902.github.io/ROItemSearchApp/data/iteminfo_new.lua"
+        ONLINE_USER_ITEMINFO_URL = "https://z2911902.github.io/ROItemSearchApp/data/User_iteminfo_new.lua"
         ONLINE_EQUIP_URL    = "https://z2911902.github.io/ROItemSearchApp/data/EquipmentProperties.lua"
         ONLINE_User_EQUIP_URL    = "https://z2911902.github.io/ROItemSearchApp/data/User_EquipmentProperties.lua"
         ONLINE_EnchantList_URL = "https://z2911902.github.io/ROItemSearchApp/data/EnchantList.lua"
@@ -7254,6 +7285,7 @@ class ItemSearchApp(QWidget):
         data_dir = os.path.join(BASE_DIR, "data")
         os.makedirs(data_dir, exist_ok=True)
         iteminfo_path      = os.path.join(data_dir, "iteminfo_new.lua")
+        user_iteminfo_path      = os.path.join(data_dir, "User_iteminfo_new.lua")
         equipment_lua_path = os.path.join(data_dir, "EquipmentProperties.lua")
         user_equipment_lua_path = os.path.join(data_dir, "User_EquipmentProperties.lua")
         EnchantList_path  = os.path.join(data_dir, "EnchantList.lua")
@@ -7547,6 +7579,7 @@ class ItemSearchApp(QWidget):
 
         # === 判斷缺檔 ===
         miss_item  = not os.path.exists(iteminfo_path)
+        miss_User_item  = not os.path.exists(user_iteminfo_path)
         miss_equip = not os.path.exists(equipment_lua_path)
         miss_user_equip = not os.path.exists(user_equipment_lua_path)
         miss_EnchantList  = not os.path.exists(EnchantList_path)
@@ -7573,6 +7606,7 @@ class ItemSearchApp(QWidget):
             # 只線上：若本地已存在就不下載；只有缺檔才下載。失敗則停止。            
             targets = []
             if miss_item:  targets.append((ONLINE_ITEMINFO_URL, iteminfo_path))
+            if miss_User_item:  targets.append((ONLINE_ITEMINFO_URL, user_iteminfo_path))
             if miss_equip: targets.append((ONLINE_EQUIP_URL,    equipment_lua_path))
             if miss_user_equip: targets.append((ONLINE_User_EQUIP_URL,    user_equipment_lua_path))
             if miss_EnchantList: targets.append((ONLINE_EnchantList_URL,    EnchantList_path))
@@ -7597,6 +7631,7 @@ class ItemSearchApp(QWidget):
             # 下載後再檢查一次，若仍缺則停止（不回退本地）
             required_files = [
                 iteminfo_path,
+                user_iteminfo_path,
                 equipment_lua_path,
                 user_equipment_lua_path,
                 EnchantList_path,
@@ -7617,6 +7652,8 @@ class ItemSearchApp(QWidget):
 
         print("📖 載入 物品列表 ...")
         self.parsed_items = parse_lub_file(iteminfo_path)
+        print("📖 載入 自訂物品列表 ...")
+        self.parsed_items = parse_lub_file(user_iteminfo_path, existing_items=self.parsed_items,duplicate_mode="skip")
         print("📖 載入 物品效果...")
         with open(equipment_lua_path, "r", encoding="utf-8") as f:
             content = f.read()
