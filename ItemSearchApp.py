@@ -1,5 +1,5 @@
 #部分資料取自ROCalculator,搜尋 ROCalculator 可以知道哪些有使用
-Version = "v0.1.46-260303"
+Version = "v0.1.46-260312"
 
 import sys, builtins, time
 from PySide6.QtCore import QThread, Signal, Qt, QMetaObject, QTimer
@@ -3623,7 +3623,8 @@ class ItemSearchApp(QWidget):
         class_key = self.class_box.currentData()
         element_lv_key = self.element_lv_input.text() or 1
         user_element_key = self.attack_element_box.currentData()
-
+        damage_reduction_key = self.damage_reduction_combobox.currentIndex()
+        MD_BETELGEUSE_data = int(self.MD_BETELGEUSE_total)
         #monsterDamage_key = self.monsterDamage_input.text() or "0"#指定魔物增傷UI
         # 整數輸入值（注意空字串要預設為 0）
         d_ef = self.def_input.text() or "0"
@@ -3634,7 +3635,29 @@ class ItemSearchApp(QWidget):
         mres = self.mres_input.text() or "0"
         skill_formula = self.skill_formula_input.text()
         # 組合新的 state_key
-        state_key = f"{MHP_NOW}|{MSP_NOW}|{BaseLv}|{Use_skill_levels}|{skill_formula}|{skill_key}|{skill_lv}|{equip_state}|{special_state}|{size_key}|{element_key}|{race_key}|{class_key}|{d_ef}|{defc}|{res}|{mdef}|{mdefc}|{mres}|{element_lv_key}|{user_element_key}|{total_STR}|{total_AGI}|{total_VIT}|{total_INT}|{total_DEX}|{total_LUK}|{total_POW}|{total_STA}|{total_WIS}|{total_SPL}|{total_CON}|{total_CRT}"
+        state_key = f"{MHP_NOW}|{MSP_NOW}|{BaseLv}|{Use_skill_levels}|{skill_formula}|{skill_key}|{skill_lv}|{equip_state}|{special_state}|{size_key}|{element_key}|{race_key}|{class_key}|{d_ef}|{defc}|{res}|{mdef}|{mdefc}|{mres}|{element_lv_key}|{user_element_key}|{total_STR}|{total_AGI}|{total_VIT}|{total_INT}|{total_DEX}|{total_LUK}|{total_POW}|{total_STA}|{total_WIS}|{total_SPL}|{total_CON}|{total_CRT}|{MD_BETELGEUSE_data}|{damage_reduction_key}"
+        MD_BETELGEUSE_state_key = f"{size_key}|{element_key}|{race_key}|{class_key}|{element_lv_key}|{d_ef}|{defc}|{res}|{mdef}|{mdefc}|{mres}|{damage_reduction_key}"
+        #print(f"{MD_BETELGEUSE_state_key}")
+
+        MD_BETELGEUSE_set_key = "2|0|9|1|2|346|191|500|102|105|500|2"
+
+        if MD_BETELGEUSE_state_key == MD_BETELGEUSE_set_key:
+            self.MD_BETELGEUSE_label_def.setVisible(True)
+            self.MD_BETELGEUSE_combo_def.setVisible(True)
+            self.MD_BETELGEUSE_label_soul.setVisible(True)
+            self.MD_BETELGEUSE_combo_soul.setVisible(True)
+            self.MD_BETELGEUSE_label_total_title.setVisible(True)
+            self.MD_BETELGEUSE_label_total.setVisible(True)
+        else:
+            self.MD_BETELGEUSE_label_def.setVisible(False)
+            self.MD_BETELGEUSE_combo_def.setVisible(False)
+            self.MD_BETELGEUSE_label_soul.setVisible(False)
+            self.MD_BETELGEUSE_combo_soul.setVisible(False)
+            self.MD_BETELGEUSE_label_total_title.setVisible(False)
+            self.MD_BETELGEUSE_label_total.setVisible(False)
+            self.MD_BETELGEUSE_combo_def.setCurrentIndex(0)
+            self.MD_BETELGEUSE_combo_soul.setCurrentIndex(0)
+            MD_BETELGEUSE_data = 0
 
 
         if getattr(self, "_last_calc_state", None) == state_key:
@@ -4766,6 +4789,10 @@ class ItemSearchApp(QWidget):
                     final_damage = int(final_damage * get_damage_reduction_value(self))
                     self.steps.append(["綠光減傷%", get_damage_reduction_value(self)*100])
 
+                    final_damage_min = int(final_damage_min * (1-(MD_BETELGEUSE_data/100)))
+                    final_damage = int(final_damage * (1-(MD_BETELGEUSE_data/100)))
+                    self.steps.append(["星座塔減傷%", 100-(MD_BETELGEUSE_data)])
+                    
                     #武器值最大化/魔法省悟min = max
                     if attack_type == "physical" and int(GUSklv(114)) == 1:
                         final_damage_min = final_damage
@@ -9467,6 +9494,65 @@ class ItemSearchApp(QWidget):
         self.mdef_input.editingFinished.connect(self.replace_custom_calc_content)
         self.mdefc_input.editingFinished.connect(self.replace_custom_calc_content)
         self.mres_input.editingFinished.connect(self.replace_custom_calc_content)
+
+        MD_BETELGEUSE = QHBoxLayout()
+
+        # 防禦星數
+        self.MD_BETELGEUSE_label_def = QLabel("參宿四防禦星數")
+        self.MD_BETELGEUSE_combo_def = QComboBox()
+        self.MD_BETELGEUSE_combo_def.addItems([str(i) for i in range(0, 6)])   # 1~5
+        self.MD_BETELGEUSE_label_def.setVisible(False)
+        self.MD_BETELGEUSE_combo_def.setVisible(False)
+
+        # 亡魂顆數
+        self.MD_BETELGEUSE_label_soul = QLabel("參宿四亡魂顆數")
+        self.MD_BETELGEUSE_combo_soul = QComboBox()
+        self.MD_BETELGEUSE_combo_soul.addItems([str(i) for i in range(0, 11)])  # 1~10
+        self.MD_BETELGEUSE_label_soul.setVisible(False)
+        self.MD_BETELGEUSE_combo_soul.setVisible(False)
+
+        # 總和顯示
+        self.MD_BETELGEUSE_label_total_title = QLabel("減傷幅度%")
+        self.MD_BETELGEUSE_label_total = QLabel("0")   # 預設 1 + 1*10 = 11
+        self.MD_BETELGEUSE_label_total_title.setVisible(False)
+        self.MD_BETELGEUSE_label_total.setVisible(False)
+
+        def update_MD_BETELGEUSE_total():
+            star = int(self.MD_BETELGEUSE_combo_def.currentText())
+            soul = int(self.MD_BETELGEUSE_combo_soul.currentText())
+            total = (star + soul) * 10
+            self.MD_BETELGEUSE_total = min(total, 99)   # 最大值 99
+            self.MD_BETELGEUSE_label_total.setText(f"{int(self.MD_BETELGEUSE_total)}%")
+
+        # 綁定事件
+        self.MD_BETELGEUSE_combo_def.currentIndexChanged.connect(update_MD_BETELGEUSE_total)
+        self.MD_BETELGEUSE_combo_def.currentIndexChanged.connect(self.replace_custom_calc_content)
+
+        self.MD_BETELGEUSE_combo_soul.currentIndexChanged.connect(update_MD_BETELGEUSE_total)
+        self.MD_BETELGEUSE_combo_soul.currentIndexChanged.connect(self.replace_custom_calc_content)
+
+
+
+
+        # 加到橫向排列
+        MD_BETELGEUSE.addWidget(self.MD_BETELGEUSE_label_def)
+        MD_BETELGEUSE.addWidget(self.MD_BETELGEUSE_combo_def)
+        MD_BETELGEUSE.addSpacing(20)
+
+        MD_BETELGEUSE.addWidget(self.MD_BETELGEUSE_label_soul)
+        MD_BETELGEUSE.addWidget(self.MD_BETELGEUSE_combo_soul)
+        MD_BETELGEUSE.addSpacing(20)
+
+        MD_BETELGEUSE.addWidget(self.MD_BETELGEUSE_label_total_title)
+        MD_BETELGEUSE.addWidget(self.MD_BETELGEUSE_label_total)
+
+        # 加進主 layout
+        layout.addLayout(MD_BETELGEUSE)
+
+        # 初始化一次
+        update_MD_BETELGEUSE_total()
+
+
 
 
         self.btn_open_monster_lookup = QPushButton("查詢怪物")
