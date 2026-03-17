@@ -7606,7 +7606,7 @@ class ItemSearchApp(QWidget):
             # 只線上：若本地已存在就不下載；只有缺檔才下載。失敗則停止。            
             targets = []
             if miss_item:  targets.append((ONLINE_ITEMINFO_URL, iteminfo_path))
-            if miss_User_item:  targets.append((ONLINE_ITEMINFO_URL, user_iteminfo_path))
+            if miss_User_item:  targets.append((ONLINE_USER_ITEMINFO_URL, user_iteminfo_path))
             if miss_equip: targets.append((ONLINE_EQUIP_URL,    equipment_lua_path))
             if miss_user_equip: targets.append((ONLINE_User_EQUIP_URL,    user_equipment_lua_path))
             if miss_EnchantList: targets.append((ONLINE_EnchantList_URL,    EnchantList_path))

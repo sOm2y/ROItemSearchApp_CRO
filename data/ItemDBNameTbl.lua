@@ -4916,7 +4916,25 @@ ItemDBNameTbl = {
   C_M_Cape_UPD = 480759,
   Energy_Xtal_CM_TW = 1002760,
   T_Dimension_Ring_SS = 490938,
-  T_Dimension_Ring_NW = 490939
+  T_Dimension_Ring_NW = 490939,
+  Time_Gap_Spear_IG = 530060,
+  Time_Gap_DK_Spear = 630049,
+  Energy_Xtal_RR_TW = 1002827,
+  Recovery_Ring_UPD = 490957,
+  T_Dimension_Ring_DK = 490958,
+  T_Dimension_Ring_IG = 490959,
+  T_Dimension_Ring_ABC = 490960,
+  Dimension_Ring_ABC = 490893,
+  T_Dimension_Ring_HN = 490961,
+  Dimension_Ring_HN = 490897,
+  T_Dimension_Ring_SH = 490962,
+  Dimension_Ring_SH = 490896,
+  T_Dimension_Ring_CD = 490963,
+  Dimension_Ring_CD = 490865,
+  T_Dimension_Ring_IQ = 490964,
+  Dimension_Ring_IQ = 490864,
+  T_Dimension_Ring_SHC = 490965,
+  Dimension_Ring_AAS = 490892
 }
 
 function ItemDB_To_ItemID(in_ItemDB)
