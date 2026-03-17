@@ -1,6 +1,6 @@
 # 額外參數對照表
 all_skill_entries = {#範例[    "": {"type": "技能/料理","code":["",""]},
-
+    "掉寶呆": {"type": "料理","code":["SubMDamage_Size(1, 0, 70)","SubMDamage_Size(1, 1, 70)","SubMDamage_Size(1, 2, 70)","SubMDamage_Property(1, 10, 70)","SubMdamage_Race(9999, 70)","AddMdamage_Class(0, 70)","AddMdamage_Class(1, 70)","AddSpellCastTime(30)","SubDamage_Size(1, 0, 70)","SubDamage_Size(1, 1, 70)","SubDamage_Size(1, 2, 70)","SubDamage_Property(1, 10, 70)","RaceAddDamage(9999, 70)","ClassSubDamage(0, 1, 70)","ClassSubDamage(1, 1,70)"]},
      #10料
     "力量料理": {"type": "料理","code":["AddExtParam(0,103,10)"],"exclusive": "food_str"},
     "敏捷料理": {"type": "料理","code":["AddExtParam(0,104,10)"],"exclusive": "food_agi"},
