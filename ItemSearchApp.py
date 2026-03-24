@@ -9550,7 +9550,7 @@ class ItemSearchApp(QWidget):
 
         # 總和顯示
         self.MD_BETELGEUSE_label_total_title = QLabel("減傷幅度%")
-        self.MD_BETELGEUSE_label_total = QLabel("0")   # 預設 1 + 1*10 = 11
+        self.MD_BETELGEUSE_label_total = QLabel("0")   # 預設0
         self.MD_BETELGEUSE_label_total_title.setVisible(False)
         self.MD_BETELGEUSE_label_total.setVisible(False)
 
