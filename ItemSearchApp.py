@@ -3245,7 +3245,9 @@ def parse_lub_file(filename, existing_items=None, duplicate_mode="skip"):  # 字
                 if item_id in parsed_items:
                     if duplicate_mode == "overwrite":
                         parsed_items[item_id] = new_item
+                        overwritten_count += 1
                     elif duplicate_mode == "skip":
+                        skipped_count += 1
                         continue
                 else:
                     parsed_items[item_id] = new_item
@@ -7284,10 +7286,12 @@ class ItemSearchApp(QWidget):
 
         data_dir = os.path.join(BASE_DIR, "data")
         os.makedirs(data_dir, exist_ok=True)
-        iteminfo_path      = os.path.join(data_dir, "iteminfo_new.lua")
+        iteminfo_path      = os.path.join(data_dir, "iteminfo_new.lua")        
         user_iteminfo_path      = os.path.join(data_dir, "User_iteminfo_new.lua")
+        kro_iteminfo_path      = os.path.join(data_dir, "KRO_itemInfo_true.lua")
         equipment_lua_path = os.path.join(data_dir, "EquipmentProperties.lua")
         user_equipment_lua_path = os.path.join(data_dir, "User_EquipmentProperties.lua")
+        kro_equipment_lua_path = os.path.join(data_dir, "KRO_equipmentproperties.lua")
         EnchantList_path  = os.path.join(data_dir, "EnchantList.lua")
         ItemDBNameTbl_path  = os.path.join(data_dir, "ItemDBNameTbl.lua")
         ItemReformSystem_path  = os.path.join(data_dir, "ItemReformSystem.lua")
@@ -7654,16 +7658,19 @@ class ItemSearchApp(QWidget):
         self.parsed_items = parse_lub_file(iteminfo_path)
         print("📖 載入 自訂物品列表 ...")
         self.parsed_items = parse_lub_file(user_iteminfo_path, existing_items=self.parsed_items,duplicate_mode="skip")
+        #self.parsed_items = parse_lub_file(kro_iteminfo_path, existing_items=self.parsed_items,duplicate_mode="skip")
         print("📖 載入 物品效果...")
         with open(equipment_lua_path, "r", encoding="utf-8") as f:
             content = f.read()
         self.equipment_data = self.parse_equipment_blocks(content)
         print("📖 載入 自定義物品效果...")
         self.load_equipment_incremental(user_equipment_lua_path, overwrite=True) 
+        #self.load_equipment_incremental(kro_equipment_lua_path, overwrite=False) 
         print("📖 載入 技能清單...")
         load_skill_map("data/skillneme.csv") #讀取SKILL列表
         self.lua_text = load_skill_delay_lua("data/skilldelaylist.lua")#讀取技能延遲
         self.parsed_items = resolve_name_conflicts(self.parsed_items ,self.equipment_data)#重複物品名稱加上id
+
         return self.parsed_items
 
     def rebuild_skill_tab(self):
