@@ -1,5 +1,5 @@
 #部分資料取自ROCalculator,搜尋 ROCalculator 可以知道哪些有使用
-Version = "v0.1.48-260315"
+Version = "v0.1.49-260401"
 
 import sys, builtins, time
 from PySide6.QtCore import QThread, Signal, Qt, QMetaObject, QTimer
@@ -2609,9 +2609,18 @@ def parse_lua_effects_with_variables(
             results.append(f"從 {race_name} 型怪的經驗值 {sign}{val}%")
             continue
 
+        #掉寶機率AddReceiveItem_Equip(value)
+        Item_attack = re.match(r"AddReceiveItem_Equip\(\s*(.+?)\s*\)", line)
+        if Item_attack and condition_met:
+            value_expr = Item_attack.group(1)
+            value_expr = safe_eval_expr(value_expr, variables, get_values, refine_inputs, grade)
+            results.append(f"掉寶率 +{value_expr}%")
+            continue
 
         register_function("就說通用了你還產生！", "----以上通用分隔線----", [])
         register_function("就說以下魔法了你還產生！", "--以下魔法增減分隔線--", [])
+
+
 #==========以上通用變數
 #==========以下魔法判斷        
         # Add/Sub MDamage_Size（體型魔法）
