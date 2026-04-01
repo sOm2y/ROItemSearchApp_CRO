@@ -1,5 +1,5 @@
 #部分資料取自ROCalculator,搜尋 ROCalculator 可以知道哪些有使用
-Version = "v0.1.49-260401"
+Version = "v0.1.50-260402"
 
 import sys, builtins, time
 from PySide6.QtCore import QThread, Signal, Qt, QMetaObject, QTimer
@@ -3764,8 +3764,8 @@ class ItemSearchApp(QWidget):
         #砲彈ATK
         globals()["CannonballATK"] = sum(val for val, _ in effect_dict.get(("砲彈ATK", ""), []))
         #武器精煉R右L左
-        globals()["weaponRefineR"] = int(self.refine_inputs_ui["右手(武器)"]["refine"].text())
-        globals()["weaponRefineL"] = int(self.refine_inputs_ui["左手(盾牌)"]["refine"].text())
+        globals()["weaponRefineR"] = int(self.refine_inputs_ui["右手(武器)"]["refine"].text().strip() or 0)
+        globals()["weaponRefineL"] = int(self.refine_inputs_ui["左手(盾牌)"]["refine"].text().strip() or 0)
         #武器階級R右L左
         globals()["weaponGradeR"] = int(self.refine_inputs_ui["右手(武器)"]["grade"].currentIndex())
         globals()["weaponGradeL"] = int(self.refine_inputs_ui["左手(盾牌)"]["grade"].currentIndex())
