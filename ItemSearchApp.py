@@ -7777,7 +7777,11 @@ class ItemSearchApp(QWidget):
                 if query not in hay:
                     continue
 
-            if skill_job_id in data.get("id", []):
+            ids = data.get("id", [])
+            if isinstance(ids, str):
+                ids = [ids]
+
+            if skill_job_id in ids:
                 job_skills.append(name)
             else:
                 other_skills.append(name)

@@ -76,6 +76,8 @@ all_skill_entries = {#範例[    "": {"type": "技能/料理","code":["",""]},
     "神聖防護/光耀天命": {"id": "AB","type": "技能","code":["AddIgnore_MRES_RacePercent(9999, 25)","AddIgnore_RES_RacePercent(9999, 25)"]},
     "爆裂聖光": {"id": "AB","type": "技能","code":["AddExtParam(1, 253, 10)"]},
     "贖罪": {"id": "AB","type": "技能","code":["SetIgnoreDefRace_Percent(9999, 25)","SetIgnoreMdefRace(9999, 25)"]},
+    #聖裁
+    "焰魔散彈": {"id": "SU","type": "技能","code":["UseSkill(5243)"]},
     #斬首
     "致命塗毒": {"id": "GX","type": "技能","code":["UseSkill(378)"]},
     "魅影強化": {"id": "GX","type": "技能","code":["UseSkill(5285)"]},
