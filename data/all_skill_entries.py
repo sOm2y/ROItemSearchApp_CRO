@@ -120,6 +120,7 @@ all_skill_entries = {#範例[    "": {"type": "技能/料理","code":["",""]},
     "抗性聖盾": {"id": "RG","type": "技能","code":["UseSkill(5262)","temp = GetSkillLevel(5262)","AddSkillMDamage(6, temp * 3)"]},
     "末日審判": {"id": "RG","type": "技能","code":["UseSkill(5263)"]},
     "攻擊架式": {"id": "RG","type": "技能","code":["temp = GetSkillLevel(5260)","AddExtParam(1, 242, temp * 3)","AddExtParam(1, 243, temp * 3)","SubExtParam(1, 45, temp * 40)"]},
+    "防禦架式": {"id": "RG","type": "技能","code":["UseSkill(5255)","temp = GetSkillLevel(5255)","AddExtParam(1, 45, 50 + (temp * 50))","SubExtParam(1, 41, temp * 50)"]},
     #基因
     "大聲吶喊": {"id": ["GE","ME"],"type": "技能","code":["AddExtParam(1, 103, 4)","AddExtParam(1, 41, 30)"]},
     "手推車加速": {"id": "GE","type": "技能","code":["WeaponMasteryATK(50)"]},

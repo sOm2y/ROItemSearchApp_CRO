@@ -3664,6 +3664,12 @@ SKILL_DELAY_LIST = {
 		SkillSinglePostDelay = { 700, 700, 700, 700, 700 },
 		SkillCastStatDelay = { 3000, 3000, 3000, 3000, 3000 }
 	},
+	[SKID.ABC_ABYSS_FLAME_ATK] = {
+		SkillGlobalPostDelay = { 1000, 1000, 1000, 1000, 1000 },
+		SkillCastFixedDelay = { 1500, 1500, 1500, 1500, 1500 },
+		SkillSinglePostDelay = { 700, 700, 700, 700, 700 },
+		SkillCastStatDelay = { 3000, 3000, 3000, 3000, 3000 }
+	},
 	[SKID.WH_WIND_SIGN] = {
 		SkillGlobalPostDelay = { 150, 150, 150, 150, 150 },
 		SkillCastFixedDelay = { 0, 0, 0, 0, 0 },
