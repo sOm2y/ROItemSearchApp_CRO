@@ -160,7 +160,18 @@
 }
 
 
-
+[5025] = {
+	temp = GSklv(5025)
+	AddExtParam(1, 106, temp * 20)
+	AddExtParam(1, 140, temp * 20)
+}
+[5031] = {
+	temp = GSklv(5031)
+	AddRangeAttackDamage(1, temp * 20)
+	AddExtParam(1, 50, temp * 20)
+	AddExtParam(1, 49, temp * 20)
+	AddExtParam(1, 52, temp * 20)
+}
 [5077] = {
 	temp = GSklv(5077)
 	AddExtParam(1, 200, temp * 20)
@@ -262,6 +273,11 @@
 [5417] = {
 	temp = GSklv(5417)
 	AddExtParam(1, 237, temp)
+}
+[5433] = {
+	temp = GSklv(5433)
+	AddExtParam(1, 242, temp * 1.5)
+	AddExtParam(1, 243, temp * 1.5)
 }
 [5450] = {
 	temp = GSklv(5450)
