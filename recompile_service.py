@@ -5,9 +5,9 @@ from pathlib import Path
 from datetime import datetime, timezone
 
 import requests
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import threading
 from PySide6.QtCore import QObject, QThread, Signal, Slot
-
-
 class RecompileWorker(QObject):
     finished = Signal(list)          # [(filename, default_checked), ...]
     error = Signal(str)
@@ -21,6 +21,7 @@ class RecompileWorker(QObject):
         self.repo = repo
         self.branch = branch
         self._abort = False
+        self._thread_local = threading.local()
 
     def abort(self):
         self._abort = True
@@ -61,7 +62,12 @@ class RecompileWorker(QObject):
             raise RuntimeError("找不到 GITHUB_PAT：請設定環境變數或 .env（GITHUB_PAT=...）。")
         return token
 
-    def _github_file_last_commit_dt(self, session: requests.Session, path: str, token: str, timeout=10):
+    def _get_session(self) -> requests.Session:
+        if not hasattr(self._thread_local, "session"):
+            self._thread_local.session = requests.Session()
+        return self._thread_local.session
+
+    def _github_file_last_commit_dt(self, session: requests.Session, path: str, token: str, timeout=(3.05, 5)):
         url = f"https://api.github.com/repos/{self.owner}/{self.repo}/commits"
         params = {"path": path, "sha": self.branch, "per_page": 1}
         headers = {"Accept": "application/vnd.github+json", "Authorization": f"Bearer {token}"}
@@ -92,20 +98,45 @@ class RecompileWorker(QObject):
     def _build_files_to_delete(self):
         token = self._get_github_pat()
         total = len(self.items)
-        out = []
+        out = [None] * total
+        done = 0
 
-        with requests.Session() as session:
-            for i, (filename, github_path) in enumerate(self.items, start=1):
+        def check_one(idx: int, filename: str, github_path: str):
+            if self._abort:
+                return idx, (filename, False)
+
+            local_path = os.path.join(self.data_folder, filename)
+            local_dt = self._local_file_mtime_dt(local_path)
+
+            # 本機沒有檔案時，原本邏輯本來就會勾選，直接略過 GitHub 查詢
+            if local_dt is None:
+                return idx, (filename, True)
+
+            remote_dt = self._github_file_last_commit_dt(
+                self._get_session(),
+                github_path,
+                token=token,
+            )
+            default_checked = self._should_check_by_remote_newer(local_dt, remote_dt)
+            return idx, (filename, default_checked)
+
+        max_workers = min(6, max(1, total))
+
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = [
+                executor.submit(check_one, idx, filename, github_path)
+                for idx, (filename, github_path) in enumerate(self.items)
+            ]
+
+            for future in as_completed(futures):
                 if self._abort:
+                    executor.shutdown(wait=False, cancel_futures=True)
                     return []
 
-                local_path = os.path.join(self.data_folder, filename)
-                local_dt = self._local_file_mtime_dt(local_path)
-                remote_dt = self._github_file_last_commit_dt(session, github_path, token=token)
-
-                default_checked = self._should_check_by_remote_newer(local_dt, remote_dt)
-                out.append((filename, default_checked))
-                self.progress.emit(i, total)
+                idx, result = future.result()
+                out[idx] = result
+                done += 1
+                self.progress.emit(done, total)
 
         return out
 

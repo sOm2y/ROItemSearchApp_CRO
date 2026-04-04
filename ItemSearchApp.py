@@ -1854,24 +1854,47 @@ class FileSelectionDialog(QDialog):#刪除清單
     files: [(檔名, 預設是否勾選)]
     base_path: 檔案所在資料夾
     """
-    def __init__(self, files, base_path, parent=None):
+    def __init__(self, files, base_path, parent=None, program_update_info=None):
         super().__init__(parent)
+        self.program_update_info = program_update_info or {}
+        self.has_program_update = bool(self.program_update_info.get("available"))
+
         self.setWindowTitle("選擇要刪除的檔案")
         self.resize(500, 500)
 
         self.base_path = base_path
         self.checkboxes = []
+        self.update_program_checkbox = None
 
         layout = QVBoxLayout(self)
-        # === 說明輸入框（新增） ===
-        desc_label = QLabel(
-            "有勾選代表本機資料過期，若有特殊需求再手動勾選。"
-        )
+
+        desc_lines = ["有勾選代表本機資料過期，若有特殊需求再手動勾選。"]
+        if self.has_program_update:
+            local_ver = self.program_update_info.get("local_ver", "目前版本")
+            remote_ver = self.program_update_info.get("remote_ver", "最新版本")
+            desc_lines.append(f"偵測到主程式新版本：{local_ver} → {remote_ver}")
+        elif not files:
+            desc_lines.append("目前沒有需要刪除的資料檔案。")
+
+        desc_label = QLabel("\n".join(desc_lines))
         desc_label.setWordWrap(True)
-        #self.description_edit = QLineEdit()
-        #self.description_edit.setPlaceholderText("輸入此次刪除動作的說明...")
         layout.addWidget(desc_label)
-        #layout.addWidget(self.description_edit)
+
+        if self.has_program_update:
+            local_ver = self.program_update_info.get("local_ver", "目前版本")
+            remote_ver = self.program_update_info.get("remote_ver", "最新版本")
+            self.update_program_checkbox = QCheckBox(
+                f"同步更新主程式（{local_ver} → {remote_ver}）"
+            )
+            self.update_program_checkbox.setChecked(True)
+            layout.addWidget(self.update_program_checkbox)
+
+            release_url = self.program_update_info.get("release_url")
+            if release_url:
+                link = QLabel(f'<a href="{release_url}">前往 Release 頁面</a>')
+                link.setOpenExternalLinks(True)
+                layout.addWidget(link)
+
         # === scroll area ===
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
@@ -1897,7 +1920,14 @@ class FileSelectionDialog(QDialog):#刪除清單
 
         # === bottom buttons ===
         btn_box = QHBoxLayout()
-        ok_btn = QPushButton("刪除")
+        if self.has_program_update and not files:
+            ok_text = "更新主程式"
+        elif self.has_program_update:
+            ok_text = "刪除並更新"
+        else:
+            ok_text = "刪除"
+
+        ok_btn = QPushButton(ok_text)
         cancel_btn = QPushButton("取消")
 
         ok_btn.clicked.connect(self.accept)
@@ -1915,6 +1945,8 @@ class FileSelectionDialog(QDialog):#刪除清單
             if cb.isChecked()
         ]
 
+    def want_program_update(self):
+        return bool(self.update_program_checkbox and self.update_program_checkbox.isChecked())
 
 
 
@@ -6126,12 +6158,35 @@ class ItemSearchApp(QWidget):
         )
 
 
+    def get_program_update_info(self, show_error=False):
+        try:
+            local_ver = Version
+            remote_ver = read_remote_version_github()
+            if not remote_ver:
+                raise RuntimeError("GitHub 回傳的 tag_name 為空（可能沒有 release）。")
+
+            self._remote_version = remote_ver
+            cmp_result = compare_versions(remote_ver, local_ver)
+            return {
+                "available": cmp_result > 0,
+                "local_ver": str(local_ver),
+                "remote_ver": str(remote_ver),
+                "cmp_result": cmp_result,
+                "release_url": f"https://github.com/z2911902/ROItemSearchApp/releases/tag/{remote_ver}",
+            }
+        except Exception as e:
+            if show_error:
+                QMessageBox.warning(self, "主程式更新檢查失敗", f"無法檢查主程式版本，將只檢查資料更新：\n{e}")
+            return {
+                "available": False,
+                "error": str(e),
+            }
 
 
 
-
-    def recompile(self):
+    def recompile(self, program_update_info=None):
         data_folder = os.path.join(os.getcwd(), "data")
+        program_update_info = program_update_info or {}
 
         items = [
             ("EquipmentProperties.lua", "data/EquipmentProperties.lua"),
@@ -6174,16 +6229,40 @@ class ItemSearchApp(QWidget):
 
         def on_finished(files_to_delete):
             progress.close()
-            if not files_to_delete:
-                return  # 取消或無資料
+            has_program_update = bool(program_update_info.get("available"))
 
-            dialog = FileSelectionDialog(files_to_delete, data_folder, self)
+            if not files_to_delete and not has_program_update:
+                cmp_result = program_update_info.get("cmp_result")
+                if cmp_result == 0:
+                    QMessageBox.information(
+                        self,
+                        "已是最新版本",
+                        f"主程式版本：{program_update_info.get('local_ver', Version)}\n資料檔案：沒有需要更新的項目。"
+                    )
+                elif cmp_result == -1:
+                    QMessageBox.information(
+                        self,
+                        "版本較新",
+                        f"目前版本：{program_update_info.get('local_ver', Version)}\n遠端版本：{program_update_info.get('remote_ver', '未知')}\n\n你本機版本比遠端新，且資料檔案沒有需要更新的項目。"
+                    )
+                else:
+                    QMessageBox.information(self, "完成", "目前沒有需要刪除的資料檔案。")
+                return
+
+            dialog = FileSelectionDialog(
+                files_to_delete,
+                data_folder,
+                self,
+                program_update_info=program_update_info,
+            )
             if dialog.exec() != QDialog.Accepted:
                 return
 
             selected_files = dialog.get_selected_files()
-            if not selected_files:
-                QMessageBox.information(self, "取消", "沒有選擇任何檔案。")
+            want_program_update = dialog.want_program_update()
+
+            if not selected_files and not want_program_update:
+                QMessageBox.information(self, "取消", "沒有選擇任何更新項目。")
                 return
 
             try:
@@ -6192,9 +6271,18 @@ class ItemSearchApp(QWidget):
                     if os.path.exists(path):
                         os.remove(path)
 
-                QMessageBox.information(self, "完成", "檔案已刪除，程式將重新啟動。")
-                python = sys.executable
-                os.execl(python, python, *sys.argv)
+                if want_program_update:
+                    if selected_files:
+                        QMessageBox.information(self, "完成", "資料檔案已刪除，準備更新主程式。")
+                    self.do_update(program_update_info.get("remote_ver"))
+                    return
+
+                if selected_files:
+                    QMessageBox.information(self, "完成", "檔案已刪除，程式將重新啟動。")
+                    python = sys.executable
+                    os.execl(python, python, *sys.argv)
+                else:
+                    QMessageBox.information(self, "完成", "沒有需要刪除的資料檔案。")
             except Exception as e:
                 QMessageBox.critical(self, "錯誤", f"發生錯誤：{str(e)}")
 
@@ -6217,6 +6305,7 @@ class ItemSearchApp(QWidget):
             repo="ROItemSearchApp",
             branch="main",
         )
+
 
 
     def update_total_effect_display(self):
@@ -6826,8 +6915,12 @@ class ItemSearchApp(QWidget):
         return {"added": added, "updated": updated, "skipped": skipped, "total": len(self.equipment_data)}
 
 
-        
+
     def closeEvent(self, event):
+        if getattr(self, "_skip_close_confirm", False):
+            event.accept()
+            return
+
         reply = QMessageBox.question(
             self,
             "確認關閉",
@@ -6835,11 +6928,11 @@ class ItemSearchApp(QWidget):
             QMessageBox.Yes | QMessageBox.No,
             QMessageBox.No
         )
+
         if reply == QMessageBox.Yes:
             event.accept()
         else:
             event.ignore()
-
     
     def load_saved_inputs(self, filename="saved_inputs.json"):
         if not os.path.exists(filename):
@@ -7820,12 +7913,11 @@ class ItemSearchApp(QWidget):
 
 
 
-    def do_update(self):
-        if not self._remote_version:
-            QMessageBox.warning(self, "提示", "請先點『檢查更新』。")
+    def do_update(self, version=None):
+        ver = (version or self._remote_version or "").strip()
+        if not ver:
+            QMessageBox.warning(self, "提示", "目前沒有可更新的主程式版本。")
             return
-
-        ver = self._remote_version.strip()
         zip_url = ZIP_URL_TEMPLATE.format(ver=ver)
 
         updater_path = os.path.join(os.getcwd(), UPDATER_EXE)
@@ -7842,77 +7934,22 @@ class ItemSearchApp(QWidget):
             return
 
         # 更新器啟動後，主程式自己關掉比較乾淨（讓 updater 覆蓋檔案）
+        self._skip_close_confirm = True
         self.close()
 
     def check_update(self):
-        def fetch_latest_release_notes(owner: str, repo: str, timeout: int = 8) -> tuple[str, str]:
-            url = f"https://api.github.com/repos/{owner}/{repo}/releases/latest"
-            headers = {
-                "Accept": "application/vnd.github+json",
-                "User-Agent": "ROItemSearchApp-Updater"
-            }
-            r = requests.get(url, headers=headers, timeout=timeout)
-            r.raise_for_status()
-            data = r.json()
-            return (data.get("tag_name") or "").strip(), (data.get("body") or "")
+        program_update_info = self.get_program_update_info(show_error=False)
 
-
-
-        app_dir = os.getcwd()
-
-        try:
-            #local_ver = read_local_version(app_dir)
-            local_ver = Version
-        except Exception as e:
-            QMessageBox.critical(self, "更新檢查失敗", f"讀取本機 version.txt 失敗：\n{e}")
-            return
-
-        try:
-            remote_ver = read_remote_version_github()
-            if not remote_ver:
-                raise RuntimeError("GitHub 回傳的 tag_name 為空（可能沒有 release）。")
-        except Exception as e:
-            QMessageBox.critical(self, "更新檢查失敗", f"取得 GitHub 最新 Release 失敗：\n{e}")
-            return
-
-
-        self._remote_version = remote_ver
-
-        cmp_result = compare_versions(remote_ver, local_ver)
-
-        if cmp_result > 0:
-            release_url = f"https://github.com/z2911902/ROItemSearchApp/releases/tag/{remote_ver}"
-
-            try:
-                remote_ver, notes = fetch_latest_release_notes("z2911902", "ROItemSearchApp")
-
-            except Exception as e:
-                notes = f"⚠ 無法取得更新內容：{e}\n\n你仍可前往 Release 頁面查看：\n{release_url}"
-
-            dlg = UpdateDialog(
-                local_ver=str(local_ver),
-                remote_ver=str(remote_ver),
-                notes_md=notes,
-                release_url=release_url,
-                parent=self
-            )
-
-            if dlg.exec() == QDialog.Accepted:
-                self.do_update()
-
-
-
-        elif cmp_result == 0:
-            #self.action_do_update.setEnabled(False)
-            QMessageBox.information(self, "已是最新版本", f"目前版本：{local_ver}\n最新版本：{remote_ver}")
-        else:
-            # 遠端版本比本地還小（可能你本機是測試版）
-            #self.action_do_update.setEnabled(False)
-            QMessageBox.information(
+        if program_update_info.get("error"):
+            QMessageBox.warning(
                 self,
-                "版本較新",
-                f"目前版本：{local_ver}\n遠端版本：{remote_ver}\n\n你本機版本比遠端新。"
+                "主程式更新檢查失敗",
+                f"無法檢查主程式版本，將只檢查資料更新：\n{program_update_info['error']}"
             )
+
+        self.recompile(program_update_info=program_update_info)
+
+
 
 
 
@@ -7923,6 +7960,7 @@ class ItemSearchApp(QWidget):
         #self.dataloading()#讀取並載入物品跟裝備能力
         
         super().__init__()
+        self._skip_close_confirm = False
         self.setWindowTitle("RO物品查詢計算工具")
         self.current_edit_part = None  # 用來記錄目前正在編輯的部位名稱
         # 把子視窗存成成員變數，避免被 Python 回收導致閃退/秒關
@@ -9734,18 +9772,15 @@ class ItemSearchApp(QWidget):
         
         menu_update = menubar.addMenu("更新")
 
-        self.action_check_update = QAction("檢查主程式更新", self)
-        self.action_check_data_update = QAction("檢查物品職業技能資料更新", self)
-        self.action_do_update = QAction("立即更新", self)
+        self.action_check_update = QAction("檢查程式與資料更新", self)
+        self.action_do_update = QAction("立即更新主程式", self)
         self.action_do_update.setEnabled(False)  # 預設不能按
 
         menu_update.addAction(self.action_check_update)
-        menu_update.addAction(self.action_check_data_update)
         #menu_update.addAction(self.action_do_update)
 
         self.action_check_update.triggered.connect(self.check_update)
         self.action_do_update.triggered.connect(self.do_update)
-        self.action_check_data_update.triggered.connect(self.recompile)
 
         menu_debug = menubar.addMenu("偵錯")
         
