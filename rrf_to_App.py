@@ -596,6 +596,160 @@ def extract_session_stats(filepath):
 
 
 
+def extract_efstinfo_values(filepath,
+                            efst_ids_path="data/EFSTIDs.lua",
+                            stateiconinfo_path="data/stateiconinfo.lua"):
+    """
+    1. 從 temp.txt 抓所有 EfstInfo
+    2. 前2 bytes 轉 16-bit little-endian 十進位
+    3. 用 EFSTIDs.lua 對應成 EFST 名稱
+    4. 用 stateiconinfo.lua 找 descript
+    5. 略過 "%s" 那行
+    6. 回傳:
+       [
+           {
+               "id": 244,
+               "name": "EFST_FOOD_DEX",
+               "descript": ["DEX提升"]
+           },
+           ...
+       ]
+    """
+    import re
+
+    def read_text_auto(path):
+        # 先試 UTF-8，再試 cp950 / big5
+        # 不用 errors='ignore'，不然中文會被吞掉
+        for enc in ("utf-8-sig", "utf-8", "cp950", "big5"):
+            try:
+                with open(path, "r", encoding=enc) as f:
+                    return f.read()
+            except UnicodeDecodeError:
+                continue
+
+        with open(path, "r", encoding="big5", errors="replace") as f:
+            return f.read()
+
+    def extract_brace_block(text, start_brace_idx):
+        """
+        從某個 { 開始，抓到完整配對的 {...}
+        支援 inline 格式，不靠換行。
+        """
+        depth = 0
+        in_string = False
+        escape = False
+
+        for i in range(start_brace_idx, len(text)):
+            ch = text[i]
+
+            if in_string:
+                if escape:
+                    escape = False
+                elif ch == "\\":
+                    escape = True
+                elif ch == '"':
+                    in_string = False
+                continue
+
+            if ch == '"':
+                in_string = True
+            elif ch == "{":
+                depth += 1
+            elif ch == "}":
+                depth -= 1
+                if depth == 0:
+                    return text[start_brace_idx:i + 1]
+
+        return None
+
+    # --------------------------------------------------
+    # 1) 讀 EFSTIDs.lua，建立 數字ID -> EFST名稱
+    # --------------------------------------------------
+    efst_ids_content = read_text_auto(efst_ids_path)
+    id_to_name = {}
+
+    for name, num in re.findall(r'\b(EFST_[A-Z0-9_]+)\s*=\s*(\d+)\s*,?', efst_ids_content):
+        id_to_name[int(num)] = name
+
+    # --------------------------------------------------
+    # 2) 讀 stateiconinfo.lua，建立 EFST名稱 -> descript[]
+    # --------------------------------------------------
+    stateicon_content = read_text_auto(stateiconinfo_path)
+    name_to_desc = {}
+
+    entry_pattern = re.compile(
+        r'StateIconList\[EFST_IDs\.(EFST_[A-Z0-9_]+)\]\s*=\s*\{'
+    )
+
+    for m in entry_pattern.finditer(stateicon_content):
+        efst_name = m.group(1)
+
+        # 指向 StateIconList[...] = { 的第一個 {
+        block_start = m.end() - 1
+        block_text = extract_brace_block(stateicon_content, block_start)
+        if not block_text:
+            continue
+
+        desc_m = re.search(r'descript\s*=\s*\{', block_text)
+        if not desc_m:
+            continue
+
+        # 指向 descript = { 的第一個 {
+        desc_start = desc_m.end() - 1
+        desc_block = extract_brace_block(block_text, desc_start)
+        if not desc_block:
+            continue
+
+        # 抓 descript 裡每個項目的第一個字串
+        # 例如 {"%s", COLOR_TIME} / {"DEX提升"}
+        lines = re.findall(r'\{\s*"([^"]*)"', desc_block)
+
+        clean_lines = []
+        for line in lines:
+            line = line.strip()
+            if not line:
+                continue
+            if line == "%s":
+                continue
+            clean_lines.append(line)
+
+        name_to_desc[efst_name] = clean_lines
+
+    # --------------------------------------------------
+    # 3) 從 temp.txt 抓 EfstInfo 封包
+    # --------------------------------------------------
+    with open(filepath, 'r', encoding='cp950', errors='ignore') as f:
+        content = f.read()
+
+    pattern = (
+        r"\[Chunk [^\]]+\] Unparsed opcode EfstInfo, Length=\d+"
+        r"[\s\S]*?\{([^}]*)\}"
+    )
+
+    matches = re.findall(pattern, content, re.DOTALL)
+    results = []
+
+    for block in matches:
+        hex_list = re.findall(r'\b([0-9A-Fa-f]{2})\b', block)
+        if len(hex_list) < 2:
+            continue
+
+        low = int(hex_list[0], 16)
+        high = int(hex_list[1], 16)
+        value = (high << 8) | low
+
+        efst_name = id_to_name.get(value, f"UNKNOWN_EFST_{value}")
+        descript_list = name_to_desc.get(efst_name, [])
+
+        results.append({
+            "id": value,
+            "name": efst_name,
+            "descript": descript_list
+        })
+
+    return results
+
+
 
 def extract_equip_chunk(filepath, json_data, get_itemname,
                         chunk_name="EquippedItems", group_map=None):
@@ -979,14 +1133,35 @@ def run_rrf_main():
             print(f"{stat}: {session_data[stat]}")
     print("")
     
-    # 4. 用 temp.txt 開始解析
+    # 4. 解析 EfstInfo（ID -> 狀態名稱 -> descript）
+    efstinfo_list = extract_efstinfo_values(
+        txt_path,
+        "data/EFSTIDs.lua",
+        "data/stateiconinfo.lua"
+    )
+    # 把 EfstInfo 的數字 ID 寫入 default.json 的 buff，並用逗號分隔
+    json_data["buff"] = ",".join(str(info["id"]) for info in efstinfo_list)
+    print("========== EfstInfo ==========")
+    if efstinfo_list:
+        for i, info in enumerate(efstinfo_list, 1):
+            print(f"EfstInfo #{i}: {info['id']} ({info['name']})")
+            if info["descript"]:
+                for line in info["descript"]:
+                    print(f"  {line}")
+            else:
+                print("  找不到 descript")
+    else:
+        print("找不到 EfstInfo 封包")
+    print("")
+
+    # 5. 用 temp.txt 開始解析
     extract_equip_chunk(txt_path, json_data, get_itemname,'EquippedItems', GROUP_NAME_MAP)
     extract_equip_chunk(txt_path, json_data, get_itemname,'EquippedShadowItems', Shadow_GROUP_NAME_MAP)
     #投擲物品查詢 找到EquipArrowIndex的開頭序號 到InventoryItems物品內的1D01內的第五組就是代號 要反查出物品名稱再匯入json，但是我懶得寫了
     #extract_equip_chunk(txt_path, json_data, get_itemname,'InventoryItems', NAME_MAP)
 
 
-    # 5. 解析完畢 → 刪除 temp.txt
+    # 6. 解析完畢 → 刪除 temp.txt
     try:
         if os.path.exists(txt_path):
             os.remove(txt_path)

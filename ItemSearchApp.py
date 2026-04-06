@@ -1,5 +1,5 @@
 #部分資料取自ROCalculator,搜尋 ROCalculator 可以知道哪些有使用
-Version = "v0.1.50-260402"
+Version = "v0.1.52-260406"
 
 import sys, builtins, time
 from PySide6.QtCore import QThread, Signal, Qt, QMetaObject, QTimer
@@ -3459,6 +3459,67 @@ class PreferencesDialog(QDialog):
 
 
 class ItemSearchApp(QWidget):
+    def _parse_buff_ids(self, raw_buff) -> set[str]:
+        """把 buff 轉成 set[str]，支援 '244'、'10,12,244'、['1667','1668']"""
+        if raw_buff is None:
+            return set()
+
+        if isinstance(raw_buff, (int, float)):
+            return {str(int(raw_buff))}
+
+        if isinstance(raw_buff, (list, tuple, set)):
+            result = set()
+            for x in raw_buff:
+                if x is None:
+                    continue
+                s = str(x).strip()
+                if s:
+                    result.add(s)
+            return result
+
+        s = str(raw_buff).strip()
+        if not s:
+            return set()
+
+        return {part.strip() for part in s.split(",") if part.strip()}
+
+
+    def apply_buff_to_skill_checkboxes(self, raw_buff):
+        target_buff_ids = self._parse_buff_ids(raw_buff)
+
+        matched_names = []
+        used_exclusive_groups = set()
+
+        for name, data in all_skill_entries.items():
+            skill_buff_ids = self._parse_buff_ids(data.get("buff"))
+
+            # ✅ 只要有任一個 buff id 重疊，就算符合
+            if not (skill_buff_ids & target_buff_ids):
+                continue
+
+            # exclusive 處理
+            raw_exclusive = data.get("exclusive")
+            groups = []
+            if raw_exclusive:
+                if isinstance(raw_exclusive, str):
+                    groups = [g.strip() for g in raw_exclusive.split(",") if g.strip()]
+                else:
+                    groups = [str(g).strip() for g in raw_exclusive if str(g).strip()]
+
+            if any(g in used_exclusive_groups for g in groups):
+                continue
+
+            matched_names.append(name)
+            used_exclusive_groups.update(groups)
+
+        matched_set = set(matched_names)
+
+        for name, checkbox in self.skill_checkboxes.items():
+            checkbox.blockSignals(True)
+            checkbox.setChecked(name in matched_set)
+            checkbox.blockSignals(False)
+
+
     def open_enchant_tool(self):#附魔工具
         # 載入所需資料
         item_data = self.parsed_items
@@ -6194,6 +6255,8 @@ class ItemSearchApp(QWidget):
             ("EnchantList.lua",         "data/EnchantList.lua"),
             ("ItemDBNameTbl.lua",       "data/ItemDBNameTbl.lua"),
             ("ItemReformSystem.lua",    "data/ItemReformSystem.lua"),
+            ("stateiconinfo.lua",         "data/stateiconinfo.lua"),
+            ("EFSTIDs.lua",             "data/EFSTIDs.lua"),
             ("User_iteminfo_new.lua",        "data/User_iteminfo_new.lua"),
             ("User_EquipmentProperties.lua","data/User_EquipmentProperties.lua"),
             ("skill_tree.yml",          "data/skill_tree.yml"),
@@ -6203,6 +6266,7 @@ class ItemSearchApp(QWidget):
             ("all_skill_entries.py",    "data/all_skill_entries.py"),
             ("job_dict.py",             "data/job_dict.py"),
             ("EnchantName.lua",         "data/EnchantName.lua"),
+
         ]
 
         # 建一次 service 重用：放成 self 屬性，避免被 GC
@@ -6982,6 +7046,10 @@ class ItemSearchApp(QWidget):
         for widget in self.findChildren(QWidget):
             widget.blockSignals(False)
 
+        # ===== 依 JSON buff 自動勾選技能/料理 =====
+        if "buff" in saved_data:
+            self.apply_buff_to_skill_checkboxes(saved_data.get("buff"))
+
         # 輸入空白並清空技能強制更新
         self.skill_filter_input.setText(" ")
         self.skill_filter_input.clear()
@@ -7379,6 +7447,8 @@ class ItemSearchApp(QWidget):
         ONLINE_skill_entries_URL = "https://z2911902.github.io/ROItemSearchApp/data/all_skill_entries.py"
         ONLINE_job_dict_URL = "https://z2911902.github.io/ROItemSearchApp/data/job_dict.py"
         ONLINE_EnchantName_URL = "https://z2911902.github.io/ROItemSearchApp/data/EnchantName.lua"
+        ONLINE_stateiconinfo_URL = "https://z2911902.github.io/ROItemSearchApp/data/stateiconinfo.lua"
+        ONLINE_EFSTIDs_URL = "https://z2911902.github.io/ROItemSearchApp/data/EFSTIDs.lua"
 
         # === 路徑設定 ===
         if getattr(sys, 'frozen', False):
@@ -7404,6 +7474,8 @@ class ItemSearchApp(QWidget):
         skill_entries_path  = os.path.join(data_dir, "all_skill_entries.py")
         job_dict_path  = os.path.join(data_dir, "job_dict.py")
         EnchantName_path  = os.path.join(data_dir, "EnchantName.lua")
+        stateiconinfo_path  = os.path.join(data_dir, "stateiconinfo.lua")
+        EFSTIDs_path  = os.path.join(data_dir, "EFSTIDs.lua")
         
 
         # === 內嵌小工具 ===
@@ -7670,6 +7742,32 @@ class ItemSearchApp(QWidget):
             else:
                 print("✅ ItemDBNameTbl.lua 已存在")
 
+            # --- stateiconinfo.lub（使用 decompile_lub） ---
+            if not os.path.exists(stateiconinfo_path):
+                print("📦 解出 stateiconinfo.lub...")
+                ench_rel = r"data\LuaFiles514\Lua Files\stateicon\stateiconinfo.lub"
+                if extract_lub_from_grf(ench_rel):
+                    ench_src = os.path.join(BASE_DIR, ench_rel)
+                    print("🧩 使用 luadec 反編譯 stateiconinfo...")
+                    if not decompile_lub(ench_src, stateiconinfo_path):
+                        print("❌ 反編譯 stateiconinfo 失敗")
+                        return False
+            else:
+                print("✅ stateiconinfo.lua 已存在")
+
+            # --- EFSTIDs.lub（使用 decompile_lub） ---
+            if not os.path.exists(EFSTIDs_path):
+                print("📦 解出 EFSTIDs.lub...")
+                ench_rel = r"data\LuaFiles514\Lua Files\stateicon\EFSTIDs.lub"
+                if extract_lub_from_grf(ench_rel):
+                    ench_src = os.path.join(BASE_DIR, ench_rel)
+                    print("🧩 使用 luadec 反編譯 EFSTIDs...")
+                    if not decompile_lub(ench_src, EFSTIDs_path):
+                        print("❌ 反編譯 EFSTIDs 失敗")
+                        return False
+            else:
+                print("✅ EFSTIDs.lua 已存在")
+
             # --- 全部完成後刪除 GRF 解出來的暫存 LuaFiles514 ---
             temp_folder = os.path.join(BASE_DIR, "data", "LuaFiles514")
             if os.path.exists(temp_folder):
@@ -7698,13 +7796,17 @@ class ItemSearchApp(QWidget):
         miss_skill_entries = not os.path.exists(skill_entries_path)
         miss_job_dict = not os.path.exists(job_dict_path)
         miss_EnchantName = not os.path.exists(EnchantName_path)
+        miss_EFSTIDs = not os.path.exists(EFSTIDs_path)
+        miss_stateiconinfo = not os.path.exists(stateiconinfo_path)
+
+        
         
 
 
         # === 模式分流 ===
         if mode == "local_only":
             print(f"編譯方式 📖 本機模式")
-            if not (os.path.exists(iteminfo_path) and os.path.exists(equipment_lua_path) and os.path.exists(EnchantList_path) and os.path.exists(ItemDBNameTbl_path) and os.path.exists(ItemReformSystem_path)):
+            if not (os.path.exists(iteminfo_path) and os.path.exists(equipment_lua_path) and os.path.exists(EnchantList_path) and os.path.exists(ItemDBNameTbl_path) and os.path.exists(ItemReformSystem_path) and os.path.exists(EFSTIDs_path) and os.path.exists(stateiconinfo_path)):
                 if not local_fill_missing():
                     print("❌ 本地補齊失敗"); return
         else:
@@ -7725,6 +7827,8 @@ class ItemSearchApp(QWidget):
             if miss_skill_entries: targets.append((ONLINE_skill_entries_URL,    skill_entries_path))
             if miss_job_dict: targets.append((ONLINE_job_dict_URL,    job_dict_path))
             if miss_EnchantName: targets.append((ONLINE_EnchantName_URL,    EnchantName_path))
+            if miss_EFSTIDs: targets.append((ONLINE_EFSTIDs_URL,    EFSTIDs_path))
+            if miss_stateiconinfo: targets.append((ONLINE_stateiconinfo_URL,    stateiconinfo_path))
             
             if targets:
                 _try_online_for(targets)
@@ -7749,6 +7853,9 @@ class ItemSearchApp(QWidget):
                 skill_entries_path,
                 job_dict_path,
                 EnchantName_path,
+                EFSTIDs_path,
+                stateiconinfo_path,
+
             ]
             if not all(os.path.exists(path) for path in required_files):
                 print("❌ online_only 模式：仍有檔案缺失，停止")
@@ -10052,6 +10159,19 @@ class ItemSearchApp(QWidget):
         data["defc"] = self.defc_input.text()
         data["res"] = self.res_input.text()
         data["element_lv"] = self.element_lv_input.text()
+
+        # 技能 buff（把目前勾選的技能轉回 buff id）
+        buff_ids = []
+        for name, checkbox in self.skill_checkboxes.items():
+            if not checkbox.isChecked():
+                continue
+
+            entry = all_skill_entries.get(name, {})
+            raw_buff = entry.get("buff")
+            buff_ids.extend(sorted(self._parse_buff_ids(raw_buff)))
+
+        # 去重後存回字串
+        data["buff"] = ",".join(sorted(set(buff_ids), key=lambda x: int(x) if x.isdigit() else x))
 
         try:
             with open(file_path, "w", encoding="utf-8") as f:
