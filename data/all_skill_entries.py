@@ -1,7 +1,8 @@
 # 額外參數對照表
 all_skill_entries = {#範例[    "": {"buff":"","type": "技能/料理","code":["",""]},
     "掉寶呆": {"buff":"1597","type": "料理","code":["SubMDamage_Size(1, 0, 70)","SubMDamage_Size(1, 1, 70)","SubMDamage_Size(1, 2, 70)","SubMDamage_Property(1, 10, 70)","SubMdamage_Race(9999, 70)","SubMdamage_Class(0, 70)","SubMdamage_Class(1, 70)","AddSpellCastTime(30)","SubDamage_Size(1, 0, 70)","SubDamage_Size(1, 1, 70)","SubDamage_Size(1, 2, 70)","SubDamage_Property(1, 10, 70)","RaceAddDamage(9999, 70)","ClassSubDamage(0, 1, 70)","ClassSubDamage(1, 1,70)"]},
-     #10料
+    "波利蛋糕": {"buff":"1480","type": "料理","code":["AddExtParam(1, 103, 15)","AddExtParam(1, 104, 15)","AddExtParam(1, 105, 15)","AddExtParam(1, 106, 15)","AddExtParam(1, 107, 15)","AddExtParam(1, 108, 15)","AddExtParam(1, 234, 15)","AddExtParam(1, 235, 15)","AddExtParam(1, 236, 15)","AddExtParam(1, 237, 15)","AddExtParam(1, 238, 15)","AddExtParam(1, 239, 15)","AddDamage_Property(1, 10, 12)","AddMDamage_Property(1, 10, 12)"]},
+    #10料
     "力量料理": {"buff":"271","type": "料理","code":["AddExtParam(0,103,10)"],"exclusive": "food_str"},
     "敏捷料理": {"buff":"272","type": "料理","code":["AddExtParam(0,104,10)"],"exclusive": "food_agi"},
     "體力料理": {"buff":"273","type": "料理","code":["AddExtParam(0,105,10)"],"exclusive": "food_vit"},
@@ -10,7 +11,8 @@ all_skill_entries = {#範例[    "": {"buff":"","type": "技能/料理","code":[
     "幸運料理": {"buff":"276","type": "料理","code":["AddExtParam(0,108,10)"],"exclusive": "food_luk"},
     "終極料理": {"buff":"1034","type": "料理","code":["AddExtParam(1, 41, 30)","AddExtParam(1, 200, 30)"],"exclusive": ""},
     "萬能年糕": {"buff":"685","type": "料理","code":["AddExtParam(1, 41, 30)","AddExtParam(1, 200, 30)"],"exclusive": ""},
-    "活力激發劑": {"buff":"","type": "料理","code":["AddExtParam(0,103,20)","AddExtParam(0,104,20)","AddExtParam(0,105,20)","AddExtParam(0,106,20)","AddExtParam(0,107,20)","AddExtParam(0,108,20)"],"exclusive": "food_str,food_agi,food_vit,food_int,food_dex,food_luk"},
+    #1641=10料6總總和
+    "活力激發劑": {"buff":"1641","type": "料理","code":["AddExtParam(0,103,20)","AddExtParam(0,104,20)","AddExtParam(0,105,20)","AddExtParam(0,106,20)","AddExtParam(0,107,20)","AddExtParam(0,108,20)"],"exclusive": "food_str,food_agi,food_vit,food_int,food_dex,food_luk"},
     #15料
     "力量棒棒條": {"buff":"241","type": "料理","code":["AddExtParam(0,103,15)"],"exclusive": "food_str"},
     "敏捷棒棒條": {"buff":"242","type": "料理","code":["AddExtParam(0,104,15)"],"exclusive": "food_agi"},
@@ -56,7 +58,7 @@ all_skill_entries = {#範例[    "": {"buff":"","type": "技能/料理","code":[
     "魔力藥水": {"buff":"487","type": "料理","code":["AddExtParam(1, 200, 50)"]},
     "紅色藥草活化液": {"buff":"1170","type": "料理","code":["AddMeleeAttackDamage(1, 15)","AddRangeAttackDamage(1, 15)"]},
     "藍色藥草活化液": {"buff":"1171","type": "料理","code":["AddSkillMDamage(10, 15)"]},
-    "戰神蒂爾之祝福": {"buff":"","type": "料理","code":["AddExtParam(1, 41, 20)","AddExtParam(1, 200, 20)"]},
+    "戰神蒂爾之祝福": {"buff":"796","type": "料理","code":["AddExtParam(1, 41, 20)","AddExtParam(1, 200, 20)"]},
     "魔幻香水": {"buff":"867","type": "料理","code":["AddExtParam(1, 41, 30)","AddExtParam(1, 200, 30)","AddExtParam(1, 207, 1)","AddExtParam(1, 140, 1)","AddExtParam(1, 54, 1)","AddExtParam(1, 49, 30)","AddExtParam(1, 50, 30)"]},
     "極限藥水": {"buff":"1065","type": "料理","code":["AddExtParam(1, 111, 5)","AddExtParam(1, 112, 5)","AddRangeAttackDamage(1, 5)","AddDamage_CRI(1, 5)","AddSkillMDamage(10, 5)"]},
     "研磨劑": {"buff":"295","type": "料理","code":["AddExtParam(1, 52, 30)"]},
@@ -64,7 +66,7 @@ all_skill_entries = {#範例[    "": {"buff":"","type": "技能/料理","code":[
 
     #====技能
     #騎領
-    "怒爆": {"buff":"","id": "RK","type": "技能","code":["UseSkill(7)"]},
+    "怒爆": {"buff":"131","id": "RK","type": "技能","code":["UseSkill(7)"]},
     "天龍光環": {"buff":"1176","id": "RK","type": "技能","code":["UseSkill(5210)","temp = GetSkillLevel(5210)","AddDamage_SKID(1, 2008, temp * 10)","AddDamage_SKID(1, 5004, temp * 10)"]},
     "盧恩石1": {"buff":"318","id": "RK","type": "技能","code":["AddExtParam(1, 103, 30)","AddMeleeAttackDamage(1, 30)"]},
     "盧恩石5": {"buff":"322","id": "RK","type": "技能","code":["temp = GetSkillLevel(2010)","AddExtParam(0,302,temp / 10 * 4)","AddExtParam(1, 41, temp * 7)"]},
@@ -103,6 +105,26 @@ all_skill_entries = {#範例[    "": {"buff":"","type": "技能/料理","code":[
     "狙殺瞄準": {"buff":"115","id": "RA","type": "技能","code":["UseSkill(380)","AddExtParam(1, 52, 100)","AddExtParam(1, 49, 30)","AddExtParam(1, 103, 5)","AddExtParam(1, 104, 5)","AddExtParam(1, 105, 5)","AddExtParam(1, 106, 5)","AddExtParam(1, 107, 5)","AddExtParam(1, 108, 5)"]},
     "精英狙擊": {"buff":"722","id": "RA","type": "技能","code":["AddRangeAttackDamage(1, 350)"],"exclusive": "sniper_group"},
     "憤怒暴風": {"buff":"1252","id": "RA","type": "技能","code":["UseSkill(5328)","AddRangeAttackDamage(1, 350)","AddDamage_SKID(1, 5334, 20)"],"exclusive": "sniper_group"},
+    #詩人
+    "布萊奇之詩": {"buff":"72","id": "MI","type": "技能","code":["SubSpellDelay(30)"]},
+    "朝風車突擊": {"buff":"442","id": "MI","type": "技能","code":["AddExtParam(1, 41, 20 + 2 * 10)"]},
+    "伊登的蘋果": {"buff":"73","id": "MI","type": "技能","code":["AddExtParam(1, 111, 20)"]},
+    
+    
+    #舞娘
+    "女神之吻": {"buff":"76","id": "WA","type": "技能","code":["AddExtParam(1, 52, 1 * 10)","AddDamage_CRI(1, 2 * 10)"]},
+    "月光小夜曲": {"buff":"447","id": "WA","type": "技能","code":["AddExtParam(1, 200, 20 + 2 * 10)"]},
+    "搖擺舞": {"buff":"429","id": "WA","type": "技能","code":["AddExtParam(1, 167, 25)"]},
+
+    #詩人舞娘
+    "豐年頌": {"buff":"715","id": ["MI","WA",],"type": "技能","code":["AddExtParam(1, 111, 25)"]},
+    "雷拉多露水": {"buff":"451","id": ["MI","WA",],"type": "技能","code":["AddExtParam(1, 111, 20)"]},
+    "無限哼唱聲": {"buff":"454","id": ["MI","WA",],"type": "技能","code":["AddSkillMDamage(10, 20)"]},
+    "與狼共舞": {"buff":"441","id": ["MI","WA",],"type": "技能","code":["AddRangeAttackDamage(1, 5)","AddExtParam(1, 167, 25)"]},
+    "普隆德拉進行曲": {"buff":"1263","id": ["MI","WA",],"type": "技能","code":["AddExtParam(1, 234, 15)"]},
+    "暮色小夜曲": {"buff":"1262","id": ["MI","WA",],"type": "技能","code":["AddExtParam(1, 243, 15)"]},
+    
+    
     #魅影
     "追跡狀態": {"buff":"","id": "SC","type": "技能","code":["UseSkill(5315)","UseSkill(6513)","UseSkill(6514)","UseSkill(5316)"]},
     "靠近狀態": {"buff":"","id": "SC","type": "技能","code":["UseSkill(5321)"]},

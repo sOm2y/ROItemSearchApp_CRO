@@ -20,6 +20,20 @@ SHOW_GROUP_NAMES = []# 例如 ['頭下', '盾牌'] 只顯示這兩個部位, 空
 SHOW_ONLY_FILLED = True     # 只顯示有資料的部位（group）
 SHOW_ONLY_PARSED_SLOTS = True   # 只顯示有解析/開關開啟的 slot
 # ======================
+#料理組合 自動轉換
+EFST_COMBO_RULES = [
+    {
+        "sources": {271, 272, 273, 274, 275, 276},#活力激發劑
+        "target": 1641,
+        "block_if_all_present": {1034, 685},  # 其中有一個存在，就不轉
+    },
+    {
+        "sources": {150, 151, 247, 248},#戰神蒂爾之祝福
+        "target": 796,
+        "block_if_all_present": {},  #
+    }
+]
+
 GRADE_MAP = {
     0: "N",
     1: "D",
@@ -596,30 +610,72 @@ def extract_session_stats(filepath):
 
 
 
+def apply_efst_combo_transform(results, combo_rules):
+    if not results:
+        return results
+
+    existing_ids = {item["id"] for item in results}
+    matched_source_ids = set()
+    new_entries = []
+
+    for rule in combo_rules:
+        sources = set(rule["sources"])
+        target = rule["target"]
+        block_if_all_present = set(rule.get("block_if_all_present", []))
+
+        if not sources.issubset(existing_ids):
+            continue
+
+        if block_if_all_present and (block_if_all_present & existing_ids):
+            continue
+
+        matched_source_ids.update(sources)
+        new_entries.append({
+            "id": target,
+            "name": f"COMBO_{'_'.join(map(str, sorted(sources)))}",
+            "descript": [f"由組合 {sorted(sources)} 自動轉換"]
+        })
+
+    filtered = [item for item in results if item["id"] not in matched_source_ids]
+    filtered.extend(new_entries)
+    filtered.sort(key=lambda x: x["id"])
+    return filtered
+
+
+def extract_hex_bytes_from_block(block):
+    import re
+    hex_list = []
+
+    for line in block.splitlines():
+        line = line.strip()
+        # 移除前面的位址欄，例如 0000
+        line = re.sub(r'^\s*[0-9A-Fa-f]{4,}\s+', '', line)
+        hexes = re.findall(r'\b([0-9A-Fa-f]{2})\b', line)
+        if hexes:
+            hex_list.extend(hexes)
+
+    return hex_list
+
+
+
 def extract_efstinfo_values(filepath,
                             efst_ids_path="data/EFSTIDs.lua",
                             stateiconinfo_path="data/stateiconinfo.lua"):
     """
-    1. 從 temp.txt 抓所有 EfstInfo
-    2. 前2 bytes 轉 16-bit little-endian 十進位
-    3. 用 EFSTIDs.lua 對應成 EFST 名稱
-    4. 用 stateiconinfo.lua 找 descript
-    5. 略過 "%s" 那行
-    6. 回傳:
-       [
-           {
-               "id": 244,
-               "name": "EFST_FOOD_DEX",
-               "descript": ["DEX提升"]
-           },
-           ...
-       ]
+    來源1：
+      [Chunk ...] Unparsed opcode EfstInfo, Length=...
+      -> 前2 bytes 為狀態ID (little-endian)
+
+    來源2：
+      packet HEADER_ZC_MSG_STATE_CHANGE3
+      -> 在 {} 內找 83 09
+      -> 後2 bytes = 狀態ID (little-endian)
+      -> 再後4 bytes = 施放者AID
+      -> 只保留 AID == [Chunk Session] Aid 的封包
     """
     import re
 
     def read_text_auto(path):
-        # 先試 UTF-8，再試 cp950 / big5
-        # 不用 errors='ignore'，不然中文會被吞掉
         for enc in ("utf-8-sig", "utf-8", "cp950", "big5"):
             try:
                 with open(path, "r", encoding=enc) as f:
@@ -631,10 +687,6 @@ def extract_efstinfo_values(filepath,
             return f.read()
 
     def extract_brace_block(text, start_brace_idx):
-        """
-        從某個 { 開始，抓到完整配對的 {...}
-        支援 inline 格式，不靠換行。
-        """
         depth = 0
         in_string = False
         escape = False
@@ -662,6 +714,33 @@ def extract_efstinfo_values(filepath,
 
         return None
 
+    def to_result(value, id_to_name, name_to_desc):
+        efst_name = id_to_name.get(value, f"UNKNOWN_EFST_{value}")
+        descript_list = name_to_desc.get(efst_name, [])
+        return {
+            "id": value,
+            "name": efst_name,
+            "descript": descript_list
+        }
+
+    def append_unique(results, seen_ids, value, id_to_name, name_to_desc):
+        if value in seen_ids:
+            return
+        seen_ids.add(value)
+        results.append(to_result(value, id_to_name, name_to_desc))
+
+    def extract_hex_bytes_from_block(block):
+        hex_list = []
+
+        for line in block.splitlines():
+            line = line.strip()
+            line = re.sub(r'^\s*[0-9A-Fa-f]{4,}\s+', '', line)
+            hexes = re.findall(r'\b([0-9A-Fa-f]{2})\b', line)
+            if hexes:
+                hex_list.extend(hexes)
+
+        return hex_list
+
     # --------------------------------------------------
     # 1) 讀 EFSTIDs.lua，建立 數字ID -> EFST名稱
     # --------------------------------------------------
@@ -684,7 +763,6 @@ def extract_efstinfo_values(filepath,
     for m in entry_pattern.finditer(stateicon_content):
         efst_name = m.group(1)
 
-        # 指向 StateIconList[...] = { 的第一個 {
         block_start = m.end() - 1
         block_text = extract_brace_block(stateicon_content, block_start)
         if not block_text:
@@ -694,14 +772,11 @@ def extract_efstinfo_values(filepath,
         if not desc_m:
             continue
 
-        # 指向 descript = { 的第一個 {
         desc_start = desc_m.end() - 1
         desc_block = extract_brace_block(block_text, desc_start)
         if not desc_block:
             continue
 
-        # 抓 descript 裡每個項目的第一個字串
-        # 例如 {"%s", COLOR_TIME} / {"DEX提升"}
         lines = re.findall(r'\{\s*"([^"]*)"', desc_block)
 
         clean_lines = []
@@ -716,21 +791,44 @@ def extract_efstinfo_values(filepath,
         name_to_desc[efst_name] = clean_lines
 
     # --------------------------------------------------
-    # 3) 從 temp.txt 抓 EfstInfo 封包
+    # 3) 讀 temp.txt
     # --------------------------------------------------
     with open(filepath, 'r', encoding='cp950', errors='ignore') as f:
         content = f.read()
 
-    pattern = (
+    results = []
+    seen_ids = set()
+
+    # --------------------------------------------------
+    # 4) 先抓角色自己的 AID
+    #    [Chunk Session] Unparsed opcode Aid, Length=4
+    # --------------------------------------------------
+    player_aid_hex = None
+
+    aid_pattern = (
+        r"\[Chunk Session\] Unparsed opcode Aid, Length=4"
+        r"[\s\S]*?\{([^}]*)\}"
+    )
+
+    aid_match = re.search(aid_pattern, content, re.DOTALL)
+    if aid_match:
+        aid_hex_list = extract_hex_bytes_from_block(aid_match.group(1))
+        if len(aid_hex_list) >= 4:
+            # 直接保留原始 byte 順序比對，例如 AA 8C 7C 01
+            player_aid_hex = ''.join(x.lower() for x in aid_hex_list[:4])
+
+    # --------------------------------------------------
+    # 5) 原本的 EfstInfo
+    # --------------------------------------------------
+    pattern_efstinfo = (
         r"\[Chunk [^\]]+\] Unparsed opcode EfstInfo, Length=\d+"
         r"[\s\S]*?\{([^}]*)\}"
     )
 
-    matches = re.findall(pattern, content, re.DOTALL)
-    results = []
+    matches = re.findall(pattern_efstinfo, content, re.DOTALL)
 
     for block in matches:
-        hex_list = re.findall(r'\b([0-9A-Fa-f]{2})\b', block)
+        hex_list = extract_hex_bytes_from_block(block)
         if len(hex_list) < 2:
             continue
 
@@ -738,17 +836,46 @@ def extract_efstinfo_values(filepath,
         high = int(hex_list[1], 16)
         value = (high << 8) | low
 
-        efst_name = id_to_name.get(value, f"UNKNOWN_EFST_{value}")
-        descript_list = name_to_desc.get(efst_name, [])
+        append_unique(results, seen_ids, value, id_to_name, name_to_desc)
 
-        results.append({
-            "id": value,
-            "name": efst_name,
-            "descript": descript_list
-        })
+    # --------------------------------------------------
+    # 6) 新增：HEADER_ZC_MSG_STATE_CHANGE3
+    #    找 83 09
+    #    後2 bytes = 狀態ID (little-endian)
+    #    再後4 bytes = 施放者AID
+    #    只保留 AID == player_aid_hex
+    # --------------------------------------------------
+    if player_aid_hex:
+        pattern_state_change3 = (
+            r"packet\s+HEADER_ZC_MSG_STATE_CHANGE3"
+            r"[\s\S]*?\{([^}]*)\}"
+        )
 
+        state_matches = re.findall(pattern_state_change3, content, re.DOTALL)
+
+        for block in state_matches:
+            hex_list = extract_hex_bytes_from_block(block)
+            if len(hex_list) < 8:
+                continue
+
+            for i in range(len(hex_list) - 7):
+                if hex_list[i].lower() == "83" and hex_list[i + 1].lower() == "09":
+                    # 狀態ID：83 09 後面兩個 byte，小端序
+                    low = int(hex_list[i + 2], 16)
+                    high = int(hex_list[i + 3], 16)
+                    state_id = (high << 8) | low
+
+                    # 施放者 AID：再後面四個 byte，直接比原始順序
+                    caster_aid_hex = ''.join(x.lower() for x in hex_list[i + 4:i + 8])
+
+                    if caster_aid_hex != player_aid_hex:
+                        continue
+
+                    append_unique(results, seen_ids, state_id, id_to_name, name_to_desc)
+                    break  # 這包抓到就夠了
+
+    results = apply_efst_combo_transform(results, EFST_COMBO_RULES)
     return results
-
 
 
 def extract_equip_chunk(filepath, json_data, get_itemname,
@@ -1162,12 +1289,12 @@ def run_rrf_main():
 
 
     # 6. 解析完畢 → 刪除 temp.txt
-    try:
-        if os.path.exists(txt_path):
-            os.remove(txt_path)
-            print(f"已刪除暫存檔：{txt_path}")
-    except Exception as e:
-        print(f"刪除 {txt_path} 時發生錯誤：{e}")
+    # try:
+    #     if os.path.exists(txt_path):
+    #         os.remove(txt_path)
+    #         print(f"已刪除暫存檔：{txt_path}")
+    # except Exception as e:
+    #     print(f"刪除 {txt_path} 時發生錯誤：{e}")
 
     # 依照輸入的 RRF 自動命名 json
     rrfname = session_data['Charactername'] + "_" + job_info["name"] if main_job_id == job_id else session_data['Charactername'] + "_" + job_info["name"] + "(非4轉)"
