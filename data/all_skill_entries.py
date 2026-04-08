@@ -58,7 +58,7 @@ all_skill_entries = {#範例[    "": {"buff":"","type": "技能/料理","code":[
     "魔力藥水": {"buff":"487","type": "料理","code":["AddExtParam(1, 200, 50)"]},
     "紅色藥草活化液": {"buff":"1170","type": "料理","code":["AddMeleeAttackDamage(1, 15)","AddRangeAttackDamage(1, 15)"]},
     "藍色藥草活化液": {"buff":"1171","type": "料理","code":["AddSkillMDamage(10, 15)"]},
-    "戰神蒂爾之祝福": {"buff":"796","type": "料理","code":["AddExtParam(1, 41, 20)","AddExtParam(1, 200, 20)"]},
+    "戰神蒂爾之祝福": {"buff":"796","type": "料理","code":["AddExtParam(1, 41, 20)","AddExtParam(1, 200, 20)"]},#遊戲內不會顯示atk
     "魔幻香水": {"buff":"867","type": "料理","code":["AddExtParam(1, 41, 30)","AddExtParam(1, 200, 30)","AddExtParam(1, 207, 1)","AddExtParam(1, 140, 1)","AddExtParam(1, 54, 1)","AddExtParam(1, 49, 30)","AddExtParam(1, 50, 30)"]},
     "極限藥水": {"buff":"1065","type": "料理","code":["AddExtParam(1, 111, 5)","AddExtParam(1, 112, 5)","AddRangeAttackDamage(1, 5)","AddDamage_CRI(1, 5)","AddSkillMDamage(10, 5)"]},
     "研磨劑": {"buff":"295","type": "料理","code":["AddExtParam(1, 52, 30)"]},
@@ -72,7 +72,7 @@ all_skill_entries = {#範例[    "": {"buff":"","type": "技能/料理","code":[
     "盧恩石5": {"buff":"322","id": "RK","type": "技能","code":["temp = GetSkillLevel(2010)","AddExtParam(0,302,temp / 10 * 4)","AddExtParam(1, 41, temp * 7)"]},
     "盧恩石10": {"buff":"1154","id": "RK","type": "技能","code":["AddExtParam(1, 111, 30)","AddExtParam(1, 112, 30)","AddDamage_Size(1, 0, 30)","AddDamage_Size(1, 1, 30)","AddDamage_Size(1, 2, 30)","AddDamage_CRI(1, 30)","AddMeleeAttackDamage(1, 30)","AddRangeAttackDamage(1, 30)"]},
     #主教
-    "神威祈福": {"buff":"15","id": "AB","type": "技能","code":["AddExtParam(1, 200, 25)","WeaponMasteryATK(25)"]},
+    "神威祈福": {"buff":"15","id": "AB","type": "技能","code":["AddExtParam(1, 200, 25)","Kamui_SpecialATK(25)"]},
     "慈悲術": {"buff":"10","id": "AB","type": "技能","code": ["temp = 70 / 10","AddExtParam(0,103,10 + math.floor(temp))","AddExtParam(0,106,10 + math.floor(temp)","AddExtParam(0,107,10 + math.floor(temp)","AddExtParam(0,49,20)"]},
     "純白百合花": {"buff":"12","id": "AB","type": "技能","code":["temp = 70 / 10","AddExtParam(0,104,12 + math.floor(temp))","AddExtParam(0,167,10 + math.floor(temp))"]},
     "神聖權能": {"buff":"1201","id": "AB","type": "技能","code":["AddExtParam(1, 242, 50)","AddExtParam(1, 243, 50)"]},
@@ -86,9 +86,12 @@ all_skill_entries = {#範例[    "": {"buff":"","type": "技能/料理","code":[
     "焰魔散彈": {"buff":"1326","id": "SU","type": "技能","code":["UseSkill(5243)"]},
     #斬首
     "致命塗毒": {"buff":"114","id": "GX","type": "技能","code":["UseSkill(378)"]},
+    "強效毒液": {"buff":"1194","id": "GX","type": "技能","code":["AddIgnore_RES_RacePercent(9999, 20)"]},
     "魅影強化": {"buff":"192","id": "GX","type": "技能","code":["UseSkill(5285)"]},
     "偽裝強化": {"buff":"333","id": "GX","type": "技能","code":["UseSkill(2033)"]},
-
+    "劇毒武器": {"buff":"341","id": "GX","type": "技能","code":["AddMeleeAttackDamage(1, 10)"]},
+    "劇毒武器:熱病": {"buff":"341-2","id": "GX","type": "技能","code":["AddDamage_CRI(1, 15)"]},
+    "劇毒武器:狂笑": {"buff":"341-2","id": "GX","type": "技能","code":["SubSpellDelay(0)"]},
     
     #704
     "五行符": {"buff":"1359","id": "SL","type": "技能","code":["AddMDamage_Property(1, 0, 20)","AddMDamage_Property(1, 1, 20)","AddMDamage_Property(1,2, 20)","AddMDamage_Property(1, 3, 20)","AddMDamage_Property(1, 4, 20)","AddDamage_Property(1, 0, 20)","AddDamage_Property(1, 1, 20)","AddDamage_Property(1,2, 20)","AddDamage_Property(1, 3, 20)","AddDamage_Property(1, 4, 20)"]},
@@ -109,20 +112,22 @@ all_skill_entries = {#範例[    "": {"buff":"","type": "技能/料理","code":[
     "布萊奇之詩": {"buff":"72","id": "MI","type": "技能","code":["SubSpellDelay(30)"]},
     "朝風車突擊": {"buff":"442","id": "MI","type": "技能","code":["AddExtParam(1, 41, 20 + 2 * 10)"]},
     "伊登的蘋果": {"buff":"73","id": "MI","type": "技能","code":["AddExtParam(1, 111, 20)"]},
-    
-    
+
     #舞娘
     "女神之吻": {"buff":"76","id": "WA","type": "技能","code":["AddExtParam(1, 52, 1 * 10)","AddDamage_CRI(1, 2 * 10)"]},
     "月光小夜曲": {"buff":"447","id": "WA","type": "技能","code":["AddExtParam(1, 200, 20 + 2 * 10)"]},
     "搖擺舞": {"buff":"429","id": "WA","type": "技能","code":["AddExtParam(1, 167, 25)"]},
 
     #詩人舞娘
+    "神秘交響曲": {"buff":"1256","id": ["MI","WA",],"type": "技能","code":["UseSkill(5351)","AddDamage_SKID(1, 5355, 100)","AddDamage_SKID(1, 5353, 100)","AddDamage_SKID(1, 5357, 100)","AddMdamage_Race(7, 50)","AddMdamage_Race(5, 50)","RaceAddDamage(7, 50)","RaceAddDamage(5, 50)"]},
+    "戰鼓震天": {"buff":"80","id": ["MI","WA",],"type": "技能","code":["AddExtParam(1, 41, 40)"]},
     "豐年頌": {"buff":"715","id": ["MI","WA",],"type": "技能","code":["AddExtParam(1, 111, 25)"]},
     "雷拉多露水": {"buff":"451","id": ["MI","WA",],"type": "技能","code":["AddExtParam(1, 111, 20)"]},
     "無限哼唱聲": {"buff":"454","id": ["MI","WA",],"type": "技能","code":["AddSkillMDamage(10, 20)"]},
     "與狼共舞": {"buff":"441","id": ["MI","WA",],"type": "技能","code":["AddRangeAttackDamage(1, 5)","AddExtParam(1, 167, 25)"]},
-    "普隆德拉進行曲": {"buff":"1263","id": ["MI","WA",],"type": "技能","code":["AddExtParam(1, 234, 15)"]},
-    "暮色小夜曲": {"buff":"1262","id": ["MI","WA",],"type": "技能","code":["AddExtParam(1, 243, 15)"]},
+    "普隆德拉進行曲": {"buff":"1263","id": ["MI","WA",],"type": "技能","code":["AddExtParam(1, 242, 22)"]},
+    "暮色小夜曲": {"buff":"1262","id": ["MI","WA",],"type": "技能","code":["AddExtParam(1, 243, 22)"]},
+    
     
     
     #魅影

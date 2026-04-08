@@ -1,5 +1,5 @@
 #部分資料取自ROCalculator,搜尋 ROCalculator 可以知道哪些有使用
-Version = "v0.1.52-260406"
+Version = "v0.1.54-260409"
 
 import sys, builtins, time
 from PySide6.QtCore import QThread, Signal, Qt, QMetaObject, QTimer
@@ -2836,6 +2836,13 @@ def parse_lua_effects_with_variables(
             value_expr = safe_eval_expr(value_expr, variables, get_values, refine_inputs, grade)
             results.append(f"修煉ATK +{value_expr}")
             continue
+        #神威特殊atk SpecialATK
+        KamuiATK_dmg = re.match(r"Kamui_SpecialATK\(\s*(.+?)\)", line)
+        if KamuiATK_dmg and condition_met:
+            value_expr = KamuiATK_dmg.group(1)
+            value_expr = safe_eval_expr(value_expr, variables, get_values, refine_inputs, grade)
+            results.append(f"神威ATK +{value_expr}")
+            continue
 
         #誘導攻擊機率AddGuideAttack(value)
         guide_attack = re.match(r"AddGuideAttack\(\s*(.+?)\s*\)", line)
@@ -3833,6 +3840,8 @@ class ItemSearchApp(QWidget):
         globals()["ATK_armor"] = sum(val for val, _ in effect_dict.get(("ATK", ""), []))
         #修煉ATK
         globals()["WeaponMasteryATK"] = sum(val for val, _ in effect_dict.get(("修煉ATK", ""), []))
+        #修煉ATK
+        globals()["KamuiATK"] = sum(val for val, _ in effect_dict.get(("神威ATK", ""), []))
         #裝備MATK(不含武器)
         globals()["MATK_armor"] = sum(val for val, _ in effect_dict.get(("MATK", ""), []))
         #裝備ATK%
@@ -4030,7 +4039,8 @@ class ItemSearchApp(QWidget):
         OLEUM_attack_buff = 1+15/100 if self.special_checkboxes["OLEUM_attack_checkbox"].isChecked() else 0
         #魔力增幅
         SKILL_HW_MAGICPOWER = 10 if int(GUSklv(366)) == 1 else 0  # 366
-
+        #天怒
+        PR_LEXAETERNA_buff = 100 if self.special_checkboxes["PR_LEXAETERNA_checkbox"].isChecked() else 0
         
         """
         target_size       # 來自 體型 的數值
@@ -4383,8 +4393,17 @@ class ItemSearchApp(QWidget):
         #怒爆
         MAGNUM = 1 + 0.2 * (get_damage_multiplier(3, target_element, target_element_lv)/100) if int(GUSklv(7)) == 1 else 1
         #print(f"EDP:{EDP},MAGNUM:{MAGNUM}")
-        specialATK_min = int(refineammoATK_min * EDP * MAGNUM)
-        specialATK = int(refineammoATK * EDP * MAGNUM)
+        # specialATK_min = int(refineammoATK_min * EDP * MAGNUM) 
+        # specialATK = int(refineammoATK * EDP * MAGNUM)
+        if int(GUSklv(378)) == 1:
+            specialATK_min = int(refineammoATK_min * EDP) 
+            specialATK = int(refineammoATK * EDP) 
+        elif int(GUSklv(7)) == 1:
+            specialATK_min = int(refineammoATK_min * MAGNUM)
+            specialATK = int(refineammoATK * MAGNUM)
+        else:
+            specialATK_min = int(refineammoATK_min)
+            specialATK = int(refineammoATK)
 
         #前素質總ATK
         if weapon_class in (11,13,14,17,18,19,20,21):#DEX系
@@ -4730,7 +4749,9 @@ class ItemSearchApp(QWidget):
                             #潛擊 自動判斷階級
                             (sneak_MDattack_buff,1,"潛擊"),
                             #屬性紋章 風水火地
-                            (attribute_seal_buff,"raw","紋章")
+                            (attribute_seal_buff,"raw","紋章"),
+                            #天怒
+                            (PR_LEXAETERNA_buff,1,"天怒")
                         )
                         
                     elif attack_type == "physical":
@@ -4807,6 +4828,8 @@ class ItemSearchApp(QWidget):
                                 (final_damage_1,final_damage_1_min),
                                 #最終ATK
                                 (ATKF,"+","前ATK"),
+                                #神威ATK
+                                (KamuiATK,"+","神威ATK"),
                                 #P.ATK
                                 (total_PATK,1,"PATK"),
                                 #砲彈atk
@@ -4834,7 +4857,9 @@ class ItemSearchApp(QWidget):
                                 #(潛擊)+(孢子)+(爪痕)+(撼動) 遠傷判斷類型
                                 (specialatkbuff,"raw","混傷BUFF"),
                                 #屬性紋章 風水火地
-                                (attribute_seal_buff,"raw","紋章")
+                                (attribute_seal_buff,"raw","紋章"),
+                                #天怒
+                                (PR_LEXAETERNA_buff,1,"天怒")
                             )
                             #print(f"技能爆擊最終傷害: {final_damage}")
                         else:#STR系
@@ -4843,6 +4868,8 @@ class ItemSearchApp(QWidget):
                                 (final_damage_1,final_damage_1_min),
                                 #最終ATK
                                 (ATKF,"+","前ATK"),
+                                #神威ATK
+                                (KamuiATK,"+","神威ATK"),
                                 #P.ATK
                                 (total_PATK,1,"PATK"),
                                 #砲彈atk
@@ -4874,7 +4901,9 @@ class ItemSearchApp(QWidget):
                                 #(潛擊)+(爪痕)+(撼動) 遠傷判斷類型
                                 (specialatkbuff,"raw","混傷BUFF"),
                                 #屬性紋章 風水火地
-                                (attribute_seal_buff,"raw","紋章")
+                                (attribute_seal_buff,"raw","紋章"),
+                                #天怒
+                                (PR_LEXAETERNA_buff,1,"天怒")
                             )
                             #print(f"技能爆擊最終傷害: {final_damage}")
                     
@@ -5204,7 +5233,7 @@ class ItemSearchApp(QWidget):
                 result.append(f"{pad_label('前ATK (DEX系):')}{FATK:,}")
             else:#STR系
                 result.append(f"{pad_label('前ATK(STR系):')}{NATK:,}")
-            result.append(f"{pad_label('後ATK:')}{AKTC:,}")
+            result.append(f"{pad_label('後ATK:')}{AKTC + KamuiATK + atk_refine_total_L + ATK_MweaponL:,}")
             result.append(f"{pad_label('武器ATK:')}{ATK_Mweapon:,}")
             result.append(f"{pad_label('修煉ATK:')}{WeaponMasteryATK:,}")
             result.append(f"{pad_label('物理ATK%:')}{round(ATK_percent)}%")
@@ -9544,6 +9573,7 @@ class ItemSearchApp(QWidget):
             "DARKCROW_attack_checkbox": QCheckBox("致命爪痕(近)"),
             "RUSH_attack_checkbox": QCheckBox("衝擊撼動(近遠)"),            
             "OLEUM_attack_checkbox": QCheckBox("聖油洗禮(遠)"),
+            "PR_LEXAETERNA_checkbox": QCheckBox("天使之怒"),
 
 
 

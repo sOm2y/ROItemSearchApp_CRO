@@ -1289,12 +1289,12 @@ def run_rrf_main():
 
 
     # 6. 解析完畢 → 刪除 temp.txt
-    # try:
-    #     if os.path.exists(txt_path):
-    #         os.remove(txt_path)
-    #         print(f"已刪除暫存檔：{txt_path}")
-    # except Exception as e:
-    #     print(f"刪除 {txt_path} 時發生錯誤：{e}")
+    try:
+        if os.path.exists(txt_path):
+            os.remove(txt_path)
+            print(f"已刪除暫存檔：{txt_path}")
+    except Exception as e:
+        print(f"刪除 {txt_path} 時發生錯誤：{e}")
 
     # 依照輸入的 RRF 自動命名 json
     rrfname = session_data['Charactername'] + "_" + job_info["name"] if main_job_id == job_id else session_data['Charactername'] + "_" + job_info["name"] + "(非4轉)"
