@@ -33,11 +33,13 @@ all_skill_entries = {#範例[    "": {"buff":"","type": "技能/料理","code":[
     "畢帝特龍尾麵": {"buff":"496","type": "料理","code":["AddExtParam(0,108,20)"]},
 
     #活動---------
-    #櫻花
-    "蒙布朗蛋糕": {"buff":"1469","type": "料理","code":["AddMDamage_Size(1, 0, 15)","AddMDamage_Size(1, 1, 15)","AddMDamage_Size(1, 2, 15)"]},
-    "櫻花年糕": {"buff":"1470","type": "料理","code":["AddMDamage_Property(1, 10, 10)"]},
+    #櫻花, 春花季
+    "蒙布朗蛋糕": {"buff":"1469","type": "料理","code":["AddMDamage_Size(1, 0, 10)","AddMDamage_Size(1, 1, 10)","AddMDamage_Size(1, 2, 10)","AddDamage_Size(1, 0, 10)","AddDamage_Size(1, 1, 10)","AddDamage_Size(1, 2, 10)"]},
+    "櫻花年糕": {"buff":"1470","type": "料理","code":["AddMDamage_Property(1, 10, 10)","AddDamage_Property(1, 10, 10)"]},
     "甜甜可麗餅": {"buff":"1471","type": "料理","code":["AddExtParam(1, 111, 10)","AddExtParam(1, 112, 10)"]},
-    "豐滿花樹枝": {"buff":"1472","type": "料理","code":["AddSkillMDamage(10, 10)"]},
+    "豐滿花樹枝": {"buff":"1472","type": "料理","code":["AddSkillMDamage(10, 10)","AddRangeAttackDamage(1, 10)","AddMeleeAttackDamage(1, 10)"]},
+    
+
     #學術節料理
     "學術節米餅": {"buff":"1485","type": "料理","code":["AddMDamage_Size(1, 0, 10)","AddMDamage_Size(1, 1, 10)","AddMDamage_Size(1, 2, 10)","AddDamage_Size(1, 0, 10)","AddDamage_Size(1, 1, 10)","AddDamage_Size(1, 2, 10)","AddExtParam(1, 239, 15)"]},
     "學術節餅乾": {"buff":"1486","type": "料理","code":["AddMeleeAttackDamage(1, 12)","AddRangeAttackDamage(1,  12)","AddSkillMDamage(10, 12)","AddExtParam(1, 50, 30)"]},
