@@ -525,14 +525,14 @@ class EnchantUI(QWidget):
         # ---------------------------------------------------------
         mlist = []
 
-        # 如果是機率附魔（enchant）還要加上 SetRequire 裡的材料與 zeny
         tid = self.all_target_items[equip_name]
         info = self.parsed[tid]
         slot_order = list(reversed(info["slot_order"]))
         sid = slot_order[tab_index]
         slot_info = info["slots"].get(sid)
 
-        if slot_info and "require" in slot_info:
+        # 只有機率附魔才加 SetRequire
+        if data["type"] == "enchant" and slot_info and "require" in slot_info:
             req = slot_info["require"]
 
             if req.get("zeny", 0) > 0:
@@ -545,7 +545,7 @@ class EnchantUI(QWidget):
         if data.get("zeny", 0) > 0:
             mlist.append(("Zeny", data["zeny"]))
 
-        # 加上附魔自身材料
+        # 加上自身材料
         for name, cnt in data.get("materials", []):
             mlist.append((self.resolve_item_name(name), cnt))
 
