@@ -133,16 +133,19 @@ TRANSFORM_DURATION_MAP = {
 
 sid_groundskill_cache = {}   # key = sid, value = groundskill data
 
-with open("data\\skillneme.csv", "r", encoding="utf-8") as f:
-    reader = csv.reader(f)
-    for row in reader:
-        if len(row) >= 3:
-            try:
-                skill_id = int(row[0])
-                skill_name = row[2]     # ★ 第3欄才是中文名稱
-                skill_name_map[skill_id] = skill_name
-            except:
-                pass
+try:
+    with open("data\\skillneme.csv", "r", encoding="utf-8") as f:
+        reader = csv.reader(f)
+        for row in reader:
+            if len(row) >= 3:
+                try:
+                    skill_id = int(row[0])
+                    skill_name = row[2]   # 第3欄是中文名稱
+                    skill_name_map[skill_id] = skill_name
+                except:
+                    pass
+except FileNotFoundError:
+    skill_name_map = {}
 
 def parse_lub_file(filename):
     try:
@@ -4214,7 +4217,8 @@ class MainUI(QWidget):
         all_parent = QTreeWidgetItem([
             "所有物品掉落量",
             f"{total_drop_amount} 件",
-            "100.00%" if total_drop_amount > 0 else "0.00%",
+            #"100.00%" if total_drop_amount > 0 else "0.00%",
+            "",
         ])
 
         all_parent_color = QColor(90, 70, 120)
