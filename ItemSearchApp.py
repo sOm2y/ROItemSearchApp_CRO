@@ -1,5 +1,5 @@
 #部分資料取自ROCalculator,搜尋 ROCalculator 可以知道哪些有使用
-Version = "v0.1.54-260409"
+Version = "v0.2.0-2604012"
 
 import sys, builtins, time
 from PySide6.QtCore import QThread, Signal, Qt, QMetaObject, QTimer
@@ -9,6 +9,7 @@ import skill_tree #載入技能樹
 import reform_viewer #載入改造工具
 from rrf_to_App import run_rrf_main#載入rrf轉換
 from monster_lookup_dialog import MonsterLookupDialog#查詢怪物
+from RRF_compile_damage_view import MainUI#載入RRF傷害計算器
 from Damage_view import DamageCalculator
 from pathlib import Path
 from dotenv import load_dotenv
@@ -3578,6 +3579,13 @@ class ItemSearchApp(QWidget):
         dlg.monsterSelected.connect(lambda: (setattr(self, "_last_calc_state", None), self.trigger_total_effect_update()))
         dlg.exec()
 
+    def open_rrfdamage_view(self):
+        if self.rrfdamage_window is None:
+            self.rrfdamage_window = MainUI()
+
+        self.rrfdamage_window.show()
+        self.rrfdamage_window.raise_()
+        self.rrfdamage_window.activateWindow()
 
 
     def open_damage_calculator(self):
@@ -8103,7 +8111,7 @@ class ItemSearchApp(QWidget):
         self._damage_win = None
         self.preset_folder = "equip_presets"
         os.makedirs(self.preset_folder, exist_ok=True)
-
+        self.rrfdamage_window = None
         self.load_config()#讀取偏好設定
 
         
@@ -9883,7 +9891,13 @@ class ItemSearchApp(QWidget):
 
         file_menu.addAction(ROC_save_as_action)
         
-        gamedata_menu = menubar.addMenu("遊戲資訊")
+
+
+        gamedata_menu = menubar.addMenu("工具")
+        # === 建立選單：傷害表 ===
+        action_open_damage = QAction("重播檔傷害表工具", self)
+        action_open_damage.triggered.connect(self.open_rrfdamage_view)
+        gamedata_menu.addAction(action_open_damage)
         # === 建立選單：附魔工具 ===
         enchant_action = QAction("附魔查詢工具", self)
         enchant_action.triggered.connect(self.open_enchant_tool)
@@ -9895,10 +9909,7 @@ class ItemSearchApp(QWidget):
         reform_action.triggered.connect(self.open_reform_tool)
 
         gamedata_menu.addAction(reform_action)
-            # === 建立選單：技能欄 ===
-        # skill_tree_action = QAction("技能欄", self)
-        # skill_tree_action.triggered.connect(self.open_skill_tree)
-        # gamedata_menu.addAction(skill_tree_action)
+
 
         # === 設定選單 ===
         settings_menu = menubar.addMenu("設定")

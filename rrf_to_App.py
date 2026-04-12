@@ -883,14 +883,16 @@ def extract_equip_chunk(filepath, json_data, get_itemname,
 
     import re
 
-    with open(filepath, 'r', encoding='cp950', errors='ignore') as f:
+    with open(filepath, 'r', encoding='UTF-8', errors='ignore') as f:
         content = f.read()
 
     # === 只抓 chunk 本體 ===
     pattern = (
         r"\[Chunk Items\] Unparsed opcode "
         + re.escape(chunk_name)
-        + r", Length=\d+\s*\[[^\]]+\]\s*\{([\s\S]*?)^\}"
+        + r", Length=\d+\s*"
+        + r"(?:→\s*Raw hex:\s*)?"
+        + r"\[[^\]]+\]\s*\{([\s\S]*?)^\s*\}"
     )
 
     match = re.search(pattern, content, re.MULTILINE)
