@@ -49,27 +49,13 @@ SHOW_UNKNOWN_PAR_CHANGE = False  # True=顯示未知, False=隱藏
 DROP_MATCH_TOLERANCE_MS = 20  
 
 # 物品名稱高亮規則：key = 關鍵字/完整名稱, value = 底色
-DROP_ITEM_HIGHLIGHT_MAP = {
-    #紫
-    "鍺金石": "#9999FF",
-    "影子神秘金屬": "#9999FF",
-    "乙太星塵": "#9999FF",
-    "精華": "#9999FF",
-    "符文": "#9999FF",
-    "強化石": "#33CCFF",
-    #藍
-    "強化原石": "#33CCFF",
-    "影子神秘原石": "#33CCFF",
-    "鍺金原石": "#33CCFF",
-    #紅
-    "卡片": "#FF44AA",
-    "乙太琥珀": "#FF44AA",
-    "乙太黃寶石": "#FF44AA",
-    "乙太紫寶石": "#FF44AA",
-    "乙太天藍寶石": "#FF44AA",
-    
-    
-    
+DROP_ITEM_HIGHLIGHT_MAP = {    
+    1190: "#9999FF",#紫光
+    1186: "#FF44AA",#卡片粉紅光
+    1869: "#33CCFF",#裝備藍光
+    1871: "#9999FF",#符文紫光
+    2371: "#33CCFF",#原石類
+    2372: "#33CCFF",#原石類   
     
 }
 
@@ -164,9 +150,12 @@ def parse_lub_file(filename):
 
     for item_id, body in item_entries:
         name_match = re.search(r'\bidentifiedDisplayName\b\s*=\s*"([^"]+)"', body)
+        effect_match = re.search(r'\bEffectID\b\s*=\s*(\d+)', body)
+
         if name_match:
             parsed_items[int(item_id)] = {
-                "name": name_match.group(1).strip()
+                "name": name_match.group(1).strip(),
+                "EffectID": int(effect_match.group(1)) if effect_match else None
             }
 
     return parsed_items
@@ -174,7 +163,7 @@ def parse_lub_file(filename):
 
 parsed_lub_items = parse_lub_file("data\\iteminfo_new.lua")
 item_name_map = {item_id: data["name"] for item_id, data in parsed_lub_items.items()}
-
+item_effect_map = {item_id: data["EffectID"] for item_id, data in parsed_lub_items.items()}
 
 class MyNavigationToolbar(NavigationToolbar):
     def __init__(self, canvas, parent=None):
@@ -1731,21 +1720,16 @@ def parse_newentry11_blocks(text):
 def normalize_item_name(s):
     return str(s).strip().lower()
 
-def get_drop_highlight_color(item_name):
+def get_drop_highlight_color(effect_id):
     """
-    完全吻合或部分吻合就回傳 QColor，否則回傳 None
+    傳入 EffectID，對應到顏色就回傳 QColor，否則回傳 None
     """
-    target = normalize_item_name(item_name)
+    if effect_id is None:
+        return None
 
-    for keyword, color in DROP_ITEM_HIGHLIGHT_MAP.items():
-        k = normalize_item_name(keyword)
-
-        if not k:
-            continue
-
-        # 完全吻合 or 部分吻合
-        if target == k or k in target:
-            return QColor(color)
+    color = DROP_ITEM_HIGHLIGHT_MAP.get(effect_id)
+    if color:
+        return QColor(color)
 
     return None
 
@@ -2941,6 +2925,7 @@ class MainUI(QWidget):
             dec = decode_itemdrop(blk["hex"])
             item_id = dec["item_id"]
             item_name = item_name_map.get(item_id, f"ID {item_id}")
+            effect_id = item_effect_map.get(item_id)   # ★ 先定義
 
             source_did, source_name = self.resolve_drop_source_by_tolerance(
                 blk["timestamp"],
@@ -2958,6 +2943,7 @@ class MainUI(QWidget):
                 "source_did": source_did,
                 "item_id": item_id,
                 "item_name": item_name,
+                "effect_id": effect_id,   # ★ 新增
                 "amount": dec["amount"],
                 "x": dec["x"],
                 "y": dec["y"],
@@ -3476,7 +3462,7 @@ class MainUI(QWidget):
             ]
 
             # 看這筆物品是否需要高亮
-            highlight_color = get_drop_highlight_color(d.get("item_name", ""))
+            highlight_color = get_drop_highlight_color(d.get("effect_id"))
 
             for c, value in enumerate(row_values):
                 item = QTableWidgetItem(str(value))
