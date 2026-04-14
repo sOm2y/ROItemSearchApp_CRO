@@ -76,7 +76,9 @@ all_skill_entries = {#範例[    "": {"buff":"","type": "技能/料理","code":[
     #主教
     "神威祈福": {"buff":"15","id": "AB","type": "技能","code":["AddExtParam(1, 200, 25)","Kamui_SpecialATK(25)"]},
     "慈悲術": {"buff":"10","id": "AB","type": "技能","code": ["temp = 70 / 10","AddExtParam(0,103,10 + math.floor(temp))","AddExtParam(0,106,10 + math.floor(temp)","AddExtParam(0,107,10 + math.floor(temp)","AddExtParam(0,49,20)"]},
+    "天使之賜福": {"buff":"","id": "AB","type": "技能","code": ["AddExtParam(0,103,10 )","AddExtParam(0,106,10 ","AddExtParam(0,107,10","AddExtParam(0,49,20)"]},
     "純白百合花": {"buff":"12","id": "AB","type": "技能","code":["temp = 70 / 10","AddExtParam(0,104,12 + math.floor(temp))","AddExtParam(0,167,10 + math.floor(temp))"]},
+    "加速術": {"buff":"","id": "AB","type": "技能","code":["AddExtParam(0,104,12)","AddExtParam(0,167,10)"]},
     "神聖權能": {"buff":"1201","id": "AB","type": "技能","code":["AddExtParam(1, 242, 50)","AddExtParam(1, 243, 50)"]},
     "全心奉獻": {"buff":"1227","id": "AB","type": "技能","code":["AddExtParam(1, 235, 10)","AddExtParam(1, 236, 10)","AddExtParam(1, 237, 10)"],"exclusive": "STA.WIS.SPL"},
     "祝福讚歌": {"buff":"1228","id": "AB","type": "技能","code":["AddExtParam(1, 234, 10)","AddExtParam(1, 238, 10)","AddExtParam(1, 239, 10)"],"exclusive": "POW.CON.CRT"},
@@ -181,6 +183,9 @@ all_skill_entries = {#範例[    "": {"buff":"","type": "技能/料理","code":[
     #心神凝聚跟風鷹重複
     "突破極限": {"buff":"1383","id": "SN","type": "技能","code":["UseSkill(5461)"]},
     "突破規矩": {"buff":"1384","id": "SN","type": "技能","code":["UseSkill(5462)"]},
+    "征服危機": {"buff":"1671","id": "SN","type": "技能","code":["temp = GetSkillLevel(5505)","AddExtParam(1, 109, temp * 15000)","AddExtParam(1, 243, temp * 3)","AddExtParam(1, 242, temp * 3)"]},
+
+    
     #忍者
     "四色符": {"buff": ["1667","1668","1669","1670"],"id": ["OB","KO"],"type": "技能","code":["UseSkill(5499)"]},
     "噩夢狀態": {"buff":"","id": ["OB","KO"],"type": "技能","code":["UseSkill(5493)","UseSkill(5494)","UseSkill(5495)"]},
