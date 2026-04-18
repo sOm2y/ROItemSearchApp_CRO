@@ -1,5 +1,5 @@
 #部分資料取自ROCalculator,搜尋 ROCalculator 可以知道哪些有使用
-Version = "v0.2.2-260418"
+Version = "v0.2.3-260418"
 
 import sys, builtins, time
 from PySide6.QtCore import QThread, Signal, Qt, QMetaObject, QTimer
@@ -3967,8 +3967,9 @@ class ItemSearchApp(QWidget):
         mdefc = self.mdefc_input.text() or "0"
         mres = self.mres_input.text() or "0"
         skill_formula = self.skill_formula_input.text()
+        weapon_class = global_weapon_type_map.get(4, 0)
         # 組合新的 state_key
-        state_key = f"{MHP_NOW}|{MSP_NOW}|{BaseLv}|{Use_skill_levels}|{skill_formula}|{skill_key}|{skill_lv}|{equip_state}|{special_state}|{size_key}|{element_key}|{race_key}|{class_key}|{d_ef}|{defc}|{res}|{mdef}|{mdefc}|{mres}|{element_lv_key}|{user_element_key}|{total_STR}|{total_AGI}|{total_VIT}|{total_INT}|{total_DEX}|{total_LUK}|{total_POW}|{total_STA}|{total_WIS}|{total_SPL}|{total_CON}|{total_CRT}|{MD_BETELGEUSE_data}|{damage_reduction_key}"
+        state_key = f"{weapon_class}|{MHP_NOW}|{MSP_NOW}|{BaseLv}|{Use_skill_levels}|{skill_formula}|{skill_key}|{skill_lv}|{equip_state}|{special_state}|{size_key}|{element_key}|{race_key}|{class_key}|{d_ef}|{defc}|{res}|{mdef}|{mdefc}|{mres}|{element_lv_key}|{user_element_key}|{total_STR}|{total_AGI}|{total_VIT}|{total_INT}|{total_DEX}|{total_LUK}|{total_POW}|{total_STA}|{total_WIS}|{total_SPL}|{total_CON}|{total_CRT}|{MD_BETELGEUSE_data}|{damage_reduction_key}"
         MD_BETELGEUSE_state_key = f"{size_key}|{element_key}|{race_key}|{class_key}|{element_lv_key}|{d_ef}|{defc}|{res}|{mdef}|{mdefc}|{mres}|{damage_reduction_key}"
         #print(f"{MD_BETELGEUSE_state_key}")
 
@@ -5927,6 +5928,9 @@ class ItemSearchApp(QWidget):
 
 
     def clear_global_state(self):#清除全域武器裝備技能等級並預先匯入基礎值
+        '''
+        清除全域武器裝備技能等級並預先匯入基礎值
+        '''
         #print("武器階級：", global_weapon_level_map)
         #print("防具階級：", global_armor_level_map)
         #print("武器類型：", global_weapon_type_map)
@@ -7166,9 +7170,11 @@ class ItemSearchApp(QWidget):
         根據武器類型控制相關 UI 的顯示與隱藏
         '''
         weapon_class = global_weapon_type_map.get(4, 0)
-        print(f"weapon_class:{weapon_class}")
-        if weapon_class in [3,5,7,16,23,11,17,18,19,20,21,22]:
+        #print(f"weapon_class:{weapon_class}")
+        if weapon_class in [3,5,7,16,23,11,17,18,19,20,21,22]:                        
             self.set_part_visible("左手(盾牌)", False)
+            self.clear_global_state()
+            self.display_all_effects()
         else:
             self.set_part_visible("左手(盾牌)", True)
 
@@ -7179,14 +7185,18 @@ class ItemSearchApp(QWidget):
         計算統一處理，除非特殊狀態不然不要單獨處理效果
         '''        
         globals()["target_element"] = self.element_box.currentData()#先取得怪物屬性給機匠被動使用。
+
         
-        self.display_all_effects()
+        #self.display_all_effects()
         self.display_item_info()
         self.weapon_type_ui_control()
         self.replace_custom_calc_content()
         self.update_dex_int_half_note()
         self.jobsphp_display()
         self.update_total_effect_display()#過濾總效果顯示
+        
+        
+        
 
 
 
