@@ -1,5 +1,5 @@
 #部分資料取自ROCalculator,搜尋 ROCalculator 可以知道哪些有使用
-Version = "v0.2.1-260418"
+Version = "v0.2.2-260418"
 
 import sys, builtins, time
 from PySide6.QtCore import QThread, Signal, Qt, QMetaObject, QTimer
@@ -168,7 +168,7 @@ import json
 import math
 from collections import defaultdict
 import pandas as pd
-from PySide6.QtCore import Qt,QThread, Signal ,QTimer, QPoint
+from PySide6.QtCore import Qt, QThread, Signal, QTimer, QPoint, QEvent, QPropertyAnimation, QEasingCurve
 from PySide6.QtGui import QFont ,QAction,QIntValidator,QPalette, QColor
 from sympy import sympify, symbols, Symbol
 from PySide6.QtWidgets import (
@@ -3491,6 +3491,190 @@ class ItemSearchApp(QWidget):
             return set()
 
         return {part.strip() for part in s.split(",") if part.strip()}
+
+    def _build_part_nav_popup(self, visible_types):
+        self.part_nav_popup = QFrame(
+            None,
+            Qt.Tool | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint
+        )
+        self.part_nav_popup.hide()
+        self.part_nav_popup.setObjectName("partNavPopup")
+        self.part_nav_popup.setAttribute(Qt.WA_ShowWithoutActivating, True)
+        self.part_nav_popup.setStyleSheet("""
+            QFrame#partNavPopup {
+                background: #2b2b2b;
+                border: 1px solid #666;
+                border-radius: 8px;
+            }
+            QFrame#partNavPopup QPushButton {
+                padding: 6px 10px;
+                text-align: center;
+                min-width: 90px;
+            }
+        """)
+
+        outer = QVBoxLayout(self.part_nav_popup)
+        outer.setContentsMargins(8, 8, 8, 8)
+        outer.setSpacing(6)
+
+        self.part_nav_buttons = []
+
+        # 這裡排快速導航，依照遊戲順序
+        custom_rows = [
+            ["頭上", "頭中", "服飾頭上", "服飾頭中"],
+            ["頭下", "鎧甲", "服飾頭下", "影子鎧甲"],
+            ["右手(武器)", "左手(盾牌)", "影子手套", "影子盾牌"],
+            [ "披肩", "鞋子", "服飾斗篷", "影子鞋子"],
+            ["飾品右", "飾品左", "影子耳環右", "影子墬子左"],
+            ["符文石碑", "寵物蛋", "技能", "投擲物品"],
+        ]
+
+        for row_parts in custom_rows:
+            row_layout = QHBoxLayout()
+            row_layout.setSpacing(6)
+            row_layout.addStretch()
+
+            for part_name in row_parts:
+                if part_name not in self.refine_parts:
+                    continue
+                if self.refine_parts[part_name]["type"] not in visible_types:
+                    continue
+
+                btn = QPushButton(part_name)
+                btn.setCursor(Qt.PointingHandCursor)
+                btn.clicked.connect(lambda _, p=part_name: self.scroll_to_equip_part(p))
+                btn.installEventFilter(self)
+
+                self.part_nav_buttons.append(btn)
+                row_layout.addWidget(btn)
+
+            row_layout.addStretch()
+            outer.addLayout(row_layout)
+
+            used_parts = {p for row in custom_rows for p in row}
+
+            remaining_parts = [
+                part_name
+                for part_name, info in self.refine_parts.items()
+                if info["type"] in visible_types and part_name not in used_parts
+            ]
+
+            if remaining_parts:
+                custom_rows.append(remaining_parts)
+
+        self.part_nav_popup.installEventFilter(self)
+
+    def _show_part_nav_popup(self):
+        if not getattr(self, "part_nav_button", None):
+            return
+        if not getattr(self, "part_nav_popup", None):
+            return
+
+        self.part_nav_hide_timer.stop()
+        self.part_nav_popup.adjustSize()
+
+        pos = self.part_nav_button.mapToGlobal(
+            QPoint(0, self.part_nav_button.height() + 2)
+        )
+
+        self.part_nav_popup.move(pos)
+        self.part_nav_popup.show()
+        self.part_nav_popup.raise_()
+
+    def _hide_part_nav_popup(self):
+        if getattr(self, "part_nav_button", None) and self.part_nav_button.underMouse():
+            return
+
+        if getattr(self, "part_nav_popup", None):
+            if self.part_nav_popup.underMouse():
+                return
+
+            for btn in getattr(self, "part_nav_buttons", []):
+                if btn.underMouse():
+                    return
+
+            self.part_nav_popup.hide()
+
+    def scroll_to_equip_part(self, part_name):
+        part_ui = self.refine_inputs_ui.get(part_name)
+        if not part_ui:
+            return
+
+        target = part_ui["container"]
+        content_widget = self.equip_scroll.widget()
+
+        y = target.mapTo(content_widget, QPoint(0, 0)).y()
+
+        # 稍微留一點上邊距，避免貼太死
+        target_y = max(0, y - 8)
+
+        self._animate_scroll_to(target_y)
+        self._flash_part_target(target)
+
+        self.part_nav_popup.hide()
+
+    def eventFilter(self, obj, event):
+        watched = {getattr(self, "part_nav_button", None), getattr(self, "part_nav_popup", None)}
+        for btn in getattr(self, "part_nav_buttons", []):
+            watched.add(btn)
+
+        if obj in watched:
+            if event.type() == QEvent.Enter:
+                self.part_nav_hide_timer.stop()
+                if obj == self.part_nav_button:
+                    self._show_part_nav_popup()
+
+            elif event.type() == QEvent.Leave:
+                self.part_nav_hide_timer.start(150)
+
+        return super().eventFilter(obj, event)
+
+
+    def _animate_scroll_to(self, target_value):
+        scroll_bar = self.equip_scroll.verticalScrollBar()
+
+        start_value = scroll_bar.value()
+        end_value = max(scroll_bar.minimum(), min(target_value, scroll_bar.maximum()))
+        distance = abs(end_value - start_value)
+
+        if self.part_scroll_anim:
+            self.part_scroll_anim.stop()
+
+        self.part_scroll_anim = QPropertyAnimation(scroll_bar, b"value", self)
+        self.part_scroll_anim.setStartValue(start_value)
+        self.part_scroll_anim.setEndValue(end_value)
+
+        duration = max(180, min(520, int(distance * 0.6)))
+        self.part_scroll_anim.setDuration(duration)
+        self.part_scroll_anim.setEasingCurve(QEasingCurve.OutCubic)
+        self.part_scroll_anim.start()
+
+
+    def _flash_part_target(self, widget):
+        old_style = widget.property("_old_style")
+        if old_style is None:
+            old_style = widget.styleSheet()
+            widget.setProperty("_old_style", old_style)
+
+        token = time.time_ns()
+        widget.setProperty("_flash_token", token)
+
+        flash_style = (old_style or "") + """
+        background-color: rgba(100, 180, 255, 50);
+        border: 2px solid #5aa9ff;
+        border-radius: 8px;
+        """
+
+        widget.setStyleSheet(flash_style)
+
+        def restore():
+            try:
+                if widget.property("_flash_token") == token:
+                    widget.setStyleSheet(widget.property("_old_style") or "")
+            except RuntimeError:
+                pass
+
+        QTimer.singleShot(1000, restore)
 
 
     def apply_buff_to_skill_checkboxes(self, raw_buff):
@@ -6983,7 +7167,7 @@ class ItemSearchApp(QWidget):
         '''
         weapon_class = global_weapon_type_map.get(4, 0)
         print(f"weapon_class:{weapon_class}")
-        if weapon_class in [3,5,7,23,11,17,18,19,20,21,22,23]:
+        if weapon_class in [3,5,7,16,23,11,17,18,19,20,21,22]:
             self.set_part_visible("左手(盾牌)", False)
         else:
             self.set_part_visible("左手(盾牌)", True)
@@ -8640,16 +8824,48 @@ class ItemSearchApp(QWidget):
                 
 
         # === 分頁2：裝備設定 ===
+        equip_page = QWidget()
+        self.equip_page = equip_page
+        equip_page_layout = QVBoxLayout(equip_page)
+        equip_page_layout.setContentsMargins(0, 0, 0, 0)
+        equip_page_layout.setSpacing(6)
+
+        # ===== 上方固定快速定位列（不跟著捲）=====
+        top_row = QHBoxLayout()
+
+        title_label = QLabel("　裝備與卡片設定")
+        top_row.addWidget(title_label)
+        top_row.addStretch()
+
+        self.part_nav_button = QToolButton()
+        self.part_nav_button.setText("快速定位部位 ▾")
+        self.part_nav_button.setCursor(Qt.PointingHandCursor)
+        self.part_nav_button.installEventFilter(self)
+        top_row.addWidget(self.part_nav_button)
+
+        equip_page_layout.addLayout(top_row)
+
+        self.part_scroll_anim = None
+
+        self.part_nav_hide_timer = QTimer(self)
+        self.part_nav_hide_timer.setSingleShot(True)
+        self.part_nav_hide_timer.timeout.connect(self._hide_part_nav_popup)
+
+        # ===== 下方可捲動區 =====
         equip_scroll = QScrollArea()
         equip_scroll.setWidgetResizable(True)
+
         equip_inner = QWidget()
         equip_layout = QVBoxLayout(equip_inner)
         equip_scroll.setWidget(equip_inner)
 
-        equip_layout.addWidget(QLabel("裝備與卡片設定"))
-
+        self.equip_scroll = equip_scroll
         self.refine_inputs_ui = {}
         visible_types = ["裝備", "影子", "服飾", "石碑", "寵物", "技能"]
+
+        self._build_part_nav_popup(visible_types)
+
+        equip_page_layout.addWidget(equip_scroll)
 
         for part_name, info in self.refine_parts.items():
             if info["type"] not in visible_types:
@@ -8900,7 +9116,7 @@ class ItemSearchApp(QWidget):
                 part_ui["refine"].setVisible(False)
                 part_ui["grade"].setVisible(False)
 
-        tab_widget.addTab(equip_scroll, "裝備設定")
+        tab_widget.addTab(equip_page, "裝備設定")
         
         
 
