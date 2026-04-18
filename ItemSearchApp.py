@@ -1,5 +1,5 @@
 #部分資料取自ROCalculator,搜尋 ROCalculator 可以知道哪些有使用
-Version = "v0.2.0-260412"
+Version = "v0.2.1-260418"
 
 import sys, builtins, time
 from PySide6.QtCore import QThread, Signal, Qt, QMetaObject, QTimer
@@ -400,7 +400,8 @@ stat_name_sets  = {#裝備基礎編碼
 }
 
 
-weapon_type_map = {
+weapon_type_map = { # WPon()
+
     0: "空手",1: "短劍", 2: "單手劍", 3: "雙手劍", 4: "單手矛", 5: "雙手矛",
     6: "單手斧", 7: "雙手斧", 8: "鈍器", 10: "單手仗", 12: "拳套",
     13: "樂器", 14: "鞭子", 15: "書", 16: "拳刃", 23: "雙手仗",
@@ -6941,6 +6942,51 @@ class ItemSearchApp(QWidget):
 
         #self.replace_custom_calc_content()
 
+    def set_part_visible(self, part_name, visible: bool):
+        ui = self.refine_inputs_ui.get(part_name)
+        if not ui:
+            return
+
+        # 隱藏時順便清空該部位
+        if not visible:
+            equip = ui.get("equip")
+            if equip:
+                equip.clear()
+
+            refine = ui.get("refine")
+            if refine:
+                refine.setText("0")
+
+            grade = ui.get("grade")
+            if grade:
+                grade.setCurrentIndex(0)
+
+            for card in ui.get("cards", []):
+                card.clear()
+
+            note = ui.get("note")
+            if note:
+                note.clear()
+
+            note_ui = ui.get("note_ui")
+            if note_ui:
+                note_ui.clear()
+
+
+        container = ui.get("container")
+        if container:
+            container.setVisible(visible)
+
+    def weapon_type_ui_control(self):
+        '''
+        根據武器類型控制相關 UI 的顯示與隱藏
+        '''
+        weapon_class = global_weapon_type_map.get(4, 0)
+        print(f"weapon_class:{weapon_class}")
+        if weapon_class in [3,5,7,23,11,17,18,19,20,21,22,23]:
+            self.set_part_visible("左手(盾牌)", False)
+        else:
+            self.set_part_visible("左手(盾牌)", True)
 
         
 
@@ -6949,9 +6995,10 @@ class ItemSearchApp(QWidget):
         計算統一處理，除非特殊狀態不然不要單獨處理效果
         '''        
         globals()["target_element"] = self.element_box.currentData()#先取得怪物屬性給機匠被動使用。
-
+        
         self.display_all_effects()
-        self.display_item_info()        
+        self.display_item_info()
+        self.weapon_type_ui_control()
         self.replace_custom_calc_content()
         self.update_dex_int_half_note()
         self.jobsphp_display()
@@ -8549,13 +8596,55 @@ class ItemSearchApp(QWidget):
         tab_widget.addTab(char_scroll, "角色能力值")
         update_hp_sp_slider_visibility()
         
+        def make_focus_func_focus(part_label, input_field, label_name):
+            '''
+            鎖定選擇的裝備、卡片、詞條欄位，如果為詞條就轉到函數分頁
+            '''
+            def focus(event):
+                self.clear_current_edit()
+
+                self.current_edit_part = f"{part_label} - {label_name}"
+                self.current_edit_label.setText(f"目前部位：{part_label} - {label_name}")
+                self.unsync_button.setVisible(True)
+                self.unsync_button2.setVisible(True)
+                self.apply_to_note_button.setVisible(True)
+                self.clear_field_button2.setVisible(True)
+                self.apply_equip_button.setVisible(True)
+                self.clear_field_button.setVisible(True)
+                    
+                self.set_edit_lock(part_label, label_name)
+                input_field.setStyleSheet("background-color: #ff0000;")  # 紅
+                self.search_input.setFocus()  # ✅ 把焦點移到搜尋欄
+                # ✅ 若不是詞條，就切回裝備查詢分頁
+                if label_name != "note":
+                    self.tab_widget.setCurrentIndex(self.search_tab_index)
+
+                # ✅ 只有左邊欄位有文字時才清空搜尋欄位
+                if input_field.text().strip():
+                    self.search_input.setText("")
+
+                text = input_field.text().strip()
+                if text:
+                    # 搜尋對應的物品 ID
+                    for idx in range(self.result_box.count()):
+                        item_id = self.result_box.itemData(idx)
+                        item = self.filtered_items.get(item_id)
+                        if item and item["name"] == text and item_id in self.equipment_data:
+
+                            self.result_box.setCurrentIndex(idx)
+                            break
+
+
+                QLineEdit.mousePressEvent(input_field, event)
+            return focus
+                
+
         # === 分頁2：裝備設定 ===
         equip_scroll = QScrollArea()
         equip_scroll.setWidgetResizable(True)
         equip_inner = QWidget()
         equip_layout = QVBoxLayout(equip_inner)
         equip_scroll.setWidget(equip_inner)
-
 
         equip_layout.addWidget(QLabel("裝備與卡片設定"))
 
@@ -8567,58 +8656,24 @@ class ItemSearchApp(QWidget):
                 continue
 
             slot_id = info["slot"]
-            
-            def make_focus_func_focus(part_label, input_field, label_name):
-                '''
-                鎖定選擇的裝備、卡片、詞條欄位，如果為詞條就轉到函數分頁
-                '''
-                def focus(event):
-                    self.clear_current_edit()
 
-                    self.current_edit_part = f"{part_label} - {label_name}"
-                    self.current_edit_label.setText(f"目前部位：{part_label} - {label_name}")
-                    self.unsync_button.setVisible(True)
-                    self.unsync_button2.setVisible(True)
-                    self.apply_to_note_button.setVisible(True)
-                    self.clear_field_button2.setVisible(True)
-                    self.apply_equip_button.setVisible(True)
-                    self.clear_field_button.setVisible(True)
-                    
-                    self.set_edit_lock(part_label, label_name)
-                    input_field.setStyleSheet("background-color: #ff0000;")  # 紅
-                    self.search_input.setFocus()  # ✅ 把焦點移到搜尋欄
-                    # ✅ 若不是詞條，就切回裝備查詢分頁
-                    if label_name != "note":
-                        self.tab_widget.setCurrentIndex(self.search_tab_index)
-
-                    # ✅ 只有左邊欄位有文字時才清空搜尋欄位
-                    if input_field.text().strip():
-                        self.search_input.setText("")
-
-                    text = input_field.text().strip()
-                    if text:
-                        # 搜尋對應的物品 ID
-                        for idx in range(self.result_box.count()):
-                            item_id = self.result_box.itemData(idx)
-                            item = self.filtered_items.get(item_id)
-                            if item and item["name"] == text and item_id in self.equipment_data:
-
-                                self.result_box.setCurrentIndex(idx)
-                                break
-
-
-                    QLineEdit.mousePressEvent(input_field, event)
-                return focus
-                
-            
-
-            part_label = QLabel(part_name)
-            equip_layout.addWidget(part_label)
+            # =========================
+            # 每個部位一個總容器
+            # =========================
+            part_container = QWidget()
+            part_layout = QVBoxLayout(part_container)
+            part_layout.setContentsMargins(0, 0, 0, 0)
+            part_layout.setSpacing(4)
 
             part_ui = {}
-            #equip_row_layout = QHBoxLayout()
-            
-                                    # ▶️ 儲存 / 載入 / 下拉 / 刪除控制列
+            part_ui["container"] = part_container
+
+            # 部位標題
+            part_label = QLabel(part_name)
+            part_layout.addWidget(part_label)
+            part_ui["label"] = part_label
+
+            # ▶️ 儲存 / 載入 / 下拉 / 刪除控制列
             preset_row = QHBoxLayout()
 
             preset_name_input = QLineEdit()
@@ -8629,31 +8684,19 @@ class ItemSearchApp(QWidget):
             save_btn.setFixedWidth(40)
             save_btn.clicked.connect(lambda _, p=part_name: self.save_preset(p))
 
-            #preset_combo = QComboBox()
-            #preset_combo.setFixedWidth(100)
-            #preset_combo.currentIndexChanged.connect(lambda _, p=part_name: self.load_preset(p))
             manage_btn = QPushButton("讀取裝備")
             manage_btn.clicked.connect(lambda _, p=part_name: self.open_save_manager(p))
             part_ui["manage_btn"] = manage_btn
 
-
-            #delete_btn = QPushButton("刪除")
-            #delete_btn.setFixedWidth(40)
-            #delete_btn.clicked.connect(lambda _, p=part_name: self.delete_preset(p))
-
             preset_row.addWidget(preset_name_input)
             preset_row.addWidget(save_btn)
-            #preset_row.addWidget(preset_combo)
-            #preset_row.addWidget(delete_btn)
             preset_row.addWidget(manage_btn)
 
-            equip_layout.addLayout(preset_row)
+            part_layout.addLayout(preset_row)
 
-            # 保存元件供操作
             part_ui["preset_input"] = preset_name_input
-            #part_ui["preset_combo"] = preset_combo
 
-            # ▶️ 裝備欄位 + 清空（加上 container 才能單獨隱藏）
+            # ▶️ 裝備欄位 + 清空
             equip_container = QWidget()
             equip_row_layout = QHBoxLayout(equip_container)
             equip_row_layout.setContentsMargins(0, 0, 0, 0)
@@ -8677,47 +8720,44 @@ class ItemSearchApp(QWidget):
             clear_equip_btn.setFixedWidth(40)
             clear_equip_btn.clicked.connect(self.clear_global_state)
             clear_equip_btn.clicked.connect(lambda _, field=equip_input: [field.clear(), self.trigger_total_effect_update()])
-            
 
             equip_row_layout.addWidget(equip_input)
             equip_row_layout.addWidget(clear_equip_btn)
-
-            # ★ 加入 layout
-            equip_layout.addWidget(equip_container)
-
-            # ★ 存入 part_ui
-            part_ui["equip"] = equip_input
-            part_ui["equip_container"] = equip_container
-
 
             # ▶️ 精煉欄位
             refine_input = QLineEdit()
             refine_input.setPlaceholderText("精煉")
             refine_input.setMaximumWidth(40)
-            refine_input.setText('0')            
+            refine_input.setText("0")
             refine_input.textChanged.connect(self.trigger_total_effect_update)
             equip_row_layout.addWidget(refine_input)
-            part_ui["refine"] = refine_input
-            self.input_fields[part_name] = refine_input
 
             # ▶️ 階級下拉
             grade_combo = QComboBox()
             if part_name == "符文石碑":
-                grade_combo.addItems(["0", "1", "2", "3", "4", "5", "6" ])
+                grade_combo.addItems(["0", "1", "2", "3", "4", "5", "6"])
                 grade_combo.setMaximumWidth(50)
             elif part_name == "寵物蛋":
                 grade_combo.addItems(["非常陌生", "稍微陌生", "普通", "稍微親密", "非常親密"])
                 grade_combo.setMaximumWidth(95)
             else:
                 grade_combo.addItems(["N", "D", "C", "B", "A"])
-                grade_combo.setMaximumWidth(50)            
+                grade_combo.setMaximumWidth(50)
+
             grade_combo.currentIndexChanged.connect(self.trigger_total_effect_update)
             equip_row_layout.addWidget(grade_combo)
+
+            part_layout.addWidget(equip_container)
+
+            part_ui["equip"] = equip_input
+            part_ui["equip_container"] = equip_container
+            part_ui["refine"] = refine_input
             part_ui["grade"] = grade_combo
+
+            self.input_fields[part_name] = refine_input
             self.input_fields[f"{part_name}_階級"] = grade_combo
 
             # 🟢 特例：符文石碑 → 同步階級與精煉到 stat_fields
-
             if part_name == "符文石碑":
 
                 def sync_stone_slots_delayed():
@@ -8734,9 +8774,8 @@ class ItemSearchApp(QWidget):
                         stone_slot_field.setText(str(grade_val))
                         stone_slot_field.blockSignals(False)
                     self.trigger_total_effect_update()
-                    
+
                 def sync_stone_slots(*_):
-                    # 🔹 延遲一個事件循環再執行，確保取到更新後的值
                     QTimer.singleShot(0, sync_stone_slots_delayed)
 
                 def sync_stone_refine():
@@ -8757,19 +8796,16 @@ class ItemSearchApp(QWidget):
                 grade_combo.currentIndexChanged.connect(sync_stone_slots)
                 refine_input.textChanged.connect(sync_stone_refine)
 
-            
-
-            # ▶️ 將裝備行 layout 加進主 layout
-            #equip_layout.addLayout(equip_row_layout)
-
             # ▶️ 卡片欄位們 + 清空按鈕
             card_inputs = []
+            card_containers = []
+
             for i in range(4):
                 card_row_layout = QHBoxLayout()
                 card_row_layout.setSpacing(0)
                 card_row_layout.setContentsMargins(0, 0, 0, 0)
+
                 card_input = QLineEdit()
-                
                 card_input.setReadOnly(True)
                 card_input.setPlaceholderText(f"卡片 {i+1}")
                 card_input.mousePressEvent = make_focus_func_focus(part_name, card_input, f"卡片{i+1}")
@@ -8778,47 +8814,42 @@ class ItemSearchApp(QWidget):
                 clear_card_btn.setFixedWidth(40)
                 clear_card_btn.clicked.connect(self.clear_global_state)
                 clear_card_btn.clicked.connect(lambda _, field=card_input: [field.clear(), self.trigger_total_effect_update()])
-                
+
                 card_row_layout.addWidget(card_input)
                 card_row_layout.addWidget(clear_card_btn)
 
-                # 把卡片欄整行加進主裝備 layout
                 card_container = QWidget()
                 card_container.setLayout(card_row_layout)
-                equip_layout.addWidget(card_container)
+                part_layout.addWidget(card_container)
 
                 card_inputs.append(card_input)
-                
-
+                card_containers.append(card_container)
 
             # ▶️ 詞條欄位（多行文字）+ 清空
             note_text = QTextEdit()
             note_text.setPlaceholderText("lua函數")
-            note_text.setObjectName(f"{part_name}-函數")  # 例如 "頭上-詞條"
-            note_text.setFixedSize(260, 20)  # ✅ 固定寬與高（寬度固定在300）
+            note_text.setObjectName(f"{part_name}-函數")
+            note_text.setFixedSize(260, 20)
             note_text.setContentsMargins(0, 0, 0, 0)
-            note_text.setReadOnly(True) 
+            note_text.setReadOnly(True)
             note_text.setVisible(False)
             note_text.textChanged.connect(self.on_function_text_changed)
 
             note_text_ui = QTextEdit()
             note_text_ui.setPlaceholderText("自訂詞條效果")
-            note_text_ui.setObjectName(f"{part_name}-詞條")  # 例如 "頭上-詞條"
-            note_text_ui.setFixedSize(260, 20)  # ✅ 固定寬與高（寬度固定在300）
+            note_text_ui.setObjectName(f"{part_name}-詞條")
+            note_text_ui.setFixedSize(260, 20)
             note_text_ui.setContentsMargins(0, 0, 0, 0)
-            note_text_ui.setReadOnly(True) 
+            note_text_ui.setReadOnly(True)
             note_text_ui.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
             note_text_ui.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-            note_text_ui.mousePressEvent = lambda event, p=part_name, w=note_text_ui , u=note_text: self.handle_note_text_clicked(event, p, w , u)
-            
+            note_text_ui.mousePressEvent = lambda event, p=part_name, w=note_text_ui, u=note_text: self.handle_note_text_clicked(event, p, w, u)
 
-            
             clear_note_btn = QPushButton("清空")
             clear_note_btn.setFixedWidth(40)
             clear_note_btn.clicked.connect(self.clear_global_state)
-            clear_note_btn.clicked.connect(lambda _, field=note_text: [field.clear() ,self.trigger_total_effect_update()])
-            
-            
+            clear_note_btn.clicked.connect(lambda _, field=note_text: [field.clear(), self.trigger_total_effect_update()])
+
             note_row_layout = QHBoxLayout()
             note_row_layout.setContentsMargins(0, 0, 0, 0)
             note_row_layout.setSpacing(5)
@@ -8828,73 +8859,46 @@ class ItemSearchApp(QWidget):
 
             note_container = QWidget()
             note_container.setLayout(note_row_layout)
-            note_container.setFixedWidth(300)  # ✅ 包裹容器也設定固定寬度
+            note_container.setFixedWidth(300)
 
-            equip_layout.addWidget(note_container)
-            
-            
+            part_layout.addWidget(note_container)
 
-            part_ui["note"] = note_text  # ✅ 儲存以便之後取用
-            part_ui["cards"] = card_inputs
+            part_ui["note"] = note_text
             part_ui["note_ui"] = note_text_ui
-            
-            
+            part_ui["note_container"] = note_container
+            part_ui["cards"] = card_inputs
+            part_ui["card_containers"] = card_containers
+
+            # 最後再把整個部位丟進主 layout
+            equip_layout.addWidget(part_container)
 
             self.refine_inputs_ui[part_name] = part_ui
             self.refresh_presets(part_name)
 
-            # 🟢 特例：符文石碑 → 隱藏卡片與詞條欄位
-            if part_name in ("符文石碑", "寵物蛋","投擲物品"):
-                # 隱藏卡片欄位
-                for c in part_ui["cards"]:
-                    c.setVisible(False)
-                    parent_layout = c.parentWidget()
-                    if parent_layout:
-                        parent_layout.setVisible(False)
+            # 🟢 特例：符文石碑 / 寵物蛋 / 投擲物品 → 隱藏卡片與詞條欄位
+            if part_name in ("符文石碑", "寵物蛋", "投擲物品"):
+                for w in part_ui["card_containers"]:
+                    w.setVisible(False)
 
-                # 隱藏詞條區
-                if "note" in part_ui:
-                    part_ui["note"].setVisible(False)
-                if "note_ui" in part_ui:
-                    part_ui["note_ui"].setVisible(False)
-                note_widget = part_ui["note"].parentWidget()
-                if note_widget:
-                    note_widget.setVisible(False)
+                if "note_container" in part_ui:
+                    part_ui["note_container"].setVisible(False)
 
                 if part_name == "投擲物品":
-                    refine_widget = part_ui["refine"]
-                    refine_widget.setVisible(False)
-                    grade_widget = part_ui["grade"]
-                    grade_widget.setVisible(False)
+                    part_ui["refine"].setVisible(False)
+                    part_ui["grade"].setVisible(False)
 
-                # 🧩 若是寵物蛋，再隱藏精煉欄位
                 if part_name == "寵物蛋" and "refine" in part_ui:
-                    refine_widget = part_ui["refine"]
-                    refine_widget.setVisible(False)
-                    refine_parent = refine_widget.parentWidget()
-                    if refine_parent:
-                        refine_widget.hide()  # 雙保險：同時呼叫 hide()
+                    part_ui["refine"].setVisible(False)
 
-            #技能只顯示詞條
+            # 技能只顯示詞條
             if part_name == "技能":
-                equip_widget = part_ui["equip"]
-                equip_widget.setVisible(False)
                 part_ui["equip_container"].setVisible(False)
-                # 隱藏卡片欄位
-                for c in part_ui["cards"]:
-                    c.setVisible(False)
-                    parent_layout = c.parentWidget()
-                    if parent_layout:
-                        parent_layout.setVisible(False)
 
-                refine_widget = part_ui["refine"]
-                refine_widget.setVisible(False)
+                for w in part_ui["card_containers"]:
+                    w.setVisible(False)
 
-                grade_widget = part_ui["grade"]
-                grade_widget.setVisible(False)
-
-
-
+                part_ui["refine"].setVisible(False)
+                part_ui["grade"].setVisible(False)
 
         tab_widget.addTab(equip_scroll, "裝備設定")
         
