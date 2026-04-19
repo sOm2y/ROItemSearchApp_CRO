@@ -23,13 +23,39 @@ SHOW_ONLY_PARSED_SLOTS = True   # 只顯示有解析/開關開啟的 slot
 #料理組合 自動轉換
 EFST_COMBO_RULES = [
     {
-        "sources": {271, 272, 273, 274, 275, 276},#活力激發劑
-        "target": 1641,
+        "sources": {241, 242, 243, 244, 245, 246},#活力激發劑
+        "target": {1641},
         "block_if_all_present": {1034, 685},  # 其中有一個存在，就不轉
     },
     {
         "sources": {150, 151, 247, 248},#戰神蒂爾之祝福
-        "target": 796,
+        "target": {796},
+        "block_if_all_present": {},  #
+    },
+    {
+        "sources": {150, 241},#力量棒棒條
+        "target": {150, 271},
+        "block_if_all_present": {},  #
+    },
+    {
+        "sources": {247, 242},#敏捷棒棒條
+        "target": {247, 272},
+        "block_if_all_present": {},  #
+    },
+    #體力棒棒條是回HP%無法寫轉換。
+    {
+        "sources": {151, 245},#智力棒棒條
+        "target": {151, 275},
+        "block_if_all_present": {},  #
+    },
+    {
+        "sources": {248, 244},#靈巧棒棒條
+        "target": {248, 274},
+        "block_if_all_present": {},  #
+    },
+    {
+        "sources": {249, 246},#幸運棒棒條
+        "target": {249, 276},
         "block_if_all_present": {},  #
     }
 ]
@@ -617,30 +643,66 @@ def apply_efst_combo_transform(results, combo_rules):
     existing_ids = {item["id"] for item in results}
     matched_source_ids = set()
     new_entries = []
+    produced_ids = set()
 
     for rule in combo_rules:
         sources = set(rule["sources"])
-        target = rule["target"]
-        block_if_all_present = set(rule.get("block_if_all_present", []))
+        target_spec = rule.get("targets", rule.get("target"))
+        block_if_any_present = set(
+            rule.get("block_if_any_present", rule.get("block_if_all_present", set()))
+        )
 
         if not sources.issubset(existing_ids):
             continue
 
-        if block_if_all_present and (block_if_all_present & existing_ids):
+        # 只要 block 名單中任一個存在，就擋掉
+        if block_if_any_present & existing_ids:
+            continue
+
+        if target_spec is None:
             continue
 
         matched_source_ids.update(sources)
-        new_entries.append({
-            "id": target,
-            "name": f"COMBO_{'_'.join(map(str, sorted(sources)))}",
-            "descript": [f"由組合 {sorted(sources)} 自動轉換"]
-        })
+
+        # target_spec 支援：
+        # 1. 單一值: 100
+        # 2. set: {100, 101}
+        # 3. dict:
+        #    {
+        #        100: {"name": "...", "descript": [...]},
+        #        101: {"name": "...", "descript": [...]}
+        #    }
+        if isinstance(target_spec, dict):
+            iterable = target_spec.items()
+        elif isinstance(target_spec, (set, list, tuple)):
+            iterable = ((target_id, None) for target_id in target_spec)
+        else:
+            iterable = ((target_spec, None),)
+
+        for target_id, meta in iterable:
+            if target_id in produced_ids or target_id in existing_ids:
+                continue
+
+            if isinstance(meta, dict):
+                entry = {
+                    "id": target_id,
+                    "name": meta.get("name", f"COMBO_{'_'.join(map(str, sorted(sources)))}_{target_id}"),
+                    "descript": meta.get("descript", [f"由組合 {sorted(sources)} 自動轉換"])
+                }
+            else:
+                entry = {
+                    "id": target_id,
+                    "name": f"COMBO_{'_'.join(map(str, sorted(sources)))}_{target_id}",
+                    "descript": [f"由組合 {sorted(sources)} 自動轉換"]
+                }
+
+            new_entries.append(entry)
+            produced_ids.add(target_id)
 
     filtered = [item for item in results if item["id"] not in matched_source_ids]
     filtered.extend(new_entries)
     filtered.sort(key=lambda x: x["id"])
     return filtered
-
 
 def extract_hex_bytes_from_block(block):
     import re
