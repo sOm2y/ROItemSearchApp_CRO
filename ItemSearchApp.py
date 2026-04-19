@@ -1,5 +1,5 @@
 #部分資料取自ROCalculator,搜尋 ROCalculator 可以知道哪些有使用
-Version = "v0.2.3-260418"
+Version = "v0.2.4-260419"
 
 import sys, builtins, time
 from PySide6.QtCore import QThread, Signal, Qt, QMetaObject, QTimer
@@ -1517,6 +1517,8 @@ class CSVEditor(QMainWindow):
                 edit_field.addItem("物理", "physical")
                 edit_field.addItem("魔法", "magic")
                 edit_field.addItem("龍息", "d_b")
+                edit_field.addItem("護盾", "shield")
+
             elif header.lower() in ("element","combo_element"):
                 edit_field = QComboBox()
                 element_options = [
@@ -1634,7 +1636,7 @@ class CSVEditor(QMainWindow):
                         idx = widget.findData(txt.lower())
                         if idx < 0:
                             # 舊資料可能是中文 → 映射到英文再找
-                            zh2en = {"魔法": "magic", "物理": "physical", "龍息":"d_b"}
+                            zh2en = {"魔法": "magic", "物理": "physical", "龍息":"d_b" , "護盾":"shield"}
                             mapped = zh2en.get(txt)
                             if mapped:
                                 idx = widget.findData(mapped)
@@ -5133,7 +5135,11 @@ class ItemSearchApp(QWidget):
                             (get_damage_multiplier(user_attack_element, target_element, target_element_lv),0,"屬性倍率%")
                         )
                         
-                        
+                    elif attack_type == "shield":
+                        final_damage_min = 0
+                        final_damage = 0
+                        pass
+
 
                     else:
                         raise ValueError(f"未知的攻擊類型: {attack_type}")
@@ -5288,223 +5294,227 @@ class ItemSearchApp(QWidget):
         all_total_damage_min = 0
         all_total_damage = 0
 
-        # 判斷是否存在 combo 均分段（技能 times > 1 且每段是均分）
-        combo_split_results = [r for r in results[1:] if r["times"] > 1 and r["damage_by_hit"] * r["times"] == r["total_damage"]]
-
-        # === 情境：主技能 + combo 均分段 ===
-        if len(results) > 1 and combo_split_results:
-            # 顯示主技能段
-            r = results[0]
-            main_element_name = element_map.get(r["user_attack_element"], f"未知({r['user_attack_element']})")
-            result.append(f"【{main_element_name}】==================主技能總傷害===========================")
-            if Critical_hit > 0:#吃爆擊顯示最大值
-                result.append(f"單次傷害:     {r['damage_by_hit']:,}")
-                result.append(f"打擊次數:     {r['times']} 次")
-                result.append(f"主技能總傷害: {r['total_damage']:,}")
-            else:
-                result.append(f"單次傷害:     {r['damage_by_hit_min']:,} ~ {r['damage_by_hit']:,}")
-                result.append(f"打擊次數:     {r['times']} 次")
-                result.append(f"主技能總傷害: {r['total_damage_min']:,} ~ {r['total_damage']:,}")
-            all_total_damage_min += r['total_damage_min']
-            all_total_damage += r['total_damage']
-
-            # 顯示 combo 均分段（只取第一段為代表）
-            r = combo_split_results[0]
-            combo_main_element_name = element_map.get(r["user_attack_element"], f"未知({r['user_attack_element']})")
-            combo_total_min = r["damage_by_hit_min"] * r["times"]
-            combo_total = r["damage_by_hit"] * r["times"]
-            result.append(f"【{combo_main_element_name}】===============COMBO 技能（均分）========================")
-            if Critical_hit > 0:#吃爆擊顯示最大值
-                result.append(f"單次傷害(COMBO): {r['damage_by_hit']:,}")
-                result.append(f"打擊次數(COMBO): {r['times']} 次")
-                result.append(f"總傷害(COMBO):   {combo_total:,}")
-            else:
-                result.append(f"單次傷害(COMBO): {r['damage_by_hit_min']:,} ~ {r['damage_by_hit']:,}")
-                result.append(f"打擊次數(COMBO): {r['times']} 次")
-                result.append(f"總傷害(COMBO):   {combo_total_min:,} ~ {combo_total:,}")
-            all_total_damage_min += combo_total_min
-            all_total_damage += combo_total
-
-            # 顯示合計
-            result.append(f" ")
-            #result.append(f"============================總傷害合計=============================")
-            if Critical_hit > 0:#吃爆擊顯示最大值
-                result.append(f"總傷害:  {all_total_damage:,}")
-            else:
-                result.append(f"總傷害:  {all_total_damage_min:,} ~ {all_total_damage:,}")
-
-        # === 正常多段技能（非均分）===
-        elif len(results) > 1:
-            result.append(f"【{element_map.get(User_attack_element, User_attack_element)}】===========以下總傷害數值（共 {len(results)} 次）====================")
-            for idx, r in enumerate(results, start=1):
+        if attack_type == "shield":            
+            result.append(f"")
+            result.append(f"{pad_label('護盾可抵擋傷害:')}{results[0]['skill_result']:,}")
+            result.append(f"")
+        else:
+            # 判斷是否存在 combo 均分段（技能 times > 1 且每段是均分）
+            combo_split_results = [r for r in results[1:] if r["times"] > 1 and r["damage_by_hit"] * r["times"] == r["total_damage"]]
+            # === 情境：主技能 + combo 均分段 ===
+            if len(results) > 1 and combo_split_results:
+                # 顯示主技能段
+                r = results[0]
+                main_element_name = element_map.get(r["user_attack_element"], f"未知({r['user_attack_element']})")
+                result.append(f"【{main_element_name}】==================主技能總傷害===========================")
                 if Critical_hit > 0:#吃爆擊顯示最大值
-                    result.append(f"第 {idx}/{len(results)} 次傷害: {r['total_damage']:,}")
+                    result.append(f"單次傷害:     {r['damage_by_hit']:,}")
+                    result.append(f"打擊次數:     {r['times']} 次")
+                    result.append(f"主技能總傷害: {r['total_damage']:,}")
                 else:
-                    result.append(f"第 {idx}/{len(results)} 次傷害: {r['total_damage_min']:,} ~ {r['total_damage']:,}")
+                    result.append(f"單次傷害:     {r['damage_by_hit_min']:,} ~ {r['damage_by_hit']:,}")
+                    result.append(f"打擊次數:     {r['times']} 次")
+                    result.append(f"主技能總傷害: {r['total_damage_min']:,} ~ {r['total_damage']:,}")
                 all_total_damage_min += r['total_damage_min']
                 all_total_damage += r['total_damage']
-                # result.append(f"------------------------------------------------------------------")
-            if Critical_hit > 0:#吃爆擊顯示最大值
-                result.append(f"總傷害:  {all_total_damage:,}")
+
+                # 顯示 combo 均分段（只取第一段為代表）
+                r = combo_split_results[0]
+                combo_main_element_name = element_map.get(r["user_attack_element"], f"未知({r['user_attack_element']})")
+                combo_total_min = r["damage_by_hit_min"] * r["times"]
+                combo_total = r["damage_by_hit"] * r["times"]
+                result.append(f"【{combo_main_element_name}】===============COMBO 技能（均分）========================")
+                if Critical_hit > 0:#吃爆擊顯示最大值
+                    result.append(f"單次傷害(COMBO): {r['damage_by_hit']:,}")
+                    result.append(f"打擊次數(COMBO): {r['times']} 次")
+                    result.append(f"總傷害(COMBO):   {combo_total:,}")
+                else:
+                    result.append(f"單次傷害(COMBO): {r['damage_by_hit_min']:,} ~ {r['damage_by_hit']:,}")
+                    result.append(f"打擊次數(COMBO): {r['times']} 次")
+                    result.append(f"總傷害(COMBO):   {combo_total_min:,} ~ {combo_total:,}")
+                all_total_damage_min += combo_total_min
+                all_total_damage += combo_total
+
+                # 顯示合計
+                result.append(f" ")
+                #result.append(f"============================總傷害合計=============================")
+                if Critical_hit > 0:#吃爆擊顯示最大值
+                    result.append(f"總傷害:  {all_total_damage:,}")
+                else:
+                    result.append(f"總傷害:  {all_total_damage_min:,} ~ {all_total_damage:,}")
+
+            # === 正常多段技能（非均分）===
+            elif len(results) > 1:
+                result.append(f"【{element_map.get(User_attack_element, User_attack_element)}】===========以下總傷害數值（共 {len(results)} 次）====================")
+                for idx, r in enumerate(results, start=1):
+                    if Critical_hit > 0:#吃爆擊顯示最大值
+                        result.append(f"第 {idx}/{len(results)} 次傷害: {r['total_damage']:,}")
+                    else:
+                        result.append(f"第 {idx}/{len(results)} 次傷害: {r['total_damage_min']:,} ~ {r['total_damage']:,}")
+                    all_total_damage_min += r['total_damage_min']
+                    all_total_damage += r['total_damage']
+                    # result.append(f"------------------------------------------------------------------")
+                if Critical_hit > 0:#吃爆擊顯示最大值
+                    result.append(f"總傷害:  {all_total_damage:,}")
+                else:
+                    result.append(f"總傷害:  {all_total_damage_min:,} ~ {all_total_damage:,}")
+
+            # === 單段技能 ===
             else:
-                result.append(f"總傷害:  {all_total_damage_min:,} ~ {all_total_damage:,}")
+                r = results[0]
+                result.append(f"【{element_map.get(User_attack_element, User_attack_element)}】=================以下總傷害數值===========================")
+                if Critical_hit > 0:#吃爆擊顯示最大值
+                    result.append(f"單次傷害: {r['damage_by_hit']:,}")
+                    result.append(f"打擊次數: {r['times']} 次")
+                    result.append(f"總傷害:   {r['total_damage']:,}")
+                else:
+                    result.append(f"單次傷害: {r['damage_by_hit_min']:,} ~ {r['damage_by_hit']:,}")
+                    result.append(f"打擊次數: {r['times']} 次")
+                    result.append(f"總傷害:   {r['total_damage_min']:,} ~ {r['total_damage']:,}")
 
-        # === 單段技能 ===
-        else:
-            r = results[0]
-            result.append(f"【{element_map.get(User_attack_element, User_attack_element)}】=================以下總傷害數值===========================")
-            if Critical_hit > 0:#吃爆擊顯示最大值
-                result.append(f"單次傷害: {r['damage_by_hit']:,}")
-                result.append(f"打擊次數: {r['times']} 次")
-                result.append(f"總傷害:   {r['total_damage']:,}")
-            else:
-                result.append(f"單次傷害: {r['damage_by_hit_min']:,} ~ {r['damage_by_hit']:,}")
-                result.append(f"打擊次數: {r['times']} 次")
-                result.append(f"總傷害:   {r['total_damage_min']:,} ~ {r['total_damage']:,}")
+            # ✅ 加上 decay_hits 顯示處理
+            decay_hits = int(skill_row["decay_hits"]) if pd.notna(skill_row.get("decay_hits")) else 0
+            #print(f"遞增/減次數：{decay_hits}")
+            if decay_hits > 1:
+                avg_damage = int(all_total_damage / decay_hits)
+                result.append(f"遞增/減段數: {decay_hits} 段")
+                result.append(f"平均每段傷害: {avg_damage:,}")
+                #result.append(f"總傷害:   {avg_damage * decay_hits:,}")
 
-        # ✅ 加上 decay_hits 顯示處理
-        decay_hits = int(skill_row["decay_hits"]) if pd.notna(skill_row.get("decay_hits")) else 0
-        #print(f"遞增/減次數：{decay_hits}")
-        if decay_hits > 1:
-            avg_damage = int(all_total_damage / decay_hits)
-            result.append(f"遞增/減段數: {decay_hits} 段")
-            result.append(f"平均每段傷害: {avg_damage:,}")
-            #result.append(f"總傷害:   {avg_damage * decay_hits:,}")
+            if attack_type == "magic":
+                self.def_label.setVisible(False)
+                self.def_input.setVisible(False)
+                self.defc_label.setVisible(False)
+                self.defc_input.setVisible(False)
+                self.res_label.setVisible(False)
+                self.res_input.setVisible(False)
+                self.mdef_label.setVisible(True)
+                self.mdef_input.setVisible(True)
+                self.mdefc_label.setVisible(True)
+                self.mdefc_input.setVisible(True)
+                self.mres_label.setVisible(True)
+                self.mres_input.setVisible(True)
+                result.append(f"=========================以下各增傷數值===========================")
+                result.append(f"{pad_label('前MATK:')}{MATKF:,}")
+                result.append(f"{pad_label('後MATK:')}{MATKC:,}")
+                result.append(f"{pad_label('武器MATK:')}{MATK_Mweapon:,}")
+                result.append(f"{pad_label('裝備MATK+魔力:')}{armorMATK_MAGICPOWER}")
+                result.append(f"{pad_label('MATK%:')}{round(MATK_percent)}%")
+                result.append(f"{pad_label('魔法體型:')}{round(get_effect_multiplier('MD_size', target_size))}%")
+                result.append(f"{pad_label('魔法屬性敵人:')}{round(get_effect_multiplier('MD_element', target_element) + get_effect_multiplier('MD_element', 10))}%")
+                result.append(f"{pad_label('屬性耐受性:')}{round((skill_wanzih4_buff + skill_poison_weak_buff + magic_poison_buff)*100)}%")
+                result.append(f"{pad_label('屬性魔法:')}{round(get_effect_multiplier('MD_Damage', User_attack_element) + get_effect_multiplier('MD_Damage', 10))}%")
+                result.append(f"{pad_label('魔法種族:')}{round(get_effect_multiplier('MD_Race', target_race) + get_effect_multiplier('MD_Race', 9999))}%")
+                result.append(f"{pad_label('魔法階級:')}{round(get_effect_multiplier('MD_class', target_class))}%")
+                result.append(f"{pad_label('魔物增傷:')}{round(target_monsterMDamage)}%")
+                result.append(f"{pad_label('S.MATK:')}{round(total_SMATK)}")
+                result.append(f"{pad_label('技能倍率:')}{results[0]['skill_result']}%")
+                result.append(f"{pad_label('屬性倍率:')}{get_damage_multiplier(User_attack_element, target_element, target_element_lv)}%")
+                result.append(f"{pad_label('後MDEF:')}{target_mdef}")
+                result.append(f"{pad_label('無視魔法階級防禦:')}{round(get_effect_multiplier('MD_class_def', target_class))}%")
+                result.append(f"{pad_label('無視魔法種族防禦:')}{round(get_effect_multiplier('MD_Race_def', target_race) + get_effect_multiplier('MD_Race_def', 9999))}%")
+                result.append(f"{pad_label('魔法破防後傷害:')}{Mdamage_nomdef * 100:.2f}%")
+                result.append(f"{pad_label('前MDEF:')}{target_mdefc}")
+                result.append(f"{pad_label('MRES:')}{target_mres}")
+                result.append(f"{pad_label('無視魔法抗性%:')}{mres_reduction}%")
+                result.append(f"{pad_label('魔法破抗性後傷害:')}{Mdamage_nomres * 100:.2f}%")
 
-        if attack_type == "magic":
-            self.def_label.setVisible(False)
-            self.def_input.setVisible(False)
-            self.defc_label.setVisible(False)
-            self.defc_input.setVisible(False)
-            self.res_label.setVisible(False)
-            self.res_input.setVisible(False)
-            self.mdef_label.setVisible(True)
-            self.mdef_input.setVisible(True)
-            self.mdefc_label.setVisible(True)
-            self.mdefc_input.setVisible(True)
-            self.mres_label.setVisible(True)
-            self.mres_input.setVisible(True)
-            result.append(f"=========================以下各增傷數值===========================")
-            result.append(f"{pad_label('前MATK:')}{MATKF:,}")
-            result.append(f"{pad_label('後MATK:')}{MATKC:,}")
-            result.append(f"{pad_label('武器MATK:')}{MATK_Mweapon:,}")
-            result.append(f"{pad_label('裝備MATK+魔力:')}{armorMATK_MAGICPOWER}")
-            result.append(f"{pad_label('MATK%:')}{round(MATK_percent)}%")
-            result.append(f"{pad_label('魔法體型:')}{round(get_effect_multiplier('MD_size', target_size))}%")
-            result.append(f"{pad_label('魔法屬性敵人:')}{round(get_effect_multiplier('MD_element', target_element) + get_effect_multiplier('MD_element', 10))}%")
-            result.append(f"{pad_label('屬性耐受性:')}{round((skill_wanzih4_buff + skill_poison_weak_buff + magic_poison_buff)*100)}%")
-            result.append(f"{pad_label('屬性魔法:')}{round(get_effect_multiplier('MD_Damage', User_attack_element) + get_effect_multiplier('MD_Damage', 10))}%")
-            result.append(f"{pad_label('魔法種族:')}{round(get_effect_multiplier('MD_Race', target_race) + get_effect_multiplier('MD_Race', 9999))}%")
-            result.append(f"{pad_label('魔法階級:')}{round(get_effect_multiplier('MD_class', target_class))}%")
-            result.append(f"{pad_label('魔物增傷:')}{round(target_monsterMDamage)}%")
-            result.append(f"{pad_label('S.MATK:')}{round(total_SMATK)}")
-            result.append(f"{pad_label('技能倍率:')}{results[0]['skill_result']}%")
-            result.append(f"{pad_label('屬性倍率:')}{get_damage_multiplier(User_attack_element, target_element, target_element_lv)}%")
-            result.append(f"{pad_label('後MDEF:')}{target_mdef}")
-            result.append(f"{pad_label('無視魔法階級防禦:')}{round(get_effect_multiplier('MD_class_def', target_class))}%")
-            result.append(f"{pad_label('無視魔法種族防禦:')}{round(get_effect_multiplier('MD_Race_def', target_race) + get_effect_multiplier('MD_Race_def', 9999))}%")
-            result.append(f"{pad_label('魔法破防後傷害:')}{Mdamage_nomdef * 100:.2f}%")
-            result.append(f"{pad_label('前MDEF:')}{target_mdefc}")
-            result.append(f"{pad_label('MRES:')}{target_mres}")
-            result.append(f"{pad_label('無視魔法抗性%:')}{mres_reduction}%")
-            result.append(f"{pad_label('魔法破抗性後傷害:')}{Mdamage_nomres * 100:.2f}%")
+            elif attack_type == "physical":
+                self.def_label.setVisible(True)
+                self.def_input.setVisible(True)
+                self.defc_label.setVisible(True)
+                self.defc_input.setVisible(True)
+                self.res_label.setVisible(True)
+                self.res_input.setVisible(True)
+                self.mdef_label.setVisible(False)
+                self.mdef_input.setVisible(False)
+                self.mdefc_label.setVisible(False)
+                self.mdefc_input.setVisible(False)
+                self.mres_label.setVisible(False)
+                self.mres_input.setVisible(False)
+                result.append(f"=========================以下各增傷數值===========================")
+                if weapon_class in (11,13,14,17,18,19,20,21):#DEX系
+                    result.append(f"{pad_label('前ATK (DEX系):')}{FATK:,}")
+                else:#STR系
+                    result.append(f"{pad_label('前ATK(STR系):')}{NATK:,}")
+                result.append(f"{pad_label('後ATK:')}{AKTC + KamuiATK + atk_refine_total_L + ATK_MweaponL:,}")
+                result.append(f"{pad_label('武器ATK:')}{ATK_Mweapon:,}")
+                result.append(f"{pad_label('修煉ATK:')}{WeaponMasteryATK:,}")
+                result.append(f"{pad_label('物理ATK%:')}{round(ATK_percent)}%")
+                result.append(f"{pad_label('物理體型:')}{round(get_effect_multiplier('D_size', target_size))}%")
+                result.append(f"{pad_label('物理種族:')}{round(get_effect_multiplier('D_Race', target_race) + get_effect_multiplier('D_Race', 9999))}%")
+                result.append(f"{pad_label('物理階級:')}{round(get_effect_multiplier('D_class', target_class))}%")
+                result.append(f"{pad_label('魔物增傷:')}{round(target_monsterDamage)}%")
+                result.append(f"{pad_label('P.ATK:')}{round(total_PATK)}")
+                result.append(f"{pad_label('物理屬性敵人:')}{round(get_effect_multiplier('D_element', target_element) + get_effect_multiplier('D_element', 10))}%")
+                result.append(f"{pad_label('物理命中:')}{round(Damage_HIT)}%")
+                result.append(f"{pad_label('爆傷:')}{round(Damage_CRI)}%")
 
-        elif attack_type == "physical":
-            self.def_label.setVisible(True)
-            self.def_input.setVisible(True)
-            self.defc_label.setVisible(True)
-            self.defc_input.setVisible(True)
-            self.res_label.setVisible(True)
-            self.res_input.setVisible(True)
-            self.mdef_label.setVisible(False)
-            self.mdef_input.setVisible(False)
-            self.mdefc_label.setVisible(False)
-            self.mdefc_input.setVisible(False)
-            self.mres_label.setVisible(False)
-            self.mres_input.setVisible(False)
-            result.append(f"=========================以下各增傷數值===========================")
-            if weapon_class in (11,13,14,17,18,19,20,21):#DEX系
-                result.append(f"{pad_label('前ATK (DEX系):')}{FATK:,}")
-            else:#STR系
-                result.append(f"{pad_label('前ATK(STR系):')}{NATK:,}")
-            result.append(f"{pad_label('後ATK:')}{AKTC + KamuiATK + atk_refine_total_L + ATK_MweaponL:,}")
-            result.append(f"{pad_label('武器ATK:')}{ATK_Mweapon:,}")
-            result.append(f"{pad_label('修煉ATK:')}{WeaponMasteryATK:,}")
-            result.append(f"{pad_label('物理ATK%:')}{round(ATK_percent)}%")
-            result.append(f"{pad_label('物理體型:')}{round(get_effect_multiplier('D_size', target_size))}%")
-            result.append(f"{pad_label('物理種族:')}{round(get_effect_multiplier('D_Race', target_race) + get_effect_multiplier('D_Race', 9999))}%")
-            result.append(f"{pad_label('物理階級:')}{round(get_effect_multiplier('D_class', target_class))}%")
-            result.append(f"{pad_label('魔物增傷:')}{round(target_monsterDamage)}%")
-            result.append(f"{pad_label('P.ATK:')}{round(total_PATK)}")
-            result.append(f"{pad_label('物理屬性敵人:')}{round(get_effect_multiplier('D_element', target_element) + get_effect_multiplier('D_element', 10))}%")
-            result.append(f"{pad_label('物理命中:')}{round(Damage_HIT)}%")
-            result.append(f"{pad_label('爆傷:')}{round(Damage_CRI)}%")
+                if skill_Rangedamage == 1:#遠傷判斷
+                    if weapon_class == 11:
+                        result.append(f"{pad_label('遠傷:')}{round(RangeAttackDamage + BowAtk)}%")
+                    else:
+                        result.append(f"{pad_label('遠傷:')}{round(RangeAttackDamage)}%")
+                
+                else:
+                    result.append(f"{pad_label('近傷:')}{round(MeleeAttackDamage)}%")
 
-            if skill_Rangedamage == 1:#遠傷判斷
+                result.append(f"{pad_label('CRATE:')}{round(total_CRATE)}")
+                result.append(f"{pad_label('技能倍率:')}{results[0]['skill_result']}%")
+                result.append(f"{pad_label('屬性倍率:')}{get_damage_multiplier(User_attack_element, target_element, target_element_lv)}%")
+                result.append(f"{pad_label('武器體型修正:')}{Weaponpunish*100}%")
+                result.append(f"{pad_label('後DEF:')}{target_def}")
+                result.append(f"{pad_label('無視階級防禦:')}{round(get_effect_multiplier('D_class_def', target_class))}%")
+                result.append(f"{pad_label('無視種族防禦:')}{round(get_effect_multiplier('D_Race_def', target_race) + get_effect_multiplier('D_Race_def', 9999))}%")
+                result.append(f"{pad_label('物理破防後傷害:')}{damage_nodef * 100:.2f}%")
+                result.append(f"{pad_label('前DEF:')}{target_defc}")
+                result.append(f"{pad_label('RES:')}{target_res}")
+                result.append(f"{pad_label('無視物理抗性%:')}{res_reduction}%")
+                result.append(f"{pad_label('物理破抗性後傷害:')}{damage_nores * 100:.2f}%")
+
+            elif attack_type == "d_b":
+                self.def_label.setVisible(True)
+                self.def_input.setVisible(True)
+                self.defc_label.setVisible(True)
+                self.defc_input.setVisible(True)
+                self.res_label.setVisible(True)
+                self.res_input.setVisible(True)
+                self.mdef_label.setVisible(False)
+                self.mdef_input.setVisible(False)
+                self.mdefc_label.setVisible(False)
+                self.mdefc_input.setVisible(False)
+                self.mres_label.setVisible(False)
+                self.mres_input.setVisible(False)
+                result.append(f"=========================以下各增傷數值===========================")
+
                 if weapon_class == 11:
                     result.append(f"{pad_label('遠傷:')}{round(RangeAttackDamage + BowAtk)}%")
                 else:
                     result.append(f"{pad_label('遠傷:')}{round(RangeAttackDamage)}%")
-                
+                #屬性耐性 龍之氣息 預設屬性火，可使用盧恩石轉屬，轉屬後一樣看火屬耐性(屬性*火耐性)
+                #屬性耐性 龍之氣息-水 預設屬性水，可使用盧恩石轉屬，轉屬後一樣看水屬耐性(屬性*水耐性)
+                result.append(f"{pad_label('技能倍率:')}{results[0]['skill_result']}%")
+                result.append(f"{pad_label('屬性倍率:')}{get_damage_multiplier(User_attack_element, target_element, target_element_lv)}%")
+
             else:
-                result.append(f"{pad_label('近傷:')}{round(MeleeAttackDamage)}%")
-
-            result.append(f"{pad_label('CRATE:')}{round(total_CRATE)}")
-            result.append(f"{pad_label('技能倍率:')}{results[0]['skill_result']}%")
-            result.append(f"{pad_label('屬性倍率:')}{get_damage_multiplier(User_attack_element, target_element, target_element_lv)}%")
-            result.append(f"{pad_label('武器體型修正:')}{Weaponpunish*100}%")
-            result.append(f"{pad_label('後DEF:')}{target_def}")
-            result.append(f"{pad_label('無視階級防禦:')}{round(get_effect_multiplier('D_class_def', target_class))}%")
-            result.append(f"{pad_label('無視種族防禦:')}{round(get_effect_multiplier('D_Race_def', target_race) + get_effect_multiplier('D_Race_def', 9999))}%")
-            result.append(f"{pad_label('物理破防後傷害:')}{damage_nodef * 100:.2f}%")
-            result.append(f"{pad_label('前DEF:')}{target_defc}")
-            result.append(f"{pad_label('RES:')}{target_res}")
-            result.append(f"{pad_label('無視物理抗性%:')}{res_reduction}%")
-            result.append(f"{pad_label('物理破抗性後傷害:')}{damage_nores * 100:.2f}%")
-
-        elif attack_type == "d_b":
-            self.def_label.setVisible(True)
-            self.def_input.setVisible(True)
-            self.defc_label.setVisible(True)
-            self.defc_input.setVisible(True)
-            self.res_label.setVisible(True)
-            self.res_input.setVisible(True)
-            self.mdef_label.setVisible(False)
-            self.mdef_input.setVisible(False)
-            self.mdefc_label.setVisible(False)
-            self.mdefc_input.setVisible(False)
-            self.mres_label.setVisible(False)
-            self.mres_input.setVisible(False)
-            result.append(f"=========================以下各增傷數值===========================")
-
-            if weapon_class == 11:
-                result.append(f"{pad_label('遠傷:')}{round(RangeAttackDamage + BowAtk)}%")
-            else:
-                result.append(f"{pad_label('遠傷:')}{round(RangeAttackDamage)}%")
-            #屬性耐性 龍之氣息 預設屬性火，可使用盧恩石轉屬，轉屬後一樣看火屬耐性(屬性*火耐性)
-            #屬性耐性 龍之氣息-水 預設屬性水，可使用盧恩石轉屬，轉屬後一樣看水屬耐性(屬性*水耐性)
-            result.append(f"{pad_label('技能倍率:')}{results[0]['skill_result']}%")
-            result.append(f"{pad_label('屬性倍率:')}{get_damage_multiplier(User_attack_element, target_element, target_element_lv)}%")
-            
-        else:
-            raise ValueError(f"未知的攻擊類型: {attack_type}")
+                raise ValueError(f"未知的攻擊類型: {attack_type}")
             
                         
-        result.append(f"{pad_label('技能增傷(裝備段):')}{round(Use_Skills)}%")
-        result.append(f"{pad_label('技能增傷(技能段):')}{round(passive_skill_buff)}%")
-        result.append(f"==================================================================")
-        result.append(f"{pad_label('技能等級:')}{Sklv}")
-        #result.append(f"{pad_label('技能公式:')}{results[0]['formula']}")
+            result.append(f"{pad_label('技能增傷(裝備段):')}{round(Use_Skills)}%")
+            result.append(f"{pad_label('技能增傷(技能段):')}{round(passive_skill_buff)}%")
+            result.append(f"==================================================================")
+            result.append(f"{pad_label('技能等級:')}{Sklv}")
+            #result.append(f"{pad_label('技能公式:')}{results[0]['formula']}")
         
-        if len(results) > 1 and combo_split_results:
-            self.steps.append(["打擊虛數", (1/r["times"])*100])
-            self.steps.append(["總傷害", r["times"]*100])
-        elif len(results) > 1:
-            #self.steps.append(("總傷害", r["times"]))
-            pass
-        else:
-            self.steps.append(["打擊虛數", (1/r["times"])*100])
-            self.steps.append(["總傷害", r["times"]*100])
+            if len(results) > 1 and combo_split_results:
+                self.steps.append(["打擊虛數", (1/r["times"])*100])
+                self.steps.append(["總傷害", r["times"]*100])
+            elif len(results) > 1:
+                #self.steps.append(("總傷害", r["times"]))
+                pass
+            else:
+                self.steps.append(["打擊虛數", (1/r["times"])*100])
+                self.steps.append(["總傷害", r["times"]*100])
 
         result.extend(bottom_result)#顯示前面儲存的公式
         self.custom_calc_box.setHtml(self.generate_highlighted_html(result))
@@ -7187,12 +7197,13 @@ class ItemSearchApp(QWidget):
         globals()["target_element"] = self.element_box.currentData()#先取得怪物屬性給機匠被動使用。
 
         
-        #self.display_all_effects()
+        self.display_all_effects()
         self.display_item_info()
         self.weapon_type_ui_control()
         self.replace_custom_calc_content()
         self.update_dex_int_half_note()
         self.jobsphp_display()
+        self.replace_custom_calc_content()
         self.update_total_effect_display()#過濾總效果顯示
         
         

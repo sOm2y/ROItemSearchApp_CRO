@@ -154,6 +154,7 @@ all_skill_entries = {#範例[    "": {"buff":"","type": "技能/料理","code":[
     "地之紋章LV3": {"buff":"","id": "SO","type": "技能","code":["AddSkillMDamage(4, 25)"]},
     "咒力賦予": {"buff":"1271","id": "SO","type": "技能","code":["AddExtParam(1, 243, 20)"]},
     #皇家
+    "靈感": {"buff":"407","id": "RG","type": "技能","code":["UseSkill(2325)","temp = GetSkillLevel(2325)","AddExtParam(1, 49, 12 * temp)","AddExtParam(1, 103, 6 * temp)","AddExtParam(1, 104, 6 * temp)","AddExtParam(1, 105, 6 * temp)","AddExtParam(1, 106, 6 * temp)","AddExtParam(1, 107, 6 * temp)","AddExtParam(1, 108, 6 * temp)","AddExtParam(1, 111, 4 * temp)","AddExtParam(1, 41, 40 * temp)","AddExtParam(1, 200, 40 * temp)"]},
     "抗性聖盾": {"buff":"1220","id": "RG","type": "技能","code":["UseSkill(5262)","temp = GetSkillLevel(5262)","AddSkillMDamage(6, temp * 3)"]},
     "末日審判": {"buff":"1222","id": "RG","type": "技能","code":["UseSkill(5263)"]},
     "攻擊架式": {"buff":"1203","id": "RG","type": "技能","code":["temp = GetSkillLevel(5260)","AddExtParam(1, 242, temp * 3)","AddExtParam(1, 243, temp * 3)","SubExtParam(1, 45, temp * 40)"]},
