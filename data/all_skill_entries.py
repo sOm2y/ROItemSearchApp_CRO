@@ -57,6 +57,7 @@ all_skill_entries = {#範例[    "": {"buff":"","type": "技能/料理","code":[
     "毒藥瓶": {"buff":"","type": "料理","code":["AddExtParam(1, 301, 20)"]},
 
     "高級戰鬥藥": {"buff":"663","type": "料理","code":["ClassAddDamage(0, 1, 10)","ClassAddDamage(1, 1, 10)","AddExtParam(1, 140, 10)","SubExtParam(1, 111, 5)","SubExtParam(1, 112, 5)"]},
+    "揮擊藥水": {"buff":"487","type": "料理","code":["AddExtParam(1, 41, 50)"]},
     "魔力藥水": {"buff":"487","type": "料理","code":["AddExtParam(1, 200, 50)"]},
     "紅色藥草活化液": {"buff":"1170","type": "料理","code":["AddMeleeAttackDamage(1, 15)","AddRangeAttackDamage(1, 15)"]},
     "藍色藥草活化液": {"buff":"1171","type": "料理","code":["AddSkillMDamage(10, 15)"]},
@@ -73,6 +74,12 @@ all_skill_entries = {#範例[    "": {"buff":"","type": "技能/料理","code":[
     "盧恩石1": {"buff":"318","id": "RK","type": "技能","code":["AddExtParam(1, 103, 30)","AddMeleeAttackDamage(1, 30)"]},
     "盧恩石5": {"buff":"322","id": "RK","type": "技能","code":["temp = GetSkillLevel(2010)","AddExtParam(0,302,temp / 10 * 4)","AddExtParam(1, 41, temp * 7)"]},
     "盧恩石10": {"buff":"1154","id": "RK","type": "技能","code":["AddExtParam(1, 111, 30)","AddExtParam(1, 112, 30)","AddDamage_Size(1, 0, 30)","AddDamage_Size(1, 1, 30)","AddDamage_Size(1, 2, 30)","AddDamage_CRI(1, 30)","AddMeleeAttackDamage(1, 30)","AddRangeAttackDamage(1, 30)"]},
+    #皇家
+    "靈感": {"buff":"407","id": "RG","type": "技能","code":["UseSkill(2325)","temp = GetSkillLevel(2325)","AddExtParam(1, 49, 12 * temp)","AddExtParam(1, 103, 6 * temp)","AddExtParam(1, 104, 6 * temp)","AddExtParam(1, 105, 6 * temp)","AddExtParam(1, 106, 6 * temp)","AddExtParam(1, 107, 6 * temp)","AddExtParam(1, 108, 6 * temp)","AddExtParam(1, 111, 4 * temp)","AddExtParam(1, 41, 40 * temp)","AddExtParam(1, 200, 40 * temp)"]},
+    "抗性聖盾": {"buff":"1220","id": "RG","type": "技能","code":["UseSkill(5262)","temp = GetSkillLevel(5262)","AddSkillMDamage(6, temp * 3)"]},
+    "末日審判": {"buff":"1222","id": "RG","type": "技能","code":["UseSkill(5263)"]},
+    "攻擊架式": {"buff":"1203","id": "RG","type": "技能","code":["temp = GetSkillLevel(5260)","AddExtParam(1, 242, temp * 3)","AddExtParam(1, 243, temp * 3)","SubExtParam(1, 45, temp * 40)"]},
+    "防禦架式": {"buff":"1202","id": "RG","type": "技能","code":["UseSkill(5255)","temp = GetSkillLevel(5255)","AddExtParam(1, 45, 50 + (temp * 50))","SubExtParam(1, 41, temp * 50)"]},
     #主教
     "神威祈福": {"buff":"15","id": "AB","type": "技能","code":["AddExtParam(1, 200, 25)","Kamui_SpecialATK(25)"]},
     "慈悲術": {"buff":"10","id": "AB","type": "技能","code": ["temp = 70 / 10","AddExtParam(0,103,10 + math.floor(temp))","AddExtParam(0,106,10 + math.floor(temp)","AddExtParam(0,107,10 + math.floor(temp)","AddExtParam(0,49,20)"]},
@@ -87,6 +94,12 @@ all_skill_entries = {#範例[    "": {"buff":"","type": "技能/料理","code":[
     "爆裂聖光": {"buff":"1200","id": "AB","type": "技能","code":["AddExtParam(1, 253, 10)"]},
     "贖罪": {"buff":"340","id": "AB","type": "技能","code":["SetIgnoreDefRace_Percent(9999, 25)","SetIgnoreMdefRace(9999, 25)"]},
     #聖裁
+    "點穴-球": {"buff":"425","id": "SU","type": "技能","code":["UseSkill(2346)","AddDamage_SKID(1, 273, 50)","AddDamage_SKID(1, 372, 50)","AddDamage_SKID(1, 371, 50)"]},
+    "點穴-反": {"buff":"426","id": "SU","type": "技能","code":["UseSkill(2347)","temp = GetSkillLevel(2347)","temp_AGI = total_AGI","AddExtParam(1, 41, temp * 8)","AddExtParam(1, 207, temp)","AddExtParam(1, 167, (temp_AGI * temp) / 60)","AddDamage_SKID(1, 2332, 30)","AddDamage_SKID(1, 2336, 30)"],"exclusive": "GENTLETOUCH"},
+    "點穴-活": {"buff":"427","id": "SU","type": "技能","code":["UseSkill(2348)","temp = GetSkillLevel(2348)","AddExtParam(1, 45, temp*2)","AddExtParam(1, 111, temp*2)","AddDamage_SKID(1, 2330, 30)","AddDamage_SKID(1, 2343, 30)"],"exclusive": "GENTLETOUCH"},
+    "堅毅信念": {"buff":"1160","id": "SU","type": "技能","code":["UseSkill(5238)","temp = GetSkillLevel(5238)","AddExtParam(1, 41, 5 + temp * 5)","AddExtParam(1, 242, 5 + temp * 2)"],"exclusive": "FAITH"},
+    "堅定信念": {"buff":"1162","id": "SU","type": "技能","code":["UseSkill(5239)","temp = GetSkillLevel(5239)","AddExtParam(1, 111, 2 * temp)"],"exclusive": "FAITH"},
+    "真誠信念": {"buff":"1161","id": "SU","type": "技能","code":["UseSkill(5242)","temp = GetSkillLevel(5242)","AddGuideAttack(4 * temp)","AddExtParam(1, 54, temp)"],"exclusive": "FAITH"},
     "焰魔散彈": {"buff":"1326","id": "SU","type": "技能","code":["UseSkill(5243)"]},
     #斬首
     "致命塗毒": {"buff":"114","id": "GX","type": "技能","code":["UseSkill(378)"]},
@@ -153,12 +166,6 @@ all_skill_entries = {#範例[    "": {"buff":"","type": "技能/料理","code":[
     "水之紋章LV3": {"buff":"","id": "SO","type": "技能","code":["AddSkillMDamage(4, 25)"]},
     "地之紋章LV3": {"buff":"","id": "SO","type": "技能","code":["AddSkillMDamage(4, 25)"]},
     "咒力賦予": {"buff":"1271","id": "SO","type": "技能","code":["AddExtParam(1, 243, 20)"]},
-    #皇家
-    "靈感": {"buff":"407","id": "RG","type": "技能","code":["UseSkill(2325)","temp = GetSkillLevel(2325)","AddExtParam(1, 49, 12 * temp)","AddExtParam(1, 103, 6 * temp)","AddExtParam(1, 104, 6 * temp)","AddExtParam(1, 105, 6 * temp)","AddExtParam(1, 106, 6 * temp)","AddExtParam(1, 107, 6 * temp)","AddExtParam(1, 108, 6 * temp)","AddExtParam(1, 111, 4 * temp)","AddExtParam(1, 41, 40 * temp)","AddExtParam(1, 200, 40 * temp)"]},
-    "抗性聖盾": {"buff":"1220","id": "RG","type": "技能","code":["UseSkill(5262)","temp = GetSkillLevel(5262)","AddSkillMDamage(6, temp * 3)"]},
-    "末日審判": {"buff":"1222","id": "RG","type": "技能","code":["UseSkill(5263)"]},
-    "攻擊架式": {"buff":"1203","id": "RG","type": "技能","code":["temp = GetSkillLevel(5260)","AddExtParam(1, 242, temp * 3)","AddExtParam(1, 243, temp * 3)","SubExtParam(1, 45, temp * 40)"]},
-    "防禦架式": {"buff":"1202","id": "RG","type": "技能","code":["UseSkill(5255)","temp = GetSkillLevel(5255)","AddExtParam(1, 45, 50 + (temp * 50))","SubExtParam(1, 41, temp * 50)"]},
     #基因
     "大聲吶喊": {"buff":"30","id": ["GE","ME"],"type": "技能","code":["AddExtParam(1, 103, 4)","AddExtParam(1, 41, 30)"]},
     "手推車加速": {"buff":"118","id": "GE","type": "技能","code":["WeaponMasteryATK(50)"]},

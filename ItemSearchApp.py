@@ -1,5 +1,5 @@
 #部分資料取自ROCalculator,搜尋 ROCalculator 可以知道哪些有使用
-Version = "v0.2.4-260419"
+Version = "v0.2.5-260421"
 
 import sys, builtins, time
 from PySide6.QtCore import QThread, Signal, Qt, QMetaObject, QTimer
@@ -2382,6 +2382,7 @@ def parse_lua_effects_with_variables(
                 "target_element": target_element,#給機匠被動
                 "skill_focus_AGI": skill_focus_AGI,#給心神凝聚處理的
                 "skill_focus_DEX": skill_focus_DEX,#給心神凝聚處理的
+                "total_AGI": total_AGI, #給點穴反
             })
 
             # ✅ 改用 eval + variables 做上下文，不再手動替換

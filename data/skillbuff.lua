@@ -84,6 +84,13 @@
 	temp = GSklv(248)
 	AddExtParam(1, 109, temp * 200)
 }
+[259] = {
+	temp = GSklv(259)
+	temp_wp = GetWeaponClass(4)
+	if temp_wp == 0 or temp_wp == 12 then
+		WeaponMasteryATK(temp * 3)
+	end
+}
 [274] = {
 	temp = GSklv(274)
 	temp_wp = GetWeaponClass(4)
@@ -185,6 +192,16 @@
 	if temp_wp == 23 then
 		AddExtParam(1, 243, temp * 2)
 	end
+}
+
+[5240] = {
+	temp = GSklv(5240)
+	if temp > 0 then
+		RaceAddDamage(1, 2 + temp)
+		RaceAddDamage(6, 2 + temp)
+	end
+	
+
 }
 
 [5270] = {
