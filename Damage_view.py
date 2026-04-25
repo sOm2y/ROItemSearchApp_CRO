@@ -203,8 +203,8 @@ class StepDelegate(QStyledItemDelegate):
         factor_rect = r.adjusted(left_pad + 150, 0, 0, 0)
         factor_rect.setWidth(100)
 
-        # mode_rect = r.adjusted(left_pad + 125 + 100, 0, 0, 0)
-        # mode_rect.setWidth(150)
+        mode_rect = r.adjusted(left_pad + 130 + 100, 0, 0, 0)
+        mode_rect.setWidth(150)
 
         result_rect = r.adjusted(0, 0, -right_pad, 0)
         result_rect.setLeft(r.right() - 200)
@@ -224,7 +224,7 @@ class StepDelegate(QStyledItemDelegate):
         else:
             ftxt = f"× {round(100+factor,2)}%"
         painter.drawText(factor_rect, Qt.AlignVCenter | Qt.AlignLeft, ftxt)
-        #painter.drawText(mode_rect, Qt.AlignVCenter | Qt.AlignLeft, f"[{mode}]")
+        painter.drawText(mode_rect, Qt.AlignVCenter | Qt.AlignLeft, f"[{mode}]")
         painter.drawText(
             result_rect,
             Qt.AlignVCenter | Qt.AlignRight,
@@ -236,23 +236,23 @@ class StepDelegate(QStyledItemDelegate):
     def sizeHint(self, option, index):
         return QSize(10, 30)
 
-    # def createEditor(self, parent, option, index):
-    #     cb = QComboBox(parent)
-    #     cb.addItems(["INT", "ROUND", "CEIL", "FLOOR", "NONE"])
-    #     return cb
+    def createEditor(self, parent, option, index):
+        cb = QComboBox(parent)
+        cb.addItems(["INT", "ROUND", "CEIL", "FLOOR", "NONE"])
+        return cb
 
-    # def setEditorData(self, editor, index):
-    #     _, _, mode, _ = index.data(Qt.DisplayRole)
-    #     editor.setCurrentText(mode)
+    def setEditorData(self, editor, index):
+        _, _, mode, _ = index.data(Qt.DisplayRole)
+        editor.setCurrentText(mode)
 
-    # def setModelData(self, editor, model, index):
-    #     model.setData(index, editor.currentText(), Qt.EditRole)
+    def setModelData(self, editor, model, index):
+        model.setData(index, editor.currentText(), Qt.EditRole)
 
-    # def updateEditorGeometry(self, editor, option, index):
-    #     r = option.rect
-    #     x = r.left() + 10 + 125 + 100
-    #     w = 110
-    #     editor.setGeometry(x, r.top() + 6, w, r.height() - 12)
+    def updateEditorGeometry(self, editor, option, index):
+        r = option.rect
+        x = r.left() + 10 + 125 + 100
+        w = 110
+        editor.setGeometry(x, r.top() + 6, w, r.height() - 12)
 
 class LiveReorderListView(QListView):
     """拖曳時即時 moveRows，讓其他列自動讓位（像手機排序）"""

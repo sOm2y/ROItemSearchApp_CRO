@@ -1,5 +1,5 @@
 #部分資料取自ROCalculator,搜尋 ROCalculator 可以知道哪些有使用
-Version = "v0.2.5-260421"
+Version = "v0.2.6-260425"
 
 import sys, builtins, time
 from PySide6.QtCore import QThread, Signal, Qt, QMetaObject, QTimer
@@ -190,12 +190,14 @@ global_weapon_atk_map = {}#武器基礎攻擊力
 global_weapon_matk_map = {}#武器基礎魔法攻擊力
 function_defs = {}#公式變數字典
 slot_item_id_map = {}#部位裝備的ID
-def register_function(name, desc, args):
+def register_function(name, desc, args, vars=None):
     if name in function_defs:
-        return  # 已經有了就跳過
+        return
+
     function_defs[name] = {
         "desc": desc,
-        "args": args
+        "args": args,
+        "vars": vars or {}
     }
 
 
@@ -314,6 +316,53 @@ job_dict  = DataRegistry.loaded_data["jobs"]#職業job_id
 job_4th_hpsp = DataRegistry.loaded_data["jobHPSP"]#HPSP
 WPASPDdata = DataRegistry.loaded_data["ASPD"]#攻速資料
 
+stat_fields = {
+    "BaseLv": 11, "JobLv": 12, "JOB": 19, "MHP": 200 , "MSP": 202 ,
+    "STR": 32, "AGI": 33, "VIT": 34, "INT": 35, "DEX": 36, "LUK": 37,
+    "POW": 255, "STA": 256, "WIS": 257, "SPL": 258, "CON": 259, "CRT": 260,"石碑開啟格數": 263 ,"石碑精煉": 264
+            
+}
+default_values = {
+    "BaseLv": 260,"STR": 1,"AGI": 1,"AGI": 1,"VIT": 1,"INT": 1,"DEX": 1,"LUK": 1,
+    "POW": 0,"STA": 0,"WIS": 0,"SPL": 0,"CON": 0,"CRT": 0,
+}
+
+refine_parts = {
+    # === 裝備部位 ===
+    "頭上":   {"slot": 10, "type": "裝備"},
+    "頭中":   {"slot": 11, "type": "裝備"},
+    "頭下":   {"slot": 12, "type": "裝備"},
+    "鎧甲":   {"slot": 2,  "type": "裝備"},
+    "右手(武器)":   {"slot": 4,  "type": "裝備"},
+    "投擲物品":   {"slot": 110,  "type": "裝備"},
+    "左手(盾牌)":   {"slot": 3,  "type": "裝備"},
+    "披肩":   {"slot": 5,  "type": "裝備"},
+    "鞋子":   {"slot": 6,  "type": "裝備"},
+    "飾品右": {"slot": 7,  "type": "裝備"},
+    "飾品左": {"slot": 8,  "type": "裝備"},
+
+    # === 影子裝備 ===
+    "影子鎧甲":   {"slot": 30, "type": "影子"},
+    "影子手套":   {"slot": 31, "type": "影子"},
+    "影子盾牌":     {"slot": 32, "type": "影子"},
+    "影子鞋子":   {"slot": 33, "type": "影子"},
+    "影子耳環右": {"slot": 34, "type": "影子"},
+    "影子墬子左": {"slot": 35, "type": "影子"},
+
+    # === 服飾部位 ===
+    "服飾頭上":   {"slot": 41, "type": "服飾"},
+    "服飾頭中":   {"slot": 42, "type": "服飾"},
+    "服飾頭下":   {"slot": 43, "type": "服飾"},
+    "服飾斗篷":   {"slot": 44, "type": "服飾"},
+            
+    # === 石碑/寵物部位 === slot部位自定義，遊戲未定義此位置。
+    "符文石碑":   {"slot": 100, "type": "石碑"},
+    "寵物蛋":   {"slot": 101, "type": "寵物"},
+    # === 技能欄位 === slot部位自定義，遊戲未定義此位置。
+    "技能":   {"slot": 102, "type": "技能"},
+}
+
+
 
 effect_map = {
     41: "ATK", 45: "DEF", 47: "MDEF", 49: "HIT", 50: "FLEE", 51: "完全迴避", 52: "CRI", 54: "ASPD",
@@ -408,6 +457,8 @@ weapon_type_map = { # WPon()
     11: "弓", 17: "左輪手槍", 18: "來福槍", 19: "格林機關槍",
     20: "霰彈槍", 21: "榴彈槍", 22: "風魔飛鏢"
 }
+
+
 
 weapon_class_codes = {#輸出用
     0: "Empty",# 空手
@@ -2482,6 +2533,21 @@ def parse_lua_effects_with_variables(
                 results.append(f"技能後延遲 {sign}({val})%（無法解析）")
             continue
 
+        # 增減 變動詠唱時間（%）合併處理
+        register_function("SubSpellCastTime", "減少變動詠唱時間", [{"name": "數值%", "type": "value"}])
+        register_function("AddSpellCastTime", "增加變動詠唱時間", [{"name": "數值%", "type": "value"}])
+
+        cast_time = re.match(r"(Add|Sub)SpellCastTime\(\s*(.+)\s*\)", line)
+        if cast_time and condition_met:
+            op, value_expr = cast_time.groups()
+            val = safe_eval_expr(value_expr, variables, get_values, refine_inputs, grade)
+
+            sign = "+" if op == "Add" else "-"
+            try:
+                results.append(f"變動詠唱時間 {sign}{val}%")
+            except Exception:
+                results.append(f"變動詠唱時間 {sign}({value_expr})%（無法解析）")
+            continue
 
 
         # AddSFCTEquipAmount / SubSFCTEquipAmount（固定詠唱時間，第一參數是物品ID，第二參數是 ms 表達式，第三參數是數字）
@@ -2605,23 +2671,6 @@ def parse_lua_effects_with_variables(
                 # 保留原本的無法解析提示
                 results.append(f"技能【{skill_name}】冷卻時間變化 ({val_ms}) 毫秒（無法解析）")
             continue
-            
-        # 增減 變動詠唱時間（%）合併處理
-        register_function("SubSpellCastTime", "減少變動詠唱時間", [{"name": "數值%", "type": "value"}])
-        register_function("AddSpellCastTime", "增加變動詠唱時間", [{"name": "數值%", "type": "value"}])
-
-        cast_time = re.match(r"(Add|Sub)SpellCastTime\(\s*(.+)\s*\)", line)
-        if cast_time and condition_met:
-            op, value_expr = cast_time.groups()
-            val = safe_eval_expr(value_expr, variables, get_values, refine_inputs, grade)
-
-            sign = "+" if op == "Add" else "-"
-            try:
-                results.append(f"變動詠唱時間 {sign}{val}%")
-            except Exception:
-                results.append(f"變動詠唱時間 {sign}({value_expr})%（無法解析）")
-            continue
-
 
         # Add/Sub SpecificSpellCastTime（指定技能變動詠唱時間 %）
         specific_cast = re.match(r"(Add|Sub)SpecificSpellCastTime\(\s*(\d+)\s*,\s*(.+)\s*\)", line)
@@ -2659,7 +2708,25 @@ def parse_lua_effects_with_variables(
 
 
 #==========以上通用變數
-#==========以下魔法判斷        
+#==========以下魔法判斷
+        # Add/Sub SkillMDamage（屬性魔法傷害）
+        register_function("AddSkillMDamage", "增加屬性魔法傷害", [
+            {"name": "屬性", "map": "element_map"},
+            {"name": "數值%", "type": "value"}
+        ])
+        register_function("SubSkillMDamage", "減少屬性魔法傷害", [
+            {"name": "屬性", "map": "element_map"},
+            {"name": "數值%", "type": "value"}
+        ])
+        skill_mdamage = re.match(r"(Add|Sub)SkillMDamage\(\s*(\d+)\s*,\s*(.+)\s*\)", line)
+        if skill_mdamage and condition_met:
+            op, elem_id, value_expr = skill_mdamage.groups()
+            element = element_map.get(int(elem_id), f"屬性{elem_id}")
+            val = safe_eval_expr(value_expr, variables, get_values, refine_inputs, grade)
+            sign = "+" if op == "Add" else "-"
+            results.append(f"{element} 的魔法傷害 {sign}{val}%")
+            continue
+
         # Add/Sub MDamage_Size（體型魔法）
         register_function("AddMDamage_Size", "增加體型魔法傷害", [
             {"name": "目標", "map": "unit_map"},
@@ -2681,26 +2748,24 @@ def parse_lua_effects_with_variables(
             results.append(f"對 {size_name} 敵人的魔法傷害 {sign}{val}%")
             continue
 
-
-        # Add/Sub SkillMDamage（屬性魔法傷害）
-        register_function("AddSkillMDamage", "增加屬性魔法傷害", [
-            {"name": "屬性", "map": "element_map"},
+        # Add/Sub Mdamage_Race（對種族魔法傷害）
+        register_function("AddMdamage_Race", "增加種族魔法傷害", [
+            {"name": "種族", "map": "race_map"},
             {"name": "數值%", "type": "value"}
         ])
-        register_function("SubSkillMDamage", "減少屬性魔法傷害", [
-            {"name": "屬性", "map": "element_map"},
+        register_function("SubMdamage_Race", "減少種族魔法傷害", [
+            {"name": "種族", "map": "race_map"},
             {"name": "數值%", "type": "value"}
         ])
 
-        skill_mdamage = re.match(r"(Add|Sub)SkillMDamage\(\s*(\d+)\s*,\s*(.+)\s*\)", line)
-        if skill_mdamage and condition_met:
-            op, elem_id, value_expr = skill_mdamage.groups()
-            element = element_map.get(int(elem_id), f"屬性{elem_id}")
+        mdamage_race = re.match(r"(Add|Sub)Mdamage_Race\(\s*(\d+)\s*,\s*(.+)\s*\)", line)
+        if mdamage_race and condition_met:
+            op, race_id, value_expr = mdamage_race.groups()
+            race_name = race_map.get(int(race_id), f"種族{race_id}")
             val = safe_eval_expr(value_expr, variables, get_values, refine_inputs, grade)
             sign = "+" if op == "Add" else "-"
-            results.append(f"{element} 的魔法傷害 {sign}{val}%")
+            results.append(f"對 {race_name} 型怪的魔法傷害 {sign}{val}%")
             continue
-
 
         # Add/Sub MDamage_Property（對指定種族與屬性）
         register_function("AddMDamage_Property", "增加屬性對象魔法傷害", [
@@ -2722,28 +2787,6 @@ def parse_lua_effects_with_variables(
             sign = "+" if op == "Add" else "-"
             results.append(f"對 {elem_name} 對象的魔法傷害 {sign}{val}%")
             continue
-
-
-        # Add/Sub Mdamage_Race（對種族魔法傷害）
-        register_function("AddMdamage_Race", "增加種族魔法傷害", [
-            {"name": "種族", "map": "race_map"},
-            {"name": "數值%", "type": "value"}
-        ])
-        register_function("SubMdamage_Race", "減少種族魔法傷害", [
-            {"name": "種族", "map": "race_map"},
-            {"name": "數值%", "type": "value"}
-        ])
-
-        mdamage_race = re.match(r"(Add|Sub)Mdamage_Race\(\s*(\d+)\s*,\s*(.+)\s*\)", line)
-        if mdamage_race and condition_met:
-            op, race_id, value_expr = mdamage_race.groups()
-            race_name = race_map.get(int(race_id), f"種族{race_id}")
-            val = safe_eval_expr(value_expr, variables, get_values, refine_inputs, grade)
-            sign = "+" if op == "Add" else "-"
-            results.append(f"對 {race_name} 型怪的魔法傷害 {sign}{val}%")
-            continue
-
-
         # AddMdamage_Class（對階級魔法傷害）
         
         register_function("AddMdamage_Class", "增加階級魔法傷害", [
@@ -2767,7 +2810,6 @@ def parse_lua_effects_with_variables(
             continue
 
         # SetIgnoreMdefClass（無視階級魔防）
-        
         register_function("SetIgnoreMdefClass", "無視階級魔法防禦", [
             {"name": "階級", "map": "class_map"},
             {"name": "數值%", "type": "value"}
@@ -2779,9 +2821,21 @@ def parse_lua_effects_with_variables(
             val = safe_eval_expr(value_expr, variables, get_values, refine_inputs, grade)
             results.append(f"無視 {class_name} 階級的魔法防禦 {val}%")
             continue
+            
+        # SetIgnoreMdefClass（無視種族魔防）
+        register_function("SetIgnoreMdefRace", "無視種族魔法防禦", [
+            {"name": "種族", "map": "race_map"},
+            {"name": "數值%", "type": "value"}
+        ])
+        ignore_mdef_race = re.match(r"SetIgnoreMdefRace\((\d+),\s*(.+?)\)", line)
+        if ignore_mdef_race and condition_met:
+            race_id, value_expr = ignore_mdef_race.groups()
+            race_name = race_map.get(int(race_id), f"種族{race_id}")
+            val = safe_eval_expr(value_expr, variables, get_values, refine_inputs, grade)
+            results.append(f"無視 {race_name} 型怪的魔法防禦 {val}%")
+            continue
 
         # AddIgnore_MRES_RacePercent（無視種族魔抗）
-        
         register_function("AddIgnore_MRES_RacePercent", "無視種族魔法抗性", [
             {"name": "種族", "map": "race_map"},
             {"name": "數值%", "type": "value"}
@@ -2795,21 +2849,7 @@ def parse_lua_effects_with_variables(
             results.append(f"無視 {race_name} 型怪的魔法抗性 {sign}{val}%")
             continue
             
-        # SetIgnoreMdefClass（無視種族魔防）
-        
-        register_function("SetIgnoreMdefRace", "無視種族魔法防禦", [
-            {"name": "種族", "map": "race_map"},
-            {"name": "數值%", "type": "value"}
-        ])
-        ignore_mdef_race = re.match(r"SetIgnoreMdefRace\((\d+),\s*(.+?)\)", line)
-        if ignore_mdef_race and condition_met:
-            race_id, value_expr = ignore_mdef_race.groups()
-            race_name = race_map.get(int(race_id), f"種族{race_id}")
-            val = safe_eval_expr(value_expr, variables, get_values, refine_inputs, grade)
-            results.append(f"無視 {race_name} 型怪的魔法防禦 {val}%")
-            continue
-            
-        # 特定魔物魔法增傷MonsterMAtkPercent(value)
+        # 增加特定魔物魔法傷害MonsterMAtkPercent(value)
         register_function("MonsterMAtkPercent", "增加特定魔物魔法傷害", [
             {"name": "數值%", "type": "value"}
         ])
@@ -2819,7 +2859,7 @@ def parse_lua_effects_with_variables(
             value_expr = safe_eval_expr(value_expr, variables, get_values, refine_inputs, grade)
             results.append(f"特定魔物魔法增傷 +{value_expr}%")
             continue
-        # 特定魔物魔法增傷MonsterMAtkPercent(value)
+        # 減少特定魔物魔法傷害MonsterMAtkPercent(value)
         register_function("SubMonsterMAtkPercent", "減少特定魔物魔法傷害", [
             {"name": "數值%", "type": "value"}
         ])
@@ -2829,26 +2869,34 @@ def parse_lua_effects_with_variables(
             value_expr = safe_eval_expr(value_expr, variables, get_values, refine_inputs, grade)
             results.append(f"特定魔物魔法增傷 -{value_expr}%")
             continue
-            
+
+        register_function("就說以上魔法了你還產生！", "--以上魔法增減分隔線--", [])
 #===========以上魔法判斷
 #===========以下物理判斷
-        register_function("就說以上魔法了你還產生！", "--以上魔法增減分隔線--", [])
         register_function("就說以下物理了你還產生！", "--以下物理增減分隔線--", [])
+
+        register_function("WeaponMasteryATK", "修煉ATK", [
+            {"name": "數值%", "type": "value"}
+        ])
         #修煉ATK WeaponMasteryATK(value)
-        MasteryATK_dmg = re.match(r"WeaponMasteryATK\(\s*(.+?)\)", line)
+        MasteryATK_dmg = re.match(r"WeaponMasteryATK\(\s*(.+?)\s*\)", line)
         if MasteryATK_dmg and condition_met:
             value_expr = MasteryATK_dmg.group(1)
             value_expr = safe_eval_expr(value_expr, variables, get_values, refine_inputs, grade)
             results.append(f"修煉ATK +{value_expr}")
             continue
+
         #神威特殊atk SpecialATK
-        KamuiATK_dmg = re.match(r"Kamui_SpecialATK\(\s*(.+?)\)", line)
+        KamuiATK_dmg = re.match(r"Kamui_SpecialATK\(\s*(.+?)\s*\)", line)
         if KamuiATK_dmg and condition_met:
             value_expr = KamuiATK_dmg.group(1)
             value_expr = safe_eval_expr(value_expr, variables, get_values, refine_inputs, grade)
             results.append(f"神威ATK +{value_expr}")
             continue
 
+        register_function("AddGuideAttack", "誘導攻擊機率", [
+            {"name": "數值%", "type": "value"}
+        ])
         #誘導攻擊機率AddGuideAttack(value)
         guide_attack = re.match(r"AddGuideAttack\(\s*(.+?)\s*\)", line)
         if guide_attack and condition_met:
@@ -2858,7 +2906,6 @@ def parse_lua_effects_with_variables(
             continue
 
         # AddDamage_HIT(1, value)
-        
         register_function("AddDamage_HIT", "物理命中傷害", [
             {"name": "目標", "map": "unit_map"},
             {"name": "數值%", "type": "value"}
@@ -2870,8 +2917,7 @@ def parse_lua_effects_with_variables(
             results.append(f"物理命中傷害 +{value_expr}%")
             continue
 
-        # AddMeleeAttackDamage(1, value)
-        
+        # 近距離物理傷害AddMeleeAttackDamage(1, value)
         register_function("AddMeleeAttackDamage", "增加近距離物理傷害", [
             {"name": "目標", "map": "unit_map"},
             {"name": "數值%", "type": "value"}
@@ -2888,8 +2934,7 @@ def parse_lua_effects_with_variables(
             results.append(f"近距離物理傷害 {sign}{value_expr}%")
             continue
 
-        # AddRangeAttackDamage(1, value)
-        
+        # 遠距離物理傷害AddRangeAttackDamage(1, value)
         register_function("AddRangeAttackDamage", "增加遠距離物理傷害", [
             {"name": "目標", "map": "unit_map"},
             {"name": "數值%", "type": "value"}
@@ -2899,7 +2944,6 @@ def parse_lua_effects_with_variables(
             {"name": "數值%", "type": "value"}
         ])
         range_dmg = re.match(r"(Add|Sub)RangeAttackDamage\(\s*1\s*,\s*(.+)\)", line)
-
         if range_dmg and condition_met:
             op, value_expr = range_dmg.group(1,2)
             value_expr = safe_eval_expr(value_expr, variables, get_values, refine_inputs, grade)
@@ -2908,8 +2952,7 @@ def parse_lua_effects_with_variables(
             continue
             
         # AddBowAttackDamage(1, value)#弓攻擊力
-        range_dmg = re.match(r"AddBowAttackDamage\(\s*1\s*,\s*(.+)\)", line)
-        
+        range_dmg = re.match(r"AddBowAttackDamage\(\s*1\s*,\s*(.+)\)", line)        
         if range_dmg and condition_met:
             value_expr = range_dmg.group(1)
             value_expr = safe_eval_expr(value_expr, variables, get_values, refine_inputs, grade)
@@ -2918,7 +2961,6 @@ def parse_lua_effects_with_variables(
             continue
 
         # AddDamage_CRI(1, value)
-        
         register_function("AddDamage_CRI", "增加爆擊傷害", [
             {"name": "目標", "map": "unit_map"},
             {"name": "數值%", "type": "value"}
@@ -2935,9 +2977,7 @@ def parse_lua_effects_with_variables(
             results.append(f"爆擊傷害 {sign}{value_expr}%")
             continue
 
-
-        # AddDamage_Size(1, size_id, value)
-        
+        # 體型物理傷害AddDamage_Size(1, size_id, value)
         register_function("AddDamage_Size", "增加體型物理傷害", [
             {"name": "目標", "map": "unit_map"},
             {"name": "體型", "map": "size_map"},
@@ -2958,8 +2998,25 @@ def parse_lua_effects_with_variables(
             results.append(f"對 {size_str} 敵人的物理傷害 {sign}{value_expr}%")
             continue
 
+        # RaceAddDamage(race_id, value)
+        register_function("RaceAddDamage", "增加種族物理傷害", [
+            {"name": "種族", "map": "race_map"},
+            {"name": "數值%", "type": "value"}
+        ])
+        register_function("RaceSubDamage", "減少種族物理傷害", [
+            {"name": "種族", "map": "race_map"},
+            {"name": "數值%", "type": "value"}
+        ])
+        race_dmg = re.match(r"Race(Add|Sub)Damage\((\d+),\s*(.+?)\)", line)
+        if race_dmg and condition_met:
+            op, race_id, value_expr = race_dmg.groups()
+            race_name = race_map.get(int(race_id), f"種族{race_id}")
+            value_expr = safe_eval_expr(value_expr, variables, get_values, refine_inputs, grade)
+            sign = "+" if op == "Add" else "-"
+            results.append(f"對 {race_name} 型怪的物理傷害 {sign}{value_expr}%")
+            continue
+
         # AddDamage_Property（對指定種族與屬性）
-        
         register_function("AddDamage_Property", "增加屬性敵人物理傷害", [
             {"name": "目標", "map": "unit_map"},
             {"name": "屬性", "map": "element_map"},
@@ -2979,89 +3036,8 @@ def parse_lua_effects_with_variables(
             results.append(f"對 {elem_name} 對象的物理傷害 {sign}{val}%")
             continue
 
-        # SetIgnoreDEFRace(race_id)
-        ignore_race = re.match(r"SetIgnoreDEFRace\((\d+)\)", line)
-        if ignore_race and condition_met:
-            race_name = race_map.get(int(ignore_race.group(1)), f"種族{ignore_race.group(1)}")
-            results.append(f"無視 {race_name} 型怪的物理防禦 +100%")
-            continue
 
-        # SetIgnoreDefRace_Percent(race_id, value)
-        
-        register_function("SetIgnoreDefRace_Percent", "無視種族物理防禦", [
-            {"name": "種族", "map": "race_map"},
-            {"name": "數值%", "type": "value"}
-        ])
-        ignore_race_pct = re.match(r"SetIgnoreDefRace_Percent\((\d+),\s*(.+?)\)", line)
-        if ignore_race_pct and condition_met:
-            race_id, value_expr = ignore_race_pct.groups()
-            race_name = race_map.get(int(race_id), f"種族{race_id}")
-            val = safe_eval_expr(value_expr, variables, get_values, refine_inputs, grade)
-            results.append(f"無視 {race_name} 型怪的物理防禦 {val}%")
-            continue
-
-        # SetIgnoreDEFClass(class_id)
-        ignore_class = re.match(r"SetIgnoreDEFClass\((\d+)\)", line)
-        if ignore_class and condition_met:
-            class_name = class_map.get(int(ignore_class.group(1)), f"階級{ignore_class.group(1)}")
-            results.append(f"無視 {class_name} 階級的物理防禦")
-            continue
-            
-        # PerfectDamage(1)
-        perfect_damage = re.match(r"^PerfectDamage\(1\)$", line.strip())
-        if perfect_damage and condition_met:
-            results.append(f"武器體型修正 100%")
-            continue
-
-        # SetIgnoreDefClass_Percent(class_id, value)
-        
-        register_function("SetIgnoreDefClass_Percent", "無視階級物理防禦", [
-            {"name": "階級", "map": "class_map"},
-            {"name": "數值%", "type": "value"}
-        ])
-        ignore_class_pct = re.match(r"SetIgnoreDefClass_Percent\((\d+),\s*(\d+)\)", line)
-        if ignore_class_pct and condition_met:
-            class_id, value = ignore_class_pct.groups()
-            class_name = class_map.get(int(class_id), f"階級{class_id}")
-            results.append(f"無視 {class_name} 階級的物理防禦 {value}%")
-            continue
-
-        # RaceAddDamage(race_id, value)
-        
-        register_function("RaceAddDamage", "增加種族物理傷害", [
-            {"name": "種族", "map": "race_map"},
-            {"name": "數值%", "type": "value"}
-        ])
-        register_function("RaceSubDamage", "減少種族物理傷害", [
-            {"name": "種族", "map": "race_map"},
-            {"name": "數值%", "type": "value"}
-        ])
-        race_dmg = re.match(r"Race(Add|Sub)Damage\((\d+),\s*(.+?)\)", line)
-        if race_dmg and condition_met:
-            op, race_id, value_expr = race_dmg.groups()
-            race_name = race_map.get(int(race_id), f"種族{race_id}")
-            value_expr = safe_eval_expr(value_expr, variables, get_values, refine_inputs, grade)
-            sign = "+" if op == "Add" else "-"
-            results.append(f"對 {race_name} 型怪的物理傷害 {sign}{value_expr}%")
-            continue
-                
-        # AddIgnore_RES_RacePercent(race_id, value)
-        
-        register_function("AddIgnore_RES_RacePercent", "無視種族物理抗性", [
-            {"name": "種族", "map": "race_map"},
-            {"name": "數值%", "type": "value"}
-        ])
-        ignore_res_race = re.match(r"(Add|Sub)Ignore_RES_RacePercent\((\d+),\s*(.+?)\)", line)
-        if ignore_res_race and condition_met:
-            op, race_id, value_expr = ignore_res_race.groups()
-            race_name = race_map.get(int(race_id), f"種族{race_id}")
-            value_expr = safe_eval_expr(value_expr, variables, get_values, refine_inputs, grade)
-            sign = "+" if op == "Add" else "-"
-            results.append(f"無視 {race_name} 型怪的物理抗性 {sign}{value_expr}%")
-            continue
-            
         # 階級物理傷害加成：ClassAddDamage(1, class_id, value)
-
         register_function("ClassAddDamage", "增加階級的物理傷害", [
             {"name": "階級", "map": "class_map"},
             {"name": "目標", "map": "unit_map"},
@@ -3081,13 +3057,51 @@ def parse_lua_effects_with_variables(
             results.append(f"對 {class_name} 階級的物理傷害 {sign}{val}%")
             continue
 
-        WP_INVESTIGATE_dmg = re.match(r"SetInvestigate()", line)
-        if WP_INVESTIGATE_dmg and condition_met:
-            results.append(f"武器浸透勁效果")
-            results.append(f"無視 全種族 型怪的物理防禦 +100%")
-            #Use_skill_levels[266] = True #會跟目前裝備衝突 改到計算內處理
+        # SetIgnoreDEFClass(class_id)
+        ignore_class = re.match(r"SetIgnoreDEFClass\((\d+)\)", line)
+        if ignore_class and condition_met:
+            class_name = class_map.get(int(ignore_class.group(1)), f"階級{ignore_class.group(1)}")
+            results.append(f"無視 {class_name} 階級的物理防禦")
             continue
 
+        # SetIgnoreDefClass_Percent(class_id, value)
+        register_function("SetIgnoreDefClass_Percent", "無視階級物理防禦", [
+            {"name": "階級", "map": "class_map"},
+            {"name": "數值%", "type": "value"}
+        ])
+        ignore_class_pct = re.match(r"SetIgnoreDefClass_Percent\((\d+),\s*(\d+)\)", line)
+        if ignore_class_pct and condition_met:
+            class_id, value = ignore_class_pct.groups()
+            class_name = class_map.get(int(class_id), f"階級{class_id}")
+            results.append(f"無視 {class_name} 階級的物理防禦 {value}%")
+            continue
+
+        # SetIgnoreDefRace_Percent(race_id, value)
+        register_function("SetIgnoreDefRace_Percent", "無視種族物理防禦", [
+            {"name": "種族", "map": "race_map"},
+            {"name": "數值%", "type": "value"}
+        ])
+        ignore_race_pct = re.match(r"SetIgnoreDefRace_Percent\((\d+),\s*(.+?)\)", line)
+        if ignore_race_pct and condition_met:
+            race_id, value_expr = ignore_race_pct.groups()
+            race_name = race_map.get(int(race_id), f"種族{race_id}")
+            val = safe_eval_expr(value_expr, variables, get_values, refine_inputs, grade)
+            results.append(f"無視 {race_name} 型怪的物理防禦 {val}%")
+            continue
+
+        # AddIgnore_RES_RacePercent(race_id, value)
+        register_function("AddIgnore_RES_RacePercent", "無視種族物理抗性", [
+            {"name": "種族", "map": "race_map"},
+            {"name": "數值%", "type": "value"}
+        ])
+        ignore_res_race = re.match(r"(Add|Sub)Ignore_RES_RacePercent\((\d+),\s*(.+?)\)", line)
+        if ignore_res_race and condition_met:
+            op, race_id, value_expr = ignore_res_race.groups()
+            race_name = race_map.get(int(race_id), f"種族{race_id}")
+            value_expr = safe_eval_expr(value_expr, variables, get_values, refine_inputs, grade)
+            sign = "+" if op == "Add" else "-"
+            results.append(f"無視 {race_name} 型怪的物理抗性 {sign}{value_expr}%")
+            continue
 
         # 特定魔物物理增傷MonsterAtkPercent(value)
         register_function("MonsterAtkPercent", "增加特定魔物物理傷害", [
@@ -3108,6 +3122,27 @@ def parse_lua_effects_with_variables(
             value_expr = mon_atk.group(1)
             value_expr = safe_eval_expr(value_expr, variables, get_values, refine_inputs, grade)
             results.append(f"特定魔物物理增傷 -{value_expr}%")
+            continue
+
+
+        # SetIgnoreDEFRace(race_id)
+        ignore_race = re.match(r"SetIgnoreDEFRace\((\d+)\)", line)
+        if ignore_race and condition_met:
+            race_name = race_map.get(int(ignore_race.group(1)), f"種族{ignore_race.group(1)}")
+            results.append(f"無視 {race_name} 型怪的物理防禦 +100%")
+            continue
+            
+        # PerfectDamage(1)
+        perfect_damage = re.match(r"^PerfectDamage\(1\)$", line.strip())
+        if perfect_damage and condition_met:
+            results.append(f"武器體型修正 100%")
+            continue
+
+        WP_INVESTIGATE_dmg = re.match(r"SetInvestigate()", line)
+        if WP_INVESTIGATE_dmg and condition_met:
+            results.append(f"武器浸透勁效果")
+            results.append(f"無視 全種族 型怪的物理防禦 +100%")
+            #Use_skill_levels[266] = True #會跟目前裝備衝突 改到計算內處理
             continue
 #==============以上物理判斷
 
@@ -3538,9 +3573,9 @@ class ItemSearchApp(QWidget):
             row_layout.addStretch()
 
             for part_name in row_parts:
-                if part_name not in self.refine_parts:
+                if part_name not in refine_parts:
                     continue
-                if self.refine_parts[part_name]["type"] not in visible_types:
+                if refine_parts[part_name]["type"] not in visible_types:
                     continue
 
                 btn = QPushButton(part_name)
@@ -3558,7 +3593,7 @@ class ItemSearchApp(QWidget):
 
             remaining_parts = [
                 part_name
-                for part_name, info in self.refine_parts.items()
+                for part_name, info in refine_parts.items()
                 if info["type"] in visible_types and part_name not in used_parts
             ]
 
@@ -6271,7 +6306,7 @@ class ItemSearchApp(QWidget):
 
         # === get(x) 對應 ===
         get_values = {}
-        for stat_name, stat_id in self.stat_fields.items():
+        for stat_name, stat_id in stat_fields.items():
             try:
                 get_values[stat_id] = int(self.input_fields[stat_name].text())
             except:
@@ -6279,7 +6314,7 @@ class ItemSearchApp(QWidget):
 
         # === refine_inputs: 所有部位 slot ➜ 精煉值 ===
         refine_inputs = {}
-        for part_name, info in self.refine_parts.items():
+        for part_name, info in refine_parts.items():
             slot_id = info.get("slot")
             try:
                 refine_inputs[slot_id] = self.refine_inputs_ui[part_name]["refine"].value()
@@ -6716,7 +6751,7 @@ class ItemSearchApp(QWidget):
 
 
         get_values = {}
-        for label, gid in self.stat_fields.items():
+        for label, gid in stat_fields.items():
             widget = self.input_fields[label]
             if isinstance(widget, QComboBox):
                 get_values[gid] = widget.currentData()
@@ -6738,9 +6773,9 @@ class ItemSearchApp(QWidget):
 
         refine_inputs = {}
         # 先在外面準備一份「全 0」的 refine_inputs
-        refine_inputs_base = {info["slot"]: 0 for info in self.refine_parts.values()}
+        refine_inputs_base = {info["slot"]: 0 for info in refine_parts.values()}
 
-        for label, info in self.refine_parts.items():
+        for label, info in refine_parts.items():
             slot_id = info["slot"]
             try:
                 refine_inputs[slot_id] = int(self.input_fields[label].text())
@@ -6751,7 +6786,7 @@ class ItemSearchApp(QWidget):
         base_effect_dict = {} 
         
 
-        for part in self.refine_parts.values():#先清除部位 to itemid的對應
+        for part in refine_parts.values():#先清除部位 to itemid的對應
             slot_id = part["slot"]
             slot_item_id_map[slot_id] = 0
 
@@ -6765,7 +6800,7 @@ class ItemSearchApp(QWidget):
                     if item["name"] == equip_name and item_id in self.equipment_data:
                         block_text = self.equipment_data[item_id]
                         grade = self.input_fields[f"{part_name}_階級"].currentIndex()
-                        slot_id = self.refine_parts[part_name]["slot"]
+                        slot_id = refine_parts[part_name]["slot"]
                         slot_item_id_map[slot_id] = item_id  # 存入全域對應表
 
                         effects = parse_lua_effects_with_variables(
@@ -6837,7 +6872,7 @@ class ItemSearchApp(QWidget):
                     if item["name"] == card_name and item_id in self.equipment_data:
                         block_text = self.equipment_data[item_id]
                         grade = self.input_fields[f"{part_name}_階級"].currentIndex()
-                        slot_id = self.refine_parts[part_name]["slot"]
+                        slot_id = refine_parts[part_name]["slot"]
                         effects = parse_lua_effects_with_variables(
                             block_text,
                             refine_inputs,
@@ -6876,7 +6911,7 @@ class ItemSearchApp(QWidget):
                 note_text = ui["note"].toPlainText().strip()
                 if note_text:
                     grade = self.input_fields[f"{part_name}_階級"].currentIndex()
-                    slot_id = self.refine_parts[part_name]["slot"]
+                    slot_id = refine_parts[part_name]["slot"]
                     source_label = f"{part_name}：詞條"
 
                     effects = parse_lua_effects_with_variables(
@@ -6986,12 +7021,12 @@ class ItemSearchApp(QWidget):
 
                     # ✅ 生成完整的 grade dict（每個部位的 slot 與階級）
                     grade = {
-                        self.refine_parts[part]["slot"]: self.input_fields[f"{part}_階級"].currentIndex()
-                        for part in self.refine_parts
+                        refine_parts[part]["slot"]: self.input_fields[f"{part}_階級"].currentIndex()
+                        for part in refine_parts
                     }
 
                     # 取得當前觸發套裝的部位 slot
-                    slot_id = self.refine_parts[part_name]["slot"]
+                    slot_id = refine_parts[part_name]["slot"]
 
                     # 呼叫效果解析，傳入完整的 grade dict
                     effects = parse_lua_effects_with_variables(
@@ -8416,52 +8451,8 @@ class ItemSearchApp(QWidget):
         # 建立輸入欄位
         self.input_fields = {}
 
-        self.stat_fields = {
-            "BaseLv": 11, "JobLv": 12, "JOB": 19, "MHP": 200 , "MSP": 202 ,
-            "STR": 32, "AGI": 33, "VIT": 34, "INT": 35, "DEX": 36, "LUK": 37,
-            "POW": 255, "STA": 256, "WIS": 257, "SPL": 258, "CON": 259, "CRT": 260,"石碑開啟格數": 263 ,"石碑精煉": 264
-            
-        }
-        default_values = {
-            "BaseLv": 260,"STR": 1,"AGI": 1,"AGI": 1,"VIT": 1,"INT": 1,"DEX": 1,"LUK": 1,
-            "POW": 0,"STA": 0,"WIS": 0,"SPL": 0,"CON": 0,"CRT": 0,
-        }
-        self.refine_parts = {
-            # === 裝備部位 ===
-            "頭上":   {"slot": 10, "type": "裝備"},
-            "頭中":   {"slot": 11, "type": "裝備"},
-            "頭下":   {"slot": 12, "type": "裝備"},
-            "鎧甲":   {"slot": 2,  "type": "裝備"},
-            "右手(武器)":   {"slot": 4,  "type": "裝備"},
-            "投擲物品":   {"slot": 110,  "type": "裝備"},
-            "左手(盾牌)":   {"slot": 3,  "type": "裝備"},
-            "披肩":   {"slot": 5,  "type": "裝備"},
-            "鞋子":   {"slot": 6,  "type": "裝備"},
-            "飾品右": {"slot": 7,  "type": "裝備"},
-            "飾品左": {"slot": 8,  "type": "裝備"},
-
-            # === 影子裝備 ===
-            "影子鎧甲":   {"slot": 30, "type": "影子"},
-            "影子手套":   {"slot": 31, "type": "影子"},
-            "影子盾牌":     {"slot": 32, "type": "影子"},
-            "影子鞋子":   {"slot": 33, "type": "影子"},
-            "影子耳環右": {"slot": 34, "type": "影子"},
-            "影子墬子左": {"slot": 35, "type": "影子"},
-
-            # === 服飾部位 ===
-            "服飾頭上":   {"slot": 41, "type": "服飾"},
-            "服飾頭中":   {"slot": 42, "type": "服飾"},
-            "服飾頭下":   {"slot": 43, "type": "服飾"},
-            "服飾斗篷":   {"slot": 44, "type": "服飾"},
-            
-            # === 石碑/寵物部位 === slot部位自定義，遊戲未定義此位置。
-            "符文石碑":   {"slot": 100, "type": "石碑"},
-            "寵物蛋":   {"slot": 101, "type": "寵物"},
-            # === 技能欄位 === slot部位自定義，遊戲未定義此位置。
-            "技能":   {"slot": 102, "type": "技能"},
-        }
         def get_part_slot_from_source(source_str):
-            for part_name, info in self.refine_parts.items():
+            for part_name, info in refine_parts.items():
                 if part_name in source_str:
                     return info["slot"]
             return 9999  # 未知來源排最後
@@ -8495,7 +8486,7 @@ class ItemSearchApp(QWidget):
         # 儲存加成顯示欄位
         self.stat_bonus_labels = {}
 
-        for label, gid in self.stat_fields.items():
+        for label, gid in stat_fields.items():
             # ✅ MHP / MSP 同一行 + 加滑桿（HP% / SP%）
             if label == "MHP":
                 row_layout = QHBoxLayout()
@@ -8889,7 +8880,7 @@ class ItemSearchApp(QWidget):
 
         equip_page_layout.addWidget(equip_scroll)
 
-        for part_name, info in self.refine_parts.items():
+        for part_name, info in refine_parts.items():
             if info["type"] not in visible_types:
                 continue
 
@@ -10728,7 +10719,7 @@ class ItemSearchApp(QWidget):
 
             # 整理 get(...) 對應值
             get_values = {}
-            for label, gid in self.stat_fields.items():
+            for label, gid in stat_fields.items():
                 widget = self.input_fields[label]
                 if isinstance(widget, QComboBox):
                     get_values[gid] = widget.currentData()
@@ -10740,7 +10731,7 @@ class ItemSearchApp(QWidget):
 
             # 整理 GetRefineLevel(...) 對應值
             refine_inputs = {}
-            for label, info in self.refine_parts.items():
+            for label, info in refine_parts.items():
                 slot_id = info["slot"]
                 # 如果你原本使用 slot_id 做什麼，照樣用
 
@@ -10765,7 +10756,7 @@ class ItemSearchApp(QWidget):
             current_slot = None
             if self.current_edit_part:
                 part_name = self.current_edit_part.split(" - ")[0]
-                current_slot = self.refine_parts.get(part_name, {}).get("slot")
+                current_slot = refine_parts.get(part_name, {}).get("slot")
                 grade = self.input_fields.get(f"{part_name}_階級", self.global_grade_combo).currentIndex()
             else:
                 # ⬅️ 若沒選部位就用全域
@@ -10851,6 +10842,14 @@ class ItemSearchApp(QWidget):
 if __name__ == "__main__":
     app = QApplication(sys.argv)
 
+
+    if len(sys.argv) > 1 and sys.argv[1] == "rrf":
+        from RRF_compile_damage_view import MainUI
+        window = MainUI()
+        window.show()
+        sys.exit(app.exec())
+
+    # 預設：原本流程
     loading = LoadingDialog()
     loading.show()    
 
@@ -10862,11 +10861,10 @@ if __name__ == "__main__":
     worker.progress_signal.connect(loading.update_progress)
 
     def on_done(data):
-        
         print("📖 載入 外部MAP ...")
         DataRegistry.reload_all()
         loading.append_text("初始化完成，正在更新介面...")
-        # ✅ 主執行緒更新 UI
+
         window.parsed_items = data or {}
         window.update_combobox()
 
