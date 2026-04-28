@@ -1,5 +1,5 @@
 #部分資料取自ROCalculator,搜尋 ROCalculator 可以知道哪些有使用
-Version = "v0.2.6-260425"
+Version = "v0.2.7-260428"
 
 import sys, builtins, time
 from PySide6.QtCore import QThread, Signal, Qt, QMetaObject, QTimer
@@ -197,7 +197,6 @@ def register_function(name, desc, args, vars=None):
     function_defs[name] = {
         "desc": desc,
         "args": args,
-        "vars": vars or {}
     }
 
 
@@ -317,10 +316,10 @@ job_4th_hpsp = DataRegistry.loaded_data["jobHPSP"]#HPSP
 WPASPDdata = DataRegistry.loaded_data["ASPD"]#攻速資料
 
 stat_fields = {
-    "BaseLv": 11, "JobLv": 12, "JOB": 19, "MHP": 200 , "MSP": 202 ,
-    "STR": 32, "AGI": 33, "VIT": 34, "INT": 35, "DEX": 36, "LUK": 37,
-    "POW": 255, "STA": 256, "WIS": 257, "SPL": 258, "CON": 259, "CRT": 260,"石碑開啟格數": 263 ,"石碑精煉": 264
-            
+    11: "BaseLv", 12: "JobLv", 19: "JOB", 200: "MHP", 202: "MSP",
+    32: "STR", 33: "AGI", 34: "VIT", 35: "INT", 36: "DEX", 37: "LUK",
+    255: "POW", 256: "STA", 257: "WIS", 258: "SPL", 259: "CON", 260: "CRT",
+    263: "石碑開啟格數", 264: "石碑精煉"
 }
 default_values = {
     "BaseLv": 260,"STR": 1,"AGI": 1,"AGI": 1,"VIT": 1,"INT": 1,"DEX": 1,"LUK": 1,
@@ -363,6 +362,10 @@ refine_parts = {
 }
 
 
+equip_sitetype = {
+    10 : "頭上",11: "頭中",12: "頭下",2: "鎧甲",4: "右手(武器)",3: "左手(盾牌)",5: "披肩",6: "鞋子",7: "飾品右",8: "飾品左",
+    30: "影子鎧甲",31: "影子手套",32: "影子盾牌",33: "影子鞋子",34: "影子耳環右",35: "影子墬子左"
+}
 
 effect_map = {
     41: "ATK", 45: "DEF", 47: "MDEF", 49: "HIT", 50: "FLEE", 51: "完全迴避", 52: "CRI", 54: "ASPD",
@@ -2033,6 +2036,11 @@ def parse_lua_effects_with_variables(
     safe_globals = {"__builtins__": None}
     safe_locals = {"math": __import__("math")}
 
+
+
+
+
+
     def safe_eval_expr(expr, variables, get_values, refine_inputs, grade):
         expr = re.sub(r"get\((\d+)\)", lambda m: str(get_values.get(int(m.group(1)), 0)), expr)
         expr = re.sub(r"GetRefineLevel\((\d+)\)", lambda m: str(refine_inputs.get(int(m.group(1)), 0)), expr)
@@ -3144,6 +3152,26 @@ def parse_lua_effects_with_variables(
             results.append(f"無視 全種族 型怪的物理防禦 +100%")
             #Use_skill_levels[266] = True #會跟目前裝備衝突 改到計算內處理
             continue
+
+        #部位
+        register_function("","--以下取得角色能力--",[])
+
+        register_function("get","取得基礎能力",[
+            {"name": "", "type": "var_select", "map": "stat_fields"}
+        ])
+        register_function("GetRefineLevel","取得裝備精煉",[
+            {"name": "", "type": "var_select", "map": "equip_sitetype"}
+        ])
+        register_function("GetEquipGradeLevel","取得裝備階級",[
+            {"name": "", "type": "var_select", "map": "equip_sitetype"}
+        ])
+        register_function("GetEquipArmorLv","取得防具等級",[
+            {"name": "", "type": "var_select", "map": "equip_sitetype"}
+        ])
+        register_function("GetEquipWeaponLv","取得武器等級",[
+            {"name": "", "type": "var_select", "map": "equip_sitetype"}
+        ])
+
 #==============以上物理判斷
 
 #待處理判斷
@@ -6306,7 +6334,7 @@ class ItemSearchApp(QWidget):
 
         # === get(x) 對應 ===
         get_values = {}
-        for stat_name, stat_id in stat_fields.items():
+        for stat_id, stat_name in stat_fields.items():
             try:
                 get_values[stat_id] = int(self.input_fields[stat_name].text())
             except:
@@ -6355,6 +6383,12 @@ class ItemSearchApp(QWidget):
 
 
     def on_function_changed(self):
+        map_registry = {#函數對應
+            "equip_sitetype": equip_sitetype,
+            "stat_fields": stat_fields,
+            "skill_map": skill_map,
+            "effect_map": effect_map,
+        }
         self.skill_search_input.setVisible(False)
         func_name = self.function_selector.currentData()
         spec = function_defs.get(func_name, {})
@@ -6384,6 +6418,32 @@ class ItemSearchApp(QWidget):
 
             label = QLabel(arg["name"])
             row_layout.addWidget(label)
+            if arg.get("type") == "var_select":
+
+                # 🔹 變數名稱
+                name_input = QLineEdit()
+                name_input.setFixedWidth(100)
+                name_input.setPlaceholderText("變數名稱")
+
+                # 🔹 等號
+                eq_label = QLabel("=")
+
+                # 🔹 dropdown（原本的 map）
+                combo = QComboBox()
+                combo.setFixedWidth(120)
+
+                value_map = map_registry.get(arg["map"], {})
+                for k, v in value_map.items():
+                    combo.addItem(v, k)
+
+                # 🔹 排版（重點：dropdown 在 = 後）
+                row_layout.addWidget(name_input)
+                row_layout.addWidget(eq_label)
+                row_layout.addWidget(combo)
+
+                self.param_widgets.append((name_input, combo))
+                continue
+
 
             if "map" in arg:
                 if arg["map"].isdigit():
@@ -6467,25 +6527,50 @@ class ItemSearchApp(QWidget):
 
     def on_generate(self):
         func_name = self.function_selector.currentData()
+
         args = []
+        var_defs = []
+
         for w in self.param_widgets:
-            if isinstance(w, QComboBox):
+
+            # 🔹 var_select（關鍵新增）
+            if isinstance(w, tuple):
+                name_input, combo = w
+
+                var_name = name_input.text().strip()
+                value = combo.currentData()
+
+                # function 參數還是要保留
+                args.append(str(value))
+
+                # 如果有變數名稱 → 產生 assignment
+                if var_name:
+                    var_defs.append(f"{var_name} = {func_name}({value})")
+
+            elif isinstance(w, QComboBox):
                 args.append(str(w.currentData()))
+
             elif isinstance(w, QSpinBox):
                 args.append(str(w.value()))
-            elif isinstance(w, str):  # 固定值
-                args.append(w)
-        result = f"{func_name}({', '.join(args)})"
 
-        # ✅ 新增一行，不覆蓋
+            elif isinstance(w, str):
+                args.append(w)
+
+        # 🔹 如果有變數 → 用變數式
+        if var_defs:
+            result = "\n".join(var_defs)
+        else:
+            result = f"{func_name}({', '.join(args)})"
+
+        # ✅ append 到輸出
         existing = self.result_output.toPlainText()
         if existing.strip():
             new_text = existing + "\n" + result
         else:
             new_text = result
+
         self.result_output.setPlainText(new_text)
 
-        # ✅ 自動捲到底（可選）
         self.result_output.verticalScrollBar().setValue(
             self.result_output.verticalScrollBar().maximum()
         )
@@ -6751,7 +6836,7 @@ class ItemSearchApp(QWidget):
 
 
         get_values = {}
-        for label, gid in stat_fields.items():
+        for gid, label in stat_fields.items():
             widget = self.input_fields[label]
             if isinstance(widget, QComboBox):
                 get_values[gid] = widget.currentData()
@@ -8486,7 +8571,7 @@ class ItemSearchApp(QWidget):
         # 儲存加成顯示欄位
         self.stat_bonus_labels = {}
 
-        for label, gid in stat_fields.items():
+        for gid, label in stat_fields.items():
             # ✅ MHP / MSP 同一行 + 加滑桿（HP% / SP%）
             if label == "MHP":
                 row_layout = QHBoxLayout()
@@ -10719,7 +10804,7 @@ class ItemSearchApp(QWidget):
 
             # 整理 get(...) 對應值
             get_values = {}
-            for label, gid in stat_fields.items():
+            for gid, label in stat_fields.items():
                 widget = self.input_fields[label]
                 if isinstance(widget, QComboBox):
                     get_values[gid] = widget.currentData()
