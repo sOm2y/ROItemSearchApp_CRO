@@ -84,7 +84,7 @@ all_skill_entries = {#範例[    "": {"buff":"","type": "技能/料理","code":[
     #主教
     "神威祈福": {"buff":"15","id": "AB","type": "技能","code":["AddExtParam(1, 200, 25)","Kamui_SpecialATK(25)"]},
     "慈悲術": {"buff":"10","id": "AB","type": "技能","code": ["temp = 70 / 10","AddExtParam(0,103,10 + math.floor(temp))","AddExtParam(0,106,10 + math.floor(temp)","AddExtParam(0,107,10 + math.floor(temp)","AddExtParam(0,49,20)"]},
-    "天使之賜福": {"buff":"","id": ["AB","SN","SU"],"type": "技能","code": ["AddExtParam(0,103,10)","AddExtParam(0,106,10)","AddExtParam(0,107,10","AddExtParam(0,49,20)"]},
+    "天使之賜福": {"buff":"","id": ["AB","SN","SU"],"type": "技能","code": ["AddExtParam(0,103,10)","AddExtParam(0,106,10)","AddExtParam(0,107,10)","AddExtParam(0,49,20)"]},
     "純白百合花": {"buff":"12","id": "AB","type": "技能","code":["temp = 70 / 10","AddExtParam(0,104,12 + math.floor(temp))","AddExtParam(0,167,10 + math.floor(temp))"]},
     "加速術": {"buff":"","id":  ["AB","SN","SU"],"type": "技能","code":["AddExtParam(0,104,12)","AddExtParam(0,167,10)"]},
     "神聖權能": {"buff":"1201","id": "AB","type": "技能","code":["AddExtParam(1, 242, 50)","AddExtParam(1, 243, 50)"]},
