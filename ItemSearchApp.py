@@ -1,5 +1,5 @@
 #部分資料取自ROCalculator,搜尋 ROCalculator 可以知道哪些有使用
-Version = "v0.2.7-260428"
+Version = "v0.2.8-260502"
 
 import sys, builtins, time
 from PySide6.QtCore import QThread, Signal, Qt, QMetaObject, QTimer
@@ -5588,7 +5588,11 @@ class ItemSearchApp(QWidget):
 
 
     def _config_path(self):
-        base_dir = os.path.dirname(os.path.abspath(__file__))
+
+        if getattr(sys, "frozen", False):
+            base_dir = os.path.dirname(sys.executable)
+        else:
+            base_dir = os.path.dirname(os.path.abspath(__file__))
         data_dir = os.path.join(base_dir, "data")
         os.makedirs(data_dir, exist_ok=True)
         return os.path.join(data_dir, "config.json")
