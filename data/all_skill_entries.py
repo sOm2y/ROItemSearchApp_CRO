@@ -75,11 +75,12 @@ all_skill_entries = {#範例[    "": {"buff":"","type": "技能/料理","code":[
     "盧恩石5": {"buff":"322","id": "RK","type": "技能","code":["temp = GetSkillLevel(2010)","AddExtParam(0,302,temp / 10 * 4)","AddExtParam(1, 41, temp * 7)"]},
     "盧恩石10": {"buff":"1154","id": "RK","type": "技能","code":["AddExtParam(1, 111, 30)","AddExtParam(1, 112, 30)","AddDamage_Size(1, 0, 30)","AddDamage_Size(1, 1, 30)","AddDamage_Size(1, 2, 30)","AddDamage_CRI(1, 30)","AddMeleeAttackDamage(1, 30)","AddRangeAttackDamage(1, 30)"]},
     #皇家
+    "盾咒LV3": {"buff":"1316","id": "RG","type": "技能","code":["AddExtParam(1, 41, 150)","AddExtParam(1, 200, 150)"]},
     "靈感": {"buff":"407","id": "RG","type": "技能","code":["UseSkill(2325)","temp = GetSkillLevel(2325)","AddExtParam(1, 49, 12 * temp)","AddExtParam(1, 103, 6 * temp)","AddExtParam(1, 104, 6 * temp)","AddExtParam(1, 105, 6 * temp)","AddExtParam(1, 106, 6 * temp)","AddExtParam(1, 107, 6 * temp)","AddExtParam(1, 108, 6 * temp)","AddExtParam(1, 111, 4 * temp)","AddExtParam(1, 41, 40 * temp)","AddExtParam(1, 200, 40 * temp)"]},
     "抗性聖盾": {"buff":"1220","id": "RG","type": "技能","code":["UseSkill(5262)","temp = GetSkillLevel(5262)","AddSkillMDamage(6, temp * 3)"]},
     "末日審判": {"buff":"1222","id": "RG","type": "技能","code":["UseSkill(5263)"]},
-    "攻擊架式": {"buff":"1203","id": "RG","type": "技能","code":["temp = GetSkillLevel(5260)","AddExtParam(1, 242, temp * 3)","AddExtParam(1, 243, temp * 3)","SubExtParam(1, 45, temp * 40)"]},
-    "防禦架式": {"buff":"1202","id": "RG","type": "技能","code":["UseSkill(5255)","temp = GetSkillLevel(5255)","AddExtParam(1, 45, 50 + (temp * 50))","SubExtParam(1, 41, temp * 50)"]},
+    "攻擊架式": {"buff":"1203","id": "RG","type": "技能","code":["temp = GetSkillLevel(5260)","AddExtParam(1, 242, temp * 3)","AddExtParam(1, 243, temp * 3)","SubExtParam(1, 45, temp * 40)"],"exclusive": "Frame"},
+    "防禦架式": {"buff":"1202","id": "RG","type": "技能","code":["UseSkill(5255)","temp = GetSkillLevel(5255)","AddExtParam(1, 45, 50 + (temp * 50))","SubExtParam(1, 41, temp * 50)"],"exclusive": "Frame"},
     #主教
     "神威祈福": {"buff":"15","id": "AB","type": "技能","code":["AddExtParam(1, 200, 25)","Kamui_SpecialATK(25)"]},
     "慈悲術": {"buff":"10","id": "AB","type": "技能","code": ["temp = 70 / 10","AddExtParam(0,103,10 + math.floor(temp))","AddExtParam(0,106,10 + math.floor(temp)","AddExtParam(0,107,10 + math.floor(temp)","AddExtParam(0,49,20)"]},
