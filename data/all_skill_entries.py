@@ -183,6 +183,7 @@ all_skill_entries = {#範例[    "": {"buff":"","type": "技能/料理","code":[
     
     
     #禁咒
+    "終極念力": {"buff":"717","id": "WL","type": "技能","code":["AddDamage_passive_SKID(1, 13, 200)","AddDamage_passive_SKID(1, 11, 200)","AddDamage_passive_SKID(1, 400, 200)","AddDamage_passive_SKID(1, 2202, 200)","AddDamage_passive_SKID(1, 2201, 200)","AddDamage_passive_SKID(1, 5220, 200)"]},
     "魔力增幅": {"buff":"113","id": "WL","type": "技能","code":["UseSkill(366)"]},
     "魔力巔峰Lv4(毀滅颶風)": {"buff":"1151","id": "WL","type": "技能","code":["UseSkill(5232)","AddSkillMDamage(4, 30)","AddExtParam(1, 200, 100)"],"exclusive": "CLIMAX"},
     "魔力巔峰Lv3": {"buff":"1152","id": "WL","type": "技能","code":["UseSkill(5232)","AddDamage_SKID(1, 5222, 300)","AddDamage_SKID(1, 5218, 200)","AddDamage_SKID(1, 5215, 150)"],"exclusive": "CLIMAX"},
