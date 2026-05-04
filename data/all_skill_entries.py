@@ -108,8 +108,8 @@ all_skill_entries = {#範例[    "": {"buff":"","type": "技能/料理","code":[
     "魅影強化": {"buff":"192","id": "GX","type": "技能","code":["UseSkill(5285)"]},
     "偽裝強化": {"buff":"333","id": "GX","type": "技能","code":["UseSkill(2033)"]},
     "劇毒武器": {"buff":"341","id": "GX","type": "技能","code":["AddMeleeAttackDamage(1, 10)"]},
-    "劇毒武器:熱病": {"buff":"341-2","id": "GX","type": "技能","code":["AddDamage_CRI(1, 15)"]},
-    "劇毒武器:狂笑": {"buff":"341-2","id": "GX","type": "技能","code":["SubSpellDelay(0)"]},
+    "劇毒武器:熱病": {"buff":"341-1","id": "GX","type": "技能","code":["AddDamage_CRI(1, 15)"]},
+    "劇毒武器:狂笑": {"buff":"341-2","id": "GX","type": "技能","code":["SubSpellDelay(10)"]},
     
     #704
     "五行符": {"buff":"1359","id": "SL","type": "技能","code":["AddMDamage_Property(1, 0, 20)","AddMDamage_Property(1, 1, 20)","AddMDamage_Property(1,2, 20)","AddMDamage_Property(1, 3, 20)","AddMDamage_Property(1, 4, 20)","AddDamage_Property(1, 0, 20)","AddDamage_Property(1, 1, 20)","AddDamage_Property(1,2, 20)","AddDamage_Property(1, 3, 20)","AddDamage_Property(1, 4, 20)"]},

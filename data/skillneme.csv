@@ -1135,7 +1135,7 @@
 5428,SOA_TALISMAN_OF_RED_PHOENIX,朱雀符,magic,0,,,5,(1400+(1450+15*GSklv(5416))*Sklv+total_SPL*5)*BaseLv/100,0,-3,,,2,,,5431,(1600+(1850+15*GSklv(5416))*Sklv+total_SPL*5)*BaseLv/100,,,,,,,,
 5429,SOA_TALISMAN_OF_BLACK_TORTOISE,玄武符,magic,,,,5,(2150+(1600+15*GSklv(5416))*Sklv+total_SPL*5)*BaseLv/100,0,-3,,,,,,5431,(2300+(2100+15*GSklv(5416))*Sklv+total_SPL*5)*BaseLv/100,,,,,,,,
 5430,SOA_TALISMAN_OF_FOUR_BEARING_GOD,四方神符,magic,,,,5,(50+(250+15*GSklv(5416))*Sklv+total_SPL*5)*BaseLv/100,0,7,,,,,,,,,,,,,,,
-5431,SOA_CIRCLE_OF_DIRECTIONS_AND_ELEMENTALS,四方五行陣,physical,,,,5,(500+(2000+15*(GSklv(5416)+GSklv(5417)))*Sklv+total_SPL*10)*BaseLv/100,0,5,,,,,,,,,,,,,,,
+5431,SOA_CIRCLE_OF_DIRECTIONS_AND_ELEMENTALS,四方五行陣,magic,0,0,,5,(500+(2000+15*(GSklv(5416)+GSklv(5417)))*Sklv+total_SPL*10)*BaseLv/100,0,5,,,,,,,,,,,0,0,,,
 5432,SOA_SOUL_OF_HEAVEN_AND_EARTH,天地神靈,,,,,,,0,0,,,,,,,,,,,,,,,
 5433,SH_MYSTICAL_CREATURE_MASTERY,靈物互動,,,,,,,0,0,,,,,,,,,,,,,,,
 5434,SH_COMMUNE_WITH_CHUL_HO,靈物交流: 鐵虎,,,,,,,0,0,,,,,,,,,,,,,,,
