@@ -1,6 +1,7 @@
 # 額外參數對照表
 all_skill_entries = {#範例[    "": {"buff":"","type": "技能/料理","code":["",""]},
-    "掉寶呆": {"buff":"1597","type": "料理","code":["SubMDamage_Size(1, 0, 70)","SubMDamage_Size(1, 1, 70)","SubMDamage_Size(1, 2, 70)","SubMDamage_Property(1, 10, 70)","SubMdamage_Race(9999, 70)","SubMdamage_Class(0, 70)","SubMdamage_Class(1, 70)","AddSpellCastTime(30)","SubDamage_Size(1, 0, 70)","SubDamage_Size(1, 1, 70)","SubDamage_Size(1, 2, 70)","SubDamage_Property(1, 10, 70)","RaceAddDamage(9999, 70)","ClassSubDamage(0, 1, 70)","ClassSubDamage(1, 1,70)"]},
+    "掉寶呆(本次)0506-0519": {"buff":"1597","type": "料理","code":["RaceSubDamage(9999, 70)","SubDamage_Property(1, 10, 70)","ClassSubDamage(0, 1, 70)","ClassSubDamage(1, 1, 70)","SubMdamage_Race(9999, 70)","SubMDamage_Property(1, 10, 70)","SubMdamage_Class(0, 70)","SubMdamage_Class(1, 70)","SubExtParam(1, 52, 300)","SubExtParam(1, 207, 30)","SubExtParam(1, 140, 30)"],"exclusive": "itemsugar"},
+    "掉寶呆(上次)0317-0331": {"buff":"","type": "料理","code":["SubMDamage_Size(1, 0, 70)","SubMDamage_Size(1, 1, 70)","SubMDamage_Size(1, 2, 70)","SubMDamage_Property(1, 10, 70)","SubMdamage_Race(9999, 70)","SubMdamage_Class(0, 70)","SubMdamage_Class(1, 70)","AddSpellCastTime(30)","SubDamage_Size(1, 0, 70)","SubDamage_Size(1, 1, 70)","SubDamage_Size(1, 2, 70)","SubDamage_Property(1, 10, 70)","RaceSubDamage(9999, 70)","ClassSubDamage(0, 1, 70)","ClassSubDamage(1, 1,70)"],"exclusive": "itemsugar"},
     "波利蛋糕": {"buff":"1480","type": "料理","code":["AddExtParam(1, 103, 15)","AddExtParam(1, 104, 15)","AddExtParam(1, 105, 15)","AddExtParam(1, 106, 15)","AddExtParam(1, 107, 15)","AddExtParam(1, 108, 15)","AddExtParam(1, 234, 15)","AddExtParam(1, 235, 15)","AddExtParam(1, 236, 15)","AddExtParam(1, 237, 15)","AddExtParam(1, 238, 15)","AddExtParam(1, 239, 15)","AddDamage_Property(1, 10, 12)","AddMDamage_Property(1, 10, 12)"]},
     #10料
     "力量料理": {"buff":"241","type": "料理","code":["AddExtParam(0,103,10)"],"exclusive": "food_str"},
@@ -9,8 +10,8 @@ all_skill_entries = {#範例[    "": {"buff":"","type": "技能/料理","code":[
     "智慧料理": {"buff":"244","type": "料理","code":["AddExtParam(0,106,10)"],"exclusive": "food_int"},
     "靈巧料理": {"buff":"245","type": "料理","code":["AddExtParam(0,107,10)"],"exclusive": "food_dex"},
     "幸運料理": {"buff":"246","type": "料理","code":["AddExtParam(0,108,10)"],"exclusive": "food_luk"},
-    "終極料理": {"buff":"1034","type": "料理","code":["AddExtParam(1, 41, 30)","AddExtParam(1, 200, 30)"],"exclusive": ""},
-    "萬能年糕": {"buff":"685","type": "料理","code":["AddExtParam(1, 41, 30)","AddExtParam(1, 200, 30)"],"exclusive": ""},
+    "終極料理": {"buff":"1034","type": "料理","code":["AddExtParam(1, 41, 30)","AddExtParam(1, 200, 30)"],"exclusive": "atkmatk30"},
+    "萬能年糕": {"buff":"685","type": "料理","code":["AddExtParam(1, 41, 30)","AddExtParam(1, 200, 30)"],"exclusive": "atkmatk30"},
     #1641=10料6總總和
     "活力激發劑": {"buff":"1641","type": "料理","code":["AddExtParam(0,103,20)","AddExtParam(0,104,20)","AddExtParam(0,105,20)","AddExtParam(0,106,20)","AddExtParam(0,107,20)","AddExtParam(0,108,20)"],"exclusive": "food_str,food_agi,food_vit,food_int,food_dex,food_luk"},
     #15料
