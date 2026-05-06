@@ -26063,6 +26063,8 @@ Table[10041].Slot[1]:AddUpgradeEnchant("Barmund_Sta2", "Barmund_Sta3", 100000000
 Table[150] = CreateEnchantInfo()
 Table[150]:SetSlotOrder(3, 2)
 Table[150]:AddTargetItem_Duplicate("Time_Gap_Spear_IG")
+Table[150]:AddTargetItem_Duplicate("Time_Gap_TR_Ribbon")
+Table[150]:AddTargetItem_Duplicate("Time_Gap_TR_Vilolin")
 Table[150]:AddTargetItem_Duplicate("Time_Gap_DK_Spear")
 Table[150]:AddTargetItem_Duplicate("Time_Gap_IQ_Knuckle")
 Table[150]:SetCondition(0, 0)

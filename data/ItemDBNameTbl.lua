@@ -4994,7 +4994,15 @@ ItemDBNameTbl = {
   S_AG_SH_Shoes = 24974,
   Reform_4th_Skill_Shadow = 103309,
   Coal = 1003,
-  Wheel = 7093
+  Wheel = 7093,
+  S_BO_AC_Earring = 1270027,
+  S_BO_AC_Pendant = 1270028,
+  S_BO_TH_Armor = 1270029,
+  S_BO_TH_Shoes = 1270030,
+  Time_Gap_TR_Ribbon = 580075,
+  Time_Gap_TR_Vilolin = 570075,
+  T_Dimension_Ring_WH = 491015,
+  T_Dimension_Ring_TR = 491016
 }
 
 function ItemDB_To_ItemID(in_ItemDB)
