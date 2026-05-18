@@ -1,7 +1,9 @@
 #部分資料取自ROCalculator,搜尋 ROCalculator 可以知道哪些有使用
-Version = "v0.2.8-260502"
+Version = "v0.3.0-260518"
 
 import sys, builtins, time
+import os
+import json
 from PySide6.QtCore import QThread, Signal, Qt, QMetaObject, QTimer
 from PySide6.QtWidgets import QApplication, QDialog, QVBoxLayout, QPlainTextEdit, QLabel
 import enchant #載入附魔工具
@@ -14,7 +16,59 @@ from Damage_view import DamageCalculator
 from pathlib import Path
 from dotenv import load_dotenv
 from datetime import datetime, timezone
+
 import requests
+
+class LangManager:
+    """Simple JSON language-pack loader for user-facing UI text."""
+    current_lang = "zh_TW"
+    fallback_lang = "zh_TW"
+    translations = {}
+    fallback_translations = {}
+
+    @classmethod
+    def _base_dir(cls):
+        if getattr(sys, "frozen", False):
+            return os.path.dirname(sys.executable)
+        return os.path.dirname(os.path.abspath(__file__))
+
+    @classmethod
+    def _read_lang_file(cls, lang_code):
+        path = os.path.join(cls._base_dir(), "lang", f"{lang_code}.json")
+        if not os.path.exists(path):
+            return {}
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception as e:
+            print(f"語言包載入失敗：{path}，{e}")
+            return {}
+
+    @classmethod
+    def load(cls, lang_code="zh_TW"):
+        cls.current_lang = lang_code or cls.fallback_lang
+        cls.fallback_translations = cls._read_lang_file(cls.fallback_lang)
+        cls.translations = cls._read_lang_file(cls.current_lang)
+
+    @classmethod
+    def tr(cls, key, default=None, **kwargs):
+        text = cls.translations.get(
+            key,
+            cls.fallback_translations.get(key, default if default is not None else key)
+        )
+        try:
+            return text.format(**kwargs)
+        except Exception:
+            return text
+
+
+def tr(key, default=None, **kwargs):
+    return LangManager.tr(key, default, **kwargs)
+
+
+LangManager.load("zh_TW")
+
+
 class InitWorker(QThread):
     log_signal = Signal(str)
     progress_signal = Signal(str)
@@ -69,23 +123,23 @@ from PySide6.QtGui import QDesktopServices
 class UpdateDialog(QDialog):#顯示更新內容
     def __init__(self, local_ver: str, remote_ver: str, notes_md: str, release_url: str, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("有新版本")
+        self.setWindowTitle(tr("window.update_available"))
         self.setModal(True)
         self.resize(640, 520)
 
         layout = QVBoxLayout(self)
 
-        title = QLabel(f"目前版本：{local_ver}　　最新版本：{remote_ver}")
+        title = QLabel(tr("label.version_info", local_ver=local_ver, remote_ver=remote_ver))
         title.setTextInteractionFlags(Qt.TextSelectableByMouse)
         layout.addWidget(title)
 
-        link = QLabel(f'<a href="{release_url}">前往 Release 頁面</a>')
+        link = QLabel(tr("label.release_link_html", release_url=release_url))
         link.setOpenExternalLinks(True)
         layout.addWidget(link)
 
         self.browser = QTextBrowser()
         # 讓 QTextBrowser 顯示 markdown（PySide6 支援 setMarkdown）
-        self.browser.setMarkdown(notes_md if notes_md.strip() else "(此版本沒有填寫更新內容)")
+        self.browser.setMarkdown(notes_md if notes_md.strip() else tr("update.empty_notes"))
         self.browser.setReadOnly(True)
 
         # 點連結開外部瀏覽器（避免某些情況下內建行為不一致）
@@ -97,8 +151,8 @@ class UpdateDialog(QDialog):#顯示更新內容
         btn_row = QHBoxLayout()
         btn_row.addStretch(1)
 
-        self.btn_update = QPushButton("立即更新")
-        self.btn_cancel = QPushButton("稍後再說")
+        self.btn_update = QPushButton(tr("button.update_now"))
+        self.btn_cancel = QPushButton(tr("button.later"))
 
         self.btn_update.clicked.connect(self.accept)
         self.btn_cancel.clicked.connect(self.reject)
@@ -115,13 +169,13 @@ from recompile_service import RecompileService
 class LoadingDialog(QDialog):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("初始化中…")
+        self.setWindowTitle(tr("window.loading"))
         self.resize(500, 200)
         self.setWindowFlags(self.windowFlags() | Qt.WindowStaysOnTopHint)
 
         layout = QVBoxLayout(self)
 
-        self.label = QLabel("正在載入資料，請稍候...")
+        self.label = QLabel(tr("label.loading"))
         self.text = QPlainTextEdit()
         self.text.setReadOnly(True)
 
@@ -908,7 +962,7 @@ class SaveManagerDialog(QDialog, Ui_SaveManagerDialog):#儲存裝被選則
         super().__init__(parent)
         self.setupUi(self)   # 這裡載入 Designer 畫的 UI
 
-        self.setWindowTitle(f"{part_name} 的裝備清單")
+        self.setWindowTitle(tr("window.save_manager", part_name=part_name))
         self.part_name = part_name
         self.save_list = save_list
         self.selected_save = None
@@ -937,8 +991,8 @@ class SaveManagerDialog(QDialog, Ui_SaveManagerDialog):#儲存裝被選則
             save_name = current_item.text()
             confirm = QMessageBox.question(
                 self,
-                "確認刪除",
-                f"確定要刪除存檔「{save_name}」嗎？",
+                tr("message.title.confirm_delete"),
+                tr("message.confirm_delete_save", save_name=save_name),
                 QMessageBox.Yes | QMessageBox.No
             )
             if confirm == QMessageBox.Yes:
@@ -1053,7 +1107,7 @@ def update_skill_delay_labels(#技能延遲標籤更新
             break
 
     if not skill_code:
-        fix_label.setText("找不到技能 Code")
+        fix_label.setText(tr("message.skill_code_not_found"))
         delay_label.setText("")
         return
 
@@ -1064,7 +1118,7 @@ def update_skill_delay_labels(#技能延遲標籤更新
     )
     m = start_pat.search(lua_text)
     if not m:
-        fix_label.setText(f"lua 找不到 [SKID.{skill_code}]")
+        fix_label.setText(tr("message.lua_skill_not_found", skill_code=skill_code))
         delay_label.setText("")
         return
 
@@ -1081,7 +1135,7 @@ def update_skill_delay_labels(#技能延遲標籤更新
                 break
 
     if not block:
-        fix_label.setText("技能資料解析失敗")
+        fix_label.setText(tr("message.skill_data_parse_failed"))
         delay_label.setText("")
         return
 
@@ -1128,13 +1182,11 @@ def update_skill_delay_labels(#技能延遲標籤更新
 
     # ---------- 更新 QLabel ----------
     fix_label.setText(
-        f"固詠: {pick(fixed)}秒({pick(fixed_raw)}秒) "
-        f"變詠: {pick(stat)}秒({pick(stat_raw)}秒)"
+        tr("label.cast_delay_info", fixed=pick(fixed), fixed_raw=pick(fixed_raw), stat=pick(stat), stat_raw=pick(stat_raw))
     )
 
     delay_label.setText(
-        f"共延: {pick(gpost)}秒({pick(gpost_raw)}秒) "
-        f"冷卻: {pick(spost)}秒({pick(spost_raw)}秒)"
+        tr("label.post_delay_info", gpost=pick(gpost), gpost_raw=pick(gpost_raw), spost=pick(spost), spost_raw=pick(spost_raw))
     )
     # fix_label.setText(
     #     f"固詠: {pick(fixed)}秒 "
@@ -1345,7 +1397,7 @@ class CSVEditor(QMainWindow):
     def __init__(self, file_path, parent=None):
         super().__init__(parent)  # ✅ 把 parent 傳給 QMainWindow
         self.file_path = file_path
-        self.setWindowTitle("技能設定編輯器")
+        self.setWindowTitle(tr("window.skill_editor"))
         self.resize(600, 600)
         self.center_to_parent()
         self.file_path = file_path
@@ -1358,18 +1410,18 @@ class CSVEditor(QMainWindow):
         # === 搜尋 + 選擇 技能（同一行） ===
         search_name_layout = QHBoxLayout()
 
-        search_label = QLabel("搜尋 技能：")
+        search_label = QLabel(tr("label.search_skill"))
         self.search_box = QLineEdit()
-        self.search_box.setPlaceholderText("輸入名稱關鍵字...")
+        self.search_box.setPlaceholderText(tr("placeholder.search_name"))
         self.search_box.textChanged.connect(self.filter_names)
 
         # 🔹 清空按鈕
-        self.clear_search_button = QPushButton("清空")
+        self.clear_search_button = QPushButton(tr("button.clear"))
         self.clear_search_button.setFixedWidth(50)
-        self.clear_search_button.setToolTip("清除搜尋文字")
+        self.clear_search_button.setToolTip(tr("tooltip.clear_search_text"))
         self.clear_search_button.clicked.connect(self.search_box.clear)
 
-        name_label = QLabel("選擇 技能：")
+        name_label = QLabel(tr("label.select_skill"))
         self.name_combo = QComboBox()
         self.name_combo.setMinimumWidth(200)
 
@@ -1393,12 +1445,12 @@ class CSVEditor(QMainWindow):
         button_layout = QHBoxLayout()
 
         # 儲存但不關閉
-        self.save_only_button = QPushButton("📝 只儲存變更")
+        self.save_only_button = QPushButton(tr("button.save_only"))
         self.save_only_button.clicked.connect(lambda: self.save_changes(close_after=False))
         button_layout.addWidget(self.save_only_button)
 
         # 儲存並關閉
-        self.save_button = QPushButton("💾 儲存變更並關閉")
+        self.save_button = QPushButton(tr("button.save_and_close"))
         self.save_button.clicked.connect(lambda: self.save_changes(close_after=True))
         button_layout.addWidget(self.save_button)
 
@@ -1421,7 +1473,7 @@ class CSVEditor(QMainWindow):
             rows = list(reader)
 
         if not rows:
-            QMessageBox.warning(self, "錯誤", "CSV 檔案是空的！")
+            QMessageBox.warning(self, tr("message.title.error"), tr("message.csv_empty"))
             return
 
         self.headers = rows[0]
@@ -1431,7 +1483,7 @@ class CSVEditor(QMainWindow):
         try:
             self.name_index = next(i for i, h in enumerate(self.headers) if h.lower() in ["name", "skillname"])
         except StopIteration:
-            QMessageBox.warning(self, "錯誤", "找不到 'Name' 欄位！")
+            QMessageBox.warning(self, tr("message.title.error"), tr("message.csv_missing_name_column"))
             return
 
         # 將所有行資料加入
@@ -1446,103 +1498,103 @@ class CSVEditor(QMainWindow):
         # === 欄位資訊（名稱 + 提示文字） ===
         header_info = {
             "ID": {
-                "label": "技能 ID",
+                "label": tr("skill_editor.field.id"),
                 "tooltip": "技能在資料表中的唯一識別碼，通常不可修改。"
             },
             "Code": {
-                "label": "程式代碼",
+                "label": tr("skill_editor.field.code"),
                 "tooltip": "內部使用的技能代碼，用於程式判斷。"
             },
             "attack_type": {
-                "label": "攻擊類型",
+                "label": tr("skill_editor.field.attack_type"),
                 "tooltip": "選擇攻擊類型：magic 為魔法攻擊，physical 為物理攻擊。"
             },
             "Slv": {
-                "label": "技能等級",
+                "label": tr("skill_editor.field.skill_level"),
                 "tooltip": "此欄可填入技能等級對應數值。(不輸入時不顯示在下拉式選單)"
             },
             "Calculation": {
-                "label": "計算公式",
+                "label": tr("skill_editor.field.calculation"),
                 "tooltip": "技能傷害或效果的計算公式，可使用 BaseLv、Sklv 等變數。"
             },
             "element": {
-                "label": "攻擊屬性",
+                "label": tr("skill_editor.field.element"),
                 "tooltip": "屬性(無=0,水=1,地=2,火=3,風=4,毒=5,聖=6,暗=7,念=8,不死=9)"
             },
             "hits": {
-                "label": "打擊次數",
+                "label": tr("skill_editor.field.hits"),
                 "tooltip": "技能打擊次數。(負值為總傷害/次數)"
             },
             "Critical_hit": {
-                "label": "技能爆擊/命中判定",
+                "label": tr("skill_editor.field.critical_hit"),
                 "tooltip": "設定爆擊倍率，例如 0.5 代表半爆擊；設定命中增傷設定0；負數代表兩者不啟用。"
             },
             "combo": {
-                "label": "連段技能公式",
+                "label": tr("skill_editor.field.combo"),
                 "tooltip": "此技能觸發的下一個公式。"
             },
             "combo_element": {
-                "label": "連段技能攻擊屬性",
+                "label": tr("skill_editor.field.combo_element"),
                 "tooltip": "連段技能的屬性。"
             },
             "combo_hits": {
-                "label": "連段次數",
+                "label": tr("skill_editor.field.combo_hits"),
                 "tooltip": "連段技能的打擊次數。(負值為總傷害/次數)"
             },
             "combo_Special_Calculation": {
-                "label": "特殊連段計算公式",
+                "label": tr("skill_editor.field.combo_special_calculation"),
                 "tooltip": "觸發特殊條件下的技能公式，會覆蓋連段公式。"
             },
             "Special_Calculation": {
-                "label": "特殊計算公式",
+                "label": tr("skill_editor.field.special_calculation"),
                 "tooltip": "觸發特殊條件下的技能公式，會覆蓋一般公式。"
             },
             "monster_race": {
-                "label": "觸發特殊計算種族",
+                "label": tr("skill_editor.field.monster_race"),
                 "tooltip": "怪物種族觸發特別公式。"
             },
             "skill_buff": {
-                "label": "觸發特殊計算技能(ID)",
+                "label": tr("skill_editor.field.skill_buff"),
                 "tooltip": "目前技能觸發的特殊技能 ID（例如狀態技能）。"
             },
             "Special_Critical_hit": {
-                "label": "特殊技能爆擊/命中判定",
+                "label": tr("skill_editor.field.special_critical_hit"),
                 "tooltip": "觸發特殊條件爆擊倍率，例如 0.5 代表半爆擊；設定命中增傷設定0；負數代表兩者不啟用。"
             },
             "decay_hits": {
-                "label": "遞增/減段數",
+                "label": tr("skill_editor.field.decay_hits"),
                 "tooltip": "設定每段的遞增或遞減次數，例如 4 代表 4 段。"
             },
             "bonus_add": {
-                "label": "遞增/減原始數字",
+                "label": tr("skill_editor.field.bonus_add"),
                 "tooltip": "起始加成（或乘數），可輸入 +800 或 *1。"
             },
             "bonus_step": {
-                "label": "遞增/減數字",
+                "label": tr("skill_editor.field.bonus_step"),
                 "tooltip": "每段遞增/減的變化量，例如 -100 或 +0.1。"
             },
             "Rangedamage": {
-                "label": "技能遠距傷害",
+                "label": tr("skill_editor.field.rangedamage"),
                 "tooltip": "技能套用遠距傷害計算。"
             },
             "half_bypass_def": {
-                "label": "半無視DEF",
+                "label": tr("skill_editor.field.half_bypass_def"),
                 "tooltip": "無視後DEF乘算，數字加算到前DEF。"
             },
             "half_bypass_res": {
-                "label": "無視RES",
+                "label": tr("skill_editor.field.half_bypass_res"),
                 "tooltip": "無視RES"
             },
             "special_wprange": {
-                "label": "裝備武器套用遠距計算",
+                "label": tr("skill_editor.field.special_wprange"),
                 "tooltip": "裝備該類型的武器自動轉換遠傷。"
             },
             "skill_SpecialATK": {
-                "label": "技能特殊段加算傷害",
+                "label": tr("skill_editor.field.skill_special_atk"),
                 "tooltip": "綠光減傷前加算。"
             },
             "skill_cannon": {
-                "label": "使用加農砲彈",
+                "label": tr("skill_editor.field.skill_cannon"),
                 "tooltip": "計算公式加入砲彈ATK。"
             }
 
@@ -1720,7 +1772,7 @@ class CSVEditor(QMainWindow):
     def save_changes(self, close_after=True):
         index = self.name_combo.currentIndex()
         if index < 0 or index >= len(self.filtered_rows):
-            QMessageBox.warning(self, "錯誤", "請先選擇一個 Name")
+            QMessageBox.warning(self, tr("message.title.error"), tr("message.select_name_first"))
             return
 
         row = self.filtered_rows[index]
@@ -1790,7 +1842,7 @@ class CSVEditor(QMainWindow):
             if close_after:
                 self.close()
         except Exception as e:
-            QMessageBox.critical(self, "錯誤", f"儲存失敗：{e}")
+            QMessageBox.critical(self, tr("message.title.error"), tr("message.save_failed", error=e))
         # 讓主畫面即時看到變更，並選到當前編輯的技能
         self._refresh_and_select_in_main()
 
@@ -1917,7 +1969,7 @@ class FileSelectionDialog(QDialog):#刪除清單
         self.program_update_info = program_update_info or {}
         self.has_program_update = bool(self.program_update_info.get("available"))
 
-        self.setWindowTitle("選擇要刪除的檔案")
+        self.setWindowTitle(tr("window.delete_files"))
         self.resize(500, 500)
 
         self.base_path = base_path
@@ -1926,30 +1978,30 @@ class FileSelectionDialog(QDialog):#刪除清單
 
         layout = QVBoxLayout(self)
 
-        desc_lines = ["有勾選代表本機資料過期，若有特殊需求再手動勾選。"]
+        desc_lines = [tr("message.update_file_selection_tip")]
         if self.has_program_update:
-            local_ver = self.program_update_info.get("local_ver", "目前版本")
-            remote_ver = self.program_update_info.get("remote_ver", "最新版本")
-            desc_lines.append(f"偵測到主程式新版本：{local_ver} → {remote_ver}")
+            local_ver = self.program_update_info.get("local_ver", tr("label.current_version"))
+            remote_ver = self.program_update_info.get("remote_ver", tr("label.latest_version"))
+            desc_lines.append(tr("message.program_update_available", local_ver=local_ver, remote_ver=remote_ver))
         elif not files:
-            desc_lines.append("目前沒有需要刪除的資料檔案。")
+            desc_lines.append(tr("message.no_data_files_to_delete"))
 
         desc_label = QLabel("\n".join(desc_lines))
         desc_label.setWordWrap(True)
         layout.addWidget(desc_label)
 
         if self.has_program_update:
-            local_ver = self.program_update_info.get("local_ver", "目前版本")
-            remote_ver = self.program_update_info.get("remote_ver", "最新版本")
+            local_ver = self.program_update_info.get("local_ver", tr("label.current_version"))
+            remote_ver = self.program_update_info.get("remote_ver", tr("label.latest_version"))
             self.update_program_checkbox = QCheckBox(
-                f"同步更新主程式（{local_ver} → {remote_ver}）"
+                tr("checkbox.sync_program_update", local_ver=local_ver, remote_ver=remote_ver)
             )
             self.update_program_checkbox.setChecked(True)
             layout.addWidget(self.update_program_checkbox)
 
             release_url = self.program_update_info.get("release_url")
             if release_url:
-                link = QLabel(f'<a href="{release_url}">前往 Release 頁面</a>')
+                link = QLabel(tr("label.release_link_html", release_url=release_url))
                 link.setOpenExternalLinks(True)
                 layout.addWidget(link)
 
@@ -1965,7 +2017,7 @@ class FileSelectionDialog(QDialog):#刪除清單
                 mtime = datetime.fromtimestamp(os.path.getmtime(full_path))
                 date_str = mtime.strftime("%Y-%m-%d %H:%M")
             else:
-                date_str = "（不存在）"
+                date_str = tr("label.not_exists")
 
             cb = QCheckBox(f"{filename}    ({date_str})")
             cb.setChecked(default_checked)
@@ -1979,14 +2031,14 @@ class FileSelectionDialog(QDialog):#刪除清單
         # === bottom buttons ===
         btn_box = QHBoxLayout()
         if self.has_program_update and not files:
-            ok_text = "更新主程式"
+            ok_text = tr("button.update_program")
         elif self.has_program_update:
-            ok_text = "刪除並更新"
+            ok_text = tr("button.delete_and_update")
         else:
-            ok_text = "刪除"
+            ok_text = tr("button.delete")
 
         ok_btn = QPushButton(ok_text)
-        cancel_btn = QPushButton("取消")
+        cancel_btn = QPushButton(tr("button.cancel"))
 
         ok_btn.clicked.connect(self.accept)
         cancel_btn.clicked.connect(self.reject)
@@ -3260,7 +3312,7 @@ def convert_description_to_html(description_lines):#視覺化說明欄
 def decompile_lub(lub_path, output_path):
     """使用 luadec.exe 反編譯 LUB → LUA"""
     if not os.path.exists(lub_path):
-        QMessageBox.critical(None, "錯誤", f"找不到 LUB 檔案：\n{lub_path}")
+        QMessageBox.critical(None, tr("message.title.error"), tr("message.lub_file_not_found", path=lub_path))
         return False
 
     try:
@@ -3275,11 +3327,11 @@ def decompile_lub(lub_path, output_path):
         return True
 
     except subprocess.CalledProcessError as e:
-        QMessageBox.critical(None, "反編譯失敗", e.stderr.decode("utf-8", errors="ignore"))
+        QMessageBox.critical(None, tr("message.title.decompile_failed"), e.stderr.decode("utf-8", errors="ignore"))
         return False
 
     except FileNotFoundError:
-        QMessageBox.critical(None, "錯誤", "找不到 luadec.exe，請確認它放在 APP 資料夾。")
+        QMessageBox.critical(None, tr("message.title.error"), tr("message.luadec_not_found"))
         return False
 
 
@@ -3288,7 +3340,7 @@ def parse_lub_file(filename, existing_items=None, duplicate_mode="skip"):  # 字
         with open(filename, "r", encoding="utf-8") as file:
             content = file.read()
     except FileNotFoundError:
-        QMessageBox.critical(None, "錯誤", f"找不到檔案：{filename}")
+        QMessageBox.critical(None, tr("message.title.error"), tr("message.file_not_found", filename=filename))
         return existing_items if existing_items is not None else {}
 
     item_entries = re.findall(
@@ -3465,14 +3517,14 @@ from PySide6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QComboB
 class PreferencesDialog(QDialog):
     def __init__(self, current_mode: str, current_api_key: str = "", parent=None):
         super().__init__(parent)
-        self.setWindowTitle("偏好設定")
+        self.setWindowTitle(tr("window.preferences"))
         self.resize(260, 180)  # 高度加一點
 
         layout = QVBoxLayout(self)
 
         # 模式選單
         hl = QHBoxLayout()
-        hl.addWidget(QLabel("自動更新模式："))
+        hl.addWidget(QLabel(tr("label.update_mode")))
         self.mode_combo = QComboBox()
         options = [
             ("線上來源", "online_only"),
@@ -3487,32 +3539,32 @@ class PreferencesDialog(QDialog):
         hl.addWidget(self.mode_combo)
         layout.addLayout(hl)
         # 說明
-        tip = QLabel("建議使用線上模式，設為本機需要環境有Python跟java環境才可編譯。")
+        tip = QLabel(tr("label.update_mode_tip"))
         tip.setWordWrap(True)
         layout.addWidget(tip)
         # ✅ 新增：API Key
         ak = QHBoxLayout()
-        ak.addWidget(QLabel("API Key："))
+        ak.addWidget(QLabel(tr("label.api_key")))
         self.api_edit = QLineEdit()
-        self.api_edit.setPlaceholderText("輸入 API Key")
+        self.api_edit.setPlaceholderText(tr("placeholder.api_key"))
         self.api_edit.setText(current_api_key or "")
         self.api_edit.setEchoMode(QLineEdit.EchoMode.Password)  # 預設隱藏
         ak.addWidget(self.api_edit)
         layout.addLayout(ak)
 
-        self.show_key_cb = QCheckBox("顯示")
+        self.show_key_cb = QCheckBox(tr("checkbox.show"))
         self.show_key_cb.toggled.connect(self._toggle_api_visible)
         layout.addWidget(self.show_key_cb)
         # 說明
-        keytip = QLabel("此key用於divine-pride內的魔物查詢api，用來取得魔物資訊。")
+        keytip = QLabel(tr("label.api_key_tip"))
         keytip.setWordWrap(True)
         layout.addWidget(keytip)
 
 
         # 按鈕
         btns = QHBoxLayout()
-        ok_btn = QPushButton("確定")
-        cancel_btn = QPushButton("取消")
+        ok_btn = QPushButton(tr("button.ok"))
+        cancel_btn = QPushButton(tr("button.cancel"))
         ok_btn.clicked.connect(self.accept)
         cancel_btn.clicked.connect(self.reject)
         btns.addStretch(1)
@@ -3787,7 +3839,7 @@ class ItemSearchApp(QWidget):
 
         # 建立 UI
         self.enchant_window = enchant.EnchantUI(enchant_data, item_data, itemdb)
-        self.enchant_window.setWindowTitle("附魔查詢工具")
+        self.enchant_window.setWindowTitle(tr("window.enchant_tool"))
         self.enchant_window.resize(900, 600)
         self.enchant_window.show()
 
@@ -3800,7 +3852,7 @@ class ItemSearchApp(QWidget):
 
         # 建立 UI
         self.reform_viewer_window = reform_viewer.ReformUI(reform, item_data, itemdb, reform_item_list)
-        self.reform_viewer_window.setWindowTitle("改造查詢工具")
+        self.reform_viewer_window.setWindowTitle(tr("window.reform_tool"))
         self.reform_viewer_window.resize(700, 600)
         self.reform_viewer_window.show()
 
@@ -3951,7 +4003,7 @@ class ItemSearchApp(QWidget):
 
     def update_window_title(self):
         filename = os.path.basename(self.current_file) if self.current_file else "未命名"
-        self.setWindowTitle(f"RO物品查詢計算工具 {Version} - {filename} ")
+        self.setWindowTitle(tr("window.main_with_file", version=Version, filename=filename))
     
     def replace_custom_calc_content(self):
         # 特殊 CheckBox 狀態
@@ -4401,9 +4453,9 @@ class ItemSearchApp(QWidget):
                 ASPD_GCD = 0
             else:
                 ASPD_GCD = max(0,math.ceil((1 - ((1 / (50 / (200 - min(193,int(aspd))))) / gcdtotal_raw_s)) / 0.01))
-            self.ASPD_label.setText(f"ASPD：{aspd} 每秒{aspds:.2f}下 (共延需求{ASPD_GCD}%)")
+            self.ASPD_label.setText(tr("label.aspd_info", aspd=aspd, aspds=f"{aspds:.2f}", gcd=ASPD_GCD))
         else:
-            self.ASPD_label.setText(f"ASPD：該職業不能拿此武器。")
+            self.ASPD_label.setText(tr("label.aspd_weapon_not_supported"))
 
         #=======================技能欄公式====================
         #====================DEF計算==================
@@ -5071,6 +5123,8 @@ class ItemSearchApp(QWidget):
                             (target_monsterDamage,1,"特定魔物增傷%"),
                             #後總ATK
                             (ATK_percent_sign,ATK_percent_sign_min,"+","ATK%"),
+                            #跆拳加油段
+                            #(tk_power,1,"加油"),
                             #敵人屬性耐性(1+萬紫+毒弱+彗星)
                             ((1 + skill_wanzih4_buff + skill_poison_weak_buff + magic_poison_buff),"raw","屬性耐受性%"),
 
@@ -5935,7 +5989,7 @@ class ItemSearchApp(QWidget):
         self.clear_current_edit()
         self.current_edit_part = f"{part_name} - 詞條"
         self.current_edit_widget = text_widget
-        self.current_edit_label.setText(f"目前部位：{self.current_edit_part}")
+        self.current_edit_label.setText(tr("label.current_part_value", value=self.current_edit_part))
         print(f"目前部位：{self.current_edit_part}")
         self.unsync_button.setVisible(True)
         self.apply_to_note_button.setVisible(True)
@@ -6427,7 +6481,7 @@ class ItemSearchApp(QWidget):
                 # 🔹 變數名稱
                 name_input = QLineEdit()
                 name_input.setFixedWidth(100)
-                name_input.setPlaceholderText("變數名稱")
+                name_input.setPlaceholderText(tr("placeholder.variable_name"))
 
                 # 🔹 等號
                 eq_label = QLabel("=")
@@ -6451,7 +6505,7 @@ class ItemSearchApp(QWidget):
 
             if "map" in arg:
                 if arg["map"].isdigit():
-                    label_value = QLabel(f"(固定: {arg['map']})")
+                    label_value = QLabel(tr("label.fixed_value", value=arg["map"]))
                     label_value.setObjectName("fixed")
                     self.param_widgets.append(arg["map"])
                     row_layout.addWidget(label_value)
@@ -6598,7 +6652,7 @@ class ItemSearchApp(QWidget):
             }
         except Exception as e:
             if show_error:
-                QMessageBox.warning(self, "主程式更新檢查失敗", f"無法檢查主程式版本，將只檢查資料更新：\n{e}")
+                QMessageBox.warning(self, tr("message.title.program_update_check_failed"), tr("message.program_update_check_failed", error=e))
             return {
                 "available": False,
                 "error": str(e),
@@ -6636,8 +6690,8 @@ class ItemSearchApp(QWidget):
 
         svc = self._recompile_service
 
-        progress = QProgressDialog("正在取得 GitHub 檔案資訊…", "取消", 0, 0, self)
-        progress.setWindowTitle("請稍候")
+        progress = QProgressDialog(tr("progress.fetching_github_file_info"), tr("button.cancel"), 0, 0, self)
+        progress.setWindowTitle(tr("window.please_wait"))
         progress.setMinimumDuration(0)
         progress.setAutoClose(False)
         progress.setAutoReset(False)
@@ -6646,11 +6700,11 @@ class ItemSearchApp(QWidget):
         progress.canceled.connect(svc.cancel)
 
         def on_progress(done, total):
-            progress.setLabelText(f"正在取得檔案資訊…({done}/{total})")
+            progress.setLabelText(tr("progress.fetching_file_info", done=done, total=total))
 
         def on_error(msg):
             progress.close()
-            QMessageBox.critical(self, "錯誤", f"取得 GitHub 資訊失敗：{msg}")
+            QMessageBox.critical(self, tr("message.title.error"), tr("message.github_info_failed", message=msg))
 
         def on_finished(files_to_delete):
             progress.close()
@@ -6661,17 +6715,17 @@ class ItemSearchApp(QWidget):
                 if cmp_result == 0:
                     QMessageBox.information(
                         self,
-                        "已是最新版本",
-                        f"主程式版本：{program_update_info.get('local_ver', Version)}\n資料檔案：沒有需要更新的項目。"
+                        tr("message.title.already_latest"),
+                        tr("message.program_and_data_latest", version=program_update_info.get('local_ver', Version))
                     )
                 elif cmp_result == -1:
                     QMessageBox.information(
                         self,
-                        "版本較新",
-                        f"目前版本：{program_update_info.get('local_ver', Version)}\n遠端版本：{program_update_info.get('remote_ver', '未知')}\n\n你本機版本比遠端新，且資料檔案沒有需要更新的項目。"
+                        tr("message.title.local_version_newer"),
+                        tr("message.local_version_newer", local_ver=program_update_info.get('local_ver', Version), remote_ver=program_update_info.get('remote_ver', tr("label.unknown")))
                     )
                 else:
-                    QMessageBox.information(self, "完成", "目前沒有需要刪除的資料檔案。")
+                    QMessageBox.information(self, tr("message.title.done"), tr("message.no_data_files_to_delete"))
                 return
 
             dialog = FileSelectionDialog(
@@ -6687,7 +6741,7 @@ class ItemSearchApp(QWidget):
             want_program_update = dialog.want_program_update()
 
             if not selected_files and not want_program_update:
-                QMessageBox.information(self, "取消", "沒有選擇任何更新項目。")
+                QMessageBox.information(self, tr("message.title.cancel"), tr("message.no_update_items_selected"))
                 return
 
             try:
@@ -6698,18 +6752,18 @@ class ItemSearchApp(QWidget):
 
                 if want_program_update:
                     if selected_files:
-                        QMessageBox.information(self, "完成", "資料檔案已刪除，準備更新主程式。")
+                        QMessageBox.information(self, tr("message.title.done"), tr("message.data_deleted_prepare_program_update"))
                     self.do_update(program_update_info.get("remote_ver"))
                     return
 
                 if selected_files:
-                    QMessageBox.information(self, "完成", "檔案已刪除，程式將重新啟動。")
+                    QMessageBox.information(self, tr("message.title.done"), tr("message.files_deleted_restart"))
                     python = sys.executable
                     os.execl(python, python, *sys.argv)
                 else:
-                    QMessageBox.information(self, "完成", "沒有需要刪除的資料檔案。")
+                    QMessageBox.information(self, tr("message.title.done"), tr("message.no_data_files_to_delete"))
             except Exception as e:
-                QMessageBox.critical(self, "錯誤", f"發生錯誤：{str(e)}")
+                QMessageBox.critical(self, tr("message.title.error"), tr("message.generic_error", error=str(e)))
 
         # 避免重複連線：先斷再接（Qt/PySide 允許多次 connect，會重複觸發）
         try:
@@ -7483,7 +7537,7 @@ class ItemSearchApp(QWidget):
         info = self.refine_inputs_ui[part]
         name = info["preset_input"].text().strip()
         if not name:
-            QMessageBox.warning(self, "錯誤", "請輸入儲存名稱")
+            QMessageBox.warning(self, tr("message.title.error"), tr("message.enter_save_name"))
             return
         data = {
             "equip": info["equip"].text(),
@@ -7734,7 +7788,7 @@ class ItemSearchApp(QWidget):
         text = self.custom_calc_box.toPlainText()
         with open("compare_base.txt", "w", encoding="utf-8") as f:
             f.write(text)
-        QMessageBox.information(self, "儲存成功", "已儲存目前數據作為比對基準，\n並自動啟用[魔法省悟]、[武器值最大化]。")
+        QMessageBox.information(self, tr("message.title.save_success"), tr("message.compare_baseline_saved"))
         self.auto_compare_checkbox.setChecked(True)
 
     def compare_with_base(self):
@@ -7755,7 +7809,7 @@ class ItemSearchApp(QWidget):
             with open("compare_base.txt", "r", encoding="utf-8") as f:
                 base_text = f.read()
         except FileNotFoundError:
-            QMessageBox.warning(self, "錯誤", "找不到比對基準，請先儲存。")
+            QMessageBox.warning(self, tr("message.title.error"), tr("message.compare_baseline_not_found"))
             return
 
         current_text = self.custom_calc_box.toPlainText()
@@ -8437,13 +8491,13 @@ class ItemSearchApp(QWidget):
     def do_update(self, version=None):
         ver = (version or self._remote_version or "").strip()
         if not ver:
-            QMessageBox.warning(self, "提示", "目前沒有可更新的主程式版本。")
+            QMessageBox.warning(self, tr("message.title.notice"), tr("message.no_program_update"))
             return
         zip_url = ZIP_URL_TEMPLATE.format(ver=ver)
 
         updater_path = os.path.join(os.getcwd(), UPDATER_EXE)
         if not os.path.exists(updater_path):
-            QMessageBox.critical(self, "更新失敗", f"找不到更新程式：{UPDATER_EXE}")
+            QMessageBox.critical(self, tr("message.title.update_failed"), tr("message.updater_not_found", updater=UPDATER_EXE))
             return
 
         # 你要呼叫的格式：
@@ -8451,7 +8505,7 @@ class ItemSearchApp(QWidget):
         try:
             subprocess.Popen([updater_path, zip_url, TARGET_EXE], cwd=os.getcwd())
         except Exception as e:
-            QMessageBox.critical(self, "更新失敗", f"啟動更新程式失敗：\n{e}")
+            QMessageBox.critical(self, tr("message.title.update_failed"), tr("message.updater_start_failed", error=e))
             return
 
         # 更新器啟動後，主程式自己關掉比較乾淨（讓 updater 覆蓋檔案）
@@ -8482,7 +8536,7 @@ class ItemSearchApp(QWidget):
         
         super().__init__()
         self._skip_close_confirm = False
-        self.setWindowTitle("RO物品查詢計算工具")
+        self.setWindowTitle(tr("window.main"))
         self.current_edit_part = None  # 用來記錄目前正在編輯的部位名稱
         # 把子視窗存成成員變數，避免被 Python 回收導致閃退/秒關
         self._damage_win = None
@@ -8499,7 +8553,7 @@ class ItemSearchApp(QWidget):
         self.current_file = None # 尚未開啟任何檔案
         
         self.search_input = QLineEdit()
-        self.search_input.setPlaceholderText("輸入物品編號、名稱或內容...")
+        self.search_input.setPlaceholderText(tr("placeholder.search_item"))
         
         self.search_input.textChanged.connect(self.update_combobox)
 
@@ -8528,7 +8582,7 @@ class ItemSearchApp(QWidget):
         self.equip_text = QTextEdit()
         self.equip_text.setReadOnly(True)
 
-        self.sim_effect_label = QLabel("效果解析")
+        self.sim_effect_label = QLabel(tr("label.effect_parse"))
         #self.sim_effect_text = QTextEdit()
         #self.sim_effect_text.setReadOnly(True)
 
@@ -8564,9 +8618,9 @@ class ItemSearchApp(QWidget):
 
         # 角色能力值 + 勾選按鈕（同一行）
         row = QHBoxLayout()
-        row.addWidget(QLabel("角色能力值  "))
+        row.addWidget(QLabel(tr("label.character_stats")))
 
-        self.job_equip_checkbox = QCheckBox("合併職業跟裝備加成點數")  # ✅ 存成 self.xxx
+        self.job_equip_checkbox = QCheckBox(tr("checkbox.merge_job_equipment_bonus"))  # ✅ 存成 self.xxx
         row.addWidget(self.job_equip_checkbox)
         self.job_equip_checkbox.toggled.connect(self.update_stat_bonus_display)
 
@@ -8608,7 +8662,7 @@ class ItemSearchApp(QWidget):
                 char_layout.addLayout(row_layout)
 
                 # ===== 滑桿區：HP% / SP% =====
-                self.hp_percent_label = QLabel("HP 100%：0 / 0")
+                self.hp_percent_label = QLabel(tr("label.hp_percent_default"))
                 char_layout.addWidget(self.hp_percent_label)
 
                 self.hp_slider = QSlider(Qt.Horizontal)
@@ -8616,7 +8670,7 @@ class ItemSearchApp(QWidget):
                 self.hp_slider.setValue(100)
                 char_layout.addWidget(self.hp_slider)
 
-                self.sp_percent_label = QLabel("SP 100%：0 / 0")
+                self.sp_percent_label = QLabel(tr("label.sp_percent_default"))
                 char_layout.addWidget(self.sp_percent_label)
 
                 self.sp_slider = QSlider(Qt.Horizontal)
@@ -8801,7 +8855,7 @@ class ItemSearchApp(QWidget):
                 self.input_fields[label] = combo
                 row_layout.addWidget(combo)
                 # ★ 新增：技能樹按鈕
-                self.skill_btn = QPushButton("技能表")
+                self.skill_btn = QPushButton(tr("button.skill_table"))
                 self.skill_btn.setFixedWidth(60)  # 控制按鈕大小
                 self.skill_btn.clicked.connect(self.open_skill_tree)  # 呼叫你現有的技能樹視窗
                 row_layout.addWidget(self.skill_btn)
@@ -8828,12 +8882,12 @@ class ItemSearchApp(QWidget):
                         self.input_fields["INT"].textChanged.connect(update_hp_sp_slider_display)
                 
                 if label == "JobLv":
-                    bonus_label = QLabel("(預留，目前無作用。)")
+                    bonus_label = QLabel(tr("label.reserved_unused"))
                     row_layout.addWidget(bonus_label)
 
                 # ✅ 如果是 BaseLv，就加一個 QLabel 顯示素質點
                 if label == "BaseLv":
-                    self.stat_point_label = QLabel("（素質點：-）")
+                    self.stat_point_label = QLabel(tr("label.stat_points_empty"))
                     self.stat_point_label.setFixedWidth(180)
                     row_layout.addWidget(self.stat_point_label)
 
@@ -8841,7 +8895,7 @@ class ItemSearchApp(QWidget):
                         try:
                             lv = int(self.input_fields["BaseLv"].text())
                         except:
-                            self.stat_point_label.setText("（素質點：-）")
+                            self.stat_point_label.setText(tr("label.stat_points_empty"))
                             return
 
                         # 直接從 JOB 下拉選單取得職業 ID
@@ -8864,7 +8918,7 @@ class ItemSearchApp(QWidget):
                         tstat_remain = total_tpts - tstat_used
 
                         #self.stat_point_label.setText(f"（素質點：{total_pts} / 已用 {used_pts} / 剩餘 {remain_pts}｜特性點：{total_tpts} / 已用 {tstat_used} / 剩餘 {tstat_remain}）")
-                        self.stat_point_label.setText(f"剩餘素質 {remain_pts}｜特性 {tstat_remain}")
+                        self.stat_point_label.setText(tr("label.remaining_stat_points", remain_pts=remain_pts, tstat_remain=tstat_remain))
                     # ❗ BaseLv 輸入時更新
                     field.textChanged.connect(update_stat_point)
                     self._update_stat_point_callback = update_stat_point  # ✅ 暫存回呼
@@ -8879,7 +8933,7 @@ class ItemSearchApp(QWidget):
             char_layout.setAlignment(Qt.AlignTop)
 
 
-        tab_widget.addTab(char_scroll, "角色能力值")
+        tab_widget.addTab(char_scroll, tr("tab.character_stats"))
         update_hp_sp_slider_visibility()
         
         def make_focus_func_focus(part_label, input_field, label_name):
@@ -8890,7 +8944,7 @@ class ItemSearchApp(QWidget):
                 self.clear_current_edit()
 
                 self.current_edit_part = f"{part_label} - {label_name}"
-                self.current_edit_label.setText(f"目前部位：{part_label} - {label_name}")
+                self.current_edit_label.setText(tr("label.current_part_detail", part=part_label, label=label_name))
                 self.unsync_button.setVisible(True)
                 self.unsync_button2.setVisible(True)
                 self.apply_to_note_button.setVisible(True)
@@ -8935,12 +8989,12 @@ class ItemSearchApp(QWidget):
         # ===== 上方固定快速定位列（不跟著捲）=====
         top_row = QHBoxLayout()
 
-        title_label = QLabel("　裝備與卡片設定")
+        title_label = QLabel(tr("label.equipment_card_settings"))
         top_row.addWidget(title_label)
         top_row.addStretch()
 
         self.part_nav_button = QToolButton()
-        self.part_nav_button.setText("快速定位部位 ▾")
+        self.part_nav_button.setText(tr("button.quick_part_nav"))
         self.part_nav_button.setCursor(Qt.PointingHandCursor)
         self.part_nav_button.installEventFilter(self)
         top_row.addWidget(self.part_nav_button)
@@ -8995,14 +9049,14 @@ class ItemSearchApp(QWidget):
             preset_row = QHBoxLayout()
 
             preset_name_input = QLineEdit()
-            preset_name_input.setPlaceholderText("輸入儲存名稱")
+            preset_name_input.setPlaceholderText(tr("placeholder.save_name"))
             preset_name_input.setFixedWidth(160)
 
-            save_btn = QPushButton("儲存")
+            save_btn = QPushButton(tr("button.save"))
             save_btn.setFixedWidth(40)
             save_btn.clicked.connect(lambda _, p=part_name: self.save_preset(p))
 
-            manage_btn = QPushButton("讀取裝備")
+            manage_btn = QPushButton(tr("button.load_equipment"))
             manage_btn.clicked.connect(lambda _, p=part_name: self.open_save_manager(p))
             part_ui["manage_btn"] = manage_btn
 
@@ -9023,18 +9077,18 @@ class ItemSearchApp(QWidget):
             equip_input.setReadOnly(True)
 
             if part_name == "符文石碑":
-                equip_input.setPlaceholderText("石碑名稱")
+                equip_input.setPlaceholderText(tr("placeholder.rune_name"))
             elif part_name == "寵物蛋":
-                equip_input.setPlaceholderText("寵物名稱")
+                equip_input.setPlaceholderText(tr("placeholder.pet_name"))
             elif part_name == "投擲物品":
-                equip_input.setPlaceholderText("投擲名稱")
+                equip_input.setPlaceholderText(tr("placeholder.throwable_name"))
             else:
-                equip_input.setPlaceholderText("裝備名稱")
+                equip_input.setPlaceholderText(tr("placeholder.equipment_name"))
 
             equip_input.setMinimumWidth(100)
             equip_input.mousePressEvent = make_focus_func_focus(part_name, equip_input, "裝備")
 
-            clear_equip_btn = QPushButton("清空")
+            clear_equip_btn = QPushButton(tr("button.clear"))
             clear_equip_btn.setFixedWidth(40)
             clear_equip_btn.clicked.connect(self.clear_global_state)
             clear_equip_btn.clicked.connect(lambda _, field=equip_input: [field.clear(), self.trigger_total_effect_update()])
@@ -9044,7 +9098,7 @@ class ItemSearchApp(QWidget):
 
             # ▶️ 精煉欄位
             refine_input = QLineEdit()
-            refine_input.setPlaceholderText("精煉")
+            refine_input.setPlaceholderText(tr("placeholder.refine"))
             refine_input.setMaximumWidth(40)
             refine_input.setText("0")
             refine_input.textChanged.connect(self.trigger_total_effect_update)
@@ -9056,7 +9110,7 @@ class ItemSearchApp(QWidget):
                 grade_combo.addItems(["0", "1", "2", "3", "4", "5", "6"])
                 grade_combo.setMaximumWidth(50)
             elif part_name == "寵物蛋":
-                grade_combo.addItems(["非常陌生", "稍微陌生", "普通", "稍微親密", "非常親密"])
+                grade_combo.addItems([tr("pet.intimacy.very_unfamiliar"), tr("pet.intimacy.slightly_unfamiliar"), tr("pet.intimacy.normal"), tr("pet.intimacy.slightly_close"), tr("pet.intimacy.very_close")])
                 grade_combo.setMaximumWidth(95)
             else:
                 grade_combo.addItems(["N", "D", "C", "B", "A"])
@@ -9125,10 +9179,10 @@ class ItemSearchApp(QWidget):
 
                 card_input = QLineEdit()
                 card_input.setReadOnly(True)
-                card_input.setPlaceholderText(f"卡片 {i+1}")
+                card_input.setPlaceholderText(tr("placeholder.card", index=i+1))
                 card_input.mousePressEvent = make_focus_func_focus(part_name, card_input, f"卡片{i+1}")
 
-                clear_card_btn = QPushButton("清空")
+                clear_card_btn = QPushButton(tr("button.clear"))
                 clear_card_btn.setFixedWidth(40)
                 clear_card_btn.clicked.connect(self.clear_global_state)
                 clear_card_btn.clicked.connect(lambda _, field=card_input: [field.clear(), self.trigger_total_effect_update()])
@@ -9145,7 +9199,7 @@ class ItemSearchApp(QWidget):
 
             # ▶️ 詞條欄位（多行文字）+ 清空
             note_text = QTextEdit()
-            note_text.setPlaceholderText("lua函數")
+            note_text.setPlaceholderText(tr("placeholder.lua_function"))
             note_text.setObjectName(f"{part_name}-函數")
             note_text.setFixedSize(260, 20)
             note_text.setContentsMargins(0, 0, 0, 0)
@@ -9154,7 +9208,7 @@ class ItemSearchApp(QWidget):
             note_text.textChanged.connect(self.on_function_text_changed)
 
             note_text_ui = QTextEdit()
-            note_text_ui.setPlaceholderText("自訂詞條效果")
+            note_text_ui.setPlaceholderText(tr("placeholder.custom_option_effect"))
             note_text_ui.setObjectName(f"{part_name}-詞條")
             note_text_ui.setFixedSize(260, 20)
             note_text_ui.setContentsMargins(0, 0, 0, 0)
@@ -9163,7 +9217,7 @@ class ItemSearchApp(QWidget):
             note_text_ui.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
             note_text_ui.mousePressEvent = lambda event, p=part_name, w=note_text_ui, u=note_text: self.handle_note_text_clicked(event, p, w, u)
 
-            clear_note_btn = QPushButton("清空")
+            clear_note_btn = QPushButton(tr("button.clear"))
             clear_note_btn.setFixedWidth(40)
             clear_note_btn.clicked.connect(self.clear_global_state)
             clear_note_btn.clicked.connect(lambda _, field=note_text: [field.clear(), self.trigger_total_effect_update()])
@@ -9218,7 +9272,7 @@ class ItemSearchApp(QWidget):
                 part_ui["refine"].setVisible(False)
                 part_ui["grade"].setVisible(False)
 
-        tab_widget.addTab(equip_page, "裝備設定")
+        tab_widget.addTab(equip_page, tr("tab.equipment_settings"))
         
         
 
@@ -9228,9 +9282,9 @@ class ItemSearchApp(QWidget):
 
         # 搜尋欄位
         search_layout = QHBoxLayout()
-        search_label = QLabel("🔍 搜尋技能/料理：")
+        search_label = QLabel(tr("label.search_skill_food"))
         self.skill_search_bar = QLineEdit()
-        self.skill_search_bar.setPlaceholderText("輸入技能/料理名稱...")
+        self.skill_search_bar.setPlaceholderText(tr("placeholder.search_skill_food"))
         self.skill_search_bar.textChanged.connect(self.filter_skill_list)
         search_layout.addWidget(search_label)
         search_layout.addWidget(self.skill_search_bar)
@@ -9277,7 +9331,7 @@ class ItemSearchApp(QWidget):
         skill_layout.addWidget(scroll, stretch=1)
 
         # 加入主分頁
-        tab_widget.addTab(skill_page, "增益技能/料理")
+        tab_widget.addTab(skill_page, tr("tab.buff_skill_food"))
 
 
 
@@ -9305,7 +9359,7 @@ class ItemSearchApp(QWidget):
         # status_layout.addWidget(self.status_label)
         # === 計算素質無詠 ===
         
-        self.DEX_INT_265_label = QLabel("無詠計算")
+        self.DEX_INT_265_label = QLabel(tr("label.instant_cast_calc"))
         status_layout.addWidget(self.DEX_INT_265_label)
         self.fix_label = QLabel("fix")
         status_layout.addWidget(self.fix_label)
@@ -9341,25 +9395,25 @@ class ItemSearchApp(QWidget):
         equip_tab = QWidget()
         equip_layout = QVBoxLayout(equip_tab)
         equip_layout.addWidget(middle_scroll)
-        self.search_tab_index = self.tab_widget.addTab(equip_tab, "裝備查詢")
+        self.search_tab_index = self.tab_widget.addTab(equip_tab, tr("tab.equipment_search"))
 
 
         # ▶️ 編輯狀態 + 解除同步按鈕 + 全域精煉選單
         edit_status_layout = QHBoxLayout()
-        self.current_edit_label = QLabel("目前部位：")
-        self.unsync_button = QPushButton("🔓解除鎖定")
+        self.current_edit_label = QLabel(tr("label.current_part"))
+        self.unsync_button = QPushButton(tr("button.unlock"))
         self.unsync_button.setVisible(False)
         self.unsync_button.clicked.connect(self.clear_global_state)
         self.unsync_button.clicked.connect(self.clear_current_edit)
         self.unsync_button.clicked.connect(lambda: (setattr(self, "_last_calc_state", None), self.trigger_total_effect_update()))
         # ▶️ 套用按鈕
-        self.apply_equip_button = QPushButton("套用")
+        self.apply_equip_button = QPushButton(tr("button.apply"))
         self.apply_equip_button.clicked.connect(self.clear_global_state)
         self.apply_equip_button.clicked.connect(self.apply_selected_equip)     
         self.apply_equip_button.clicked.connect(lambda: (setattr(self, "_last_calc_state", None), self.trigger_total_effect_update()))
         self.apply_equip_button.setVisible(False)
         
-        self.clear_field_button = QPushButton("清空")
+        self.clear_field_button = QPushButton(tr("button.clear"))
         self.clear_field_button.clicked.connect(self.clear_global_state)
         self.clear_field_button.clicked.connect(self.clear_selected_field)  
         self.clear_field_button.clicked.connect(lambda: (setattr(self, "_last_calc_state", None), self.trigger_total_effect_update()))
@@ -9368,7 +9422,7 @@ class ItemSearchApp(QWidget):
 
         # ✅ 全域精煉與階級欄位
         self.global_refine_input = QLineEdit()
-        self.global_refine_input.setPlaceholderText("全域精煉")
+        self.global_refine_input.setPlaceholderText(tr("placeholder.global_refine"))
         self.global_refine_input.setMaximumWidth(40)
 
         self.global_grade_combo = QComboBox()
@@ -9408,10 +9462,10 @@ class ItemSearchApp(QWidget):
         #add_labeled_row(middle_layout, "鑲嵌孔數", self.slot_field)
         #middle_layout.addWidget(QLabel("物品說明"))
         middle_layout.addWidget(self.desc_text)
-        middle_layout.addWidget(QLabel("套裝清單："))
+        middle_layout.addWidget(QLabel(tr("label.set_list")))
         self.Combi_text.setFixedHeight(160)
         middle_layout.addWidget(self.Combi_text)
-        self.btn_recompile = QPushButton("重新取得物品列表(依照網路速度可能會延遲顯示。)")
+        self.btn_recompile = QPushButton(tr("button.recompile_items"))
         self.btn_recompile.clicked.connect(self.recompile)
         #middle_layout.addWidget(self.btn_recompile)
         #self.btn_recompile.setVisible(False)#重新編譯先隱藏
@@ -9429,13 +9483,13 @@ class ItemSearchApp(QWidget):
         self.function_selector.setMaximumWidth(200)
         self.update_function_selector()
 
-        self.se_function = QLabel("選擇函數：")
-        self.unsync_button2 = QPushButton("🔓解除鎖定")
+        self.se_function = QLabel(tr("label.select_function"))
+        self.unsync_button2 = QPushButton(tr("button.unlock"))
         self.unsync_button2.setVisible(False)
         self.unsync_button2.clicked.connect(self.clear_global_state)
         self.unsync_button2.clicked.connect(self.clear_current_edit)
         self.unsync_button2.clicked.connect(lambda: (setattr(self, "_last_calc_state", None), self.trigger_total_effect_update()))
-        self.apply_to_note_button = QPushButton("套用到詞條")
+        self.apply_to_note_button = QPushButton(tr("button.apply_to_option"))
         self.apply_to_note_button.setVisible(False)
         self.apply_to_note_button.clicked.connect(self.clear_global_state)
         self.apply_to_note_button.clicked.connect(self.apply_result_to_note)
@@ -9444,7 +9498,7 @@ class ItemSearchApp(QWidget):
 
 
         
-        self.clear_field_button2 = QPushButton("清空")
+        self.clear_field_button2 = QPushButton(tr("button.clear"))
         self.clear_field_button2.clicked.connect(self.clear_global_state)
         self.clear_field_button2.clicked.connect(self.clear_selected_field)
         self.clear_field_button2.clicked.connect(lambda: (setattr(self, "_last_calc_state", None), self.trigger_total_effect_update()))
@@ -9453,7 +9507,7 @@ class ItemSearchApp(QWidget):
 
         # 🔍 建立全域技能搜尋欄位（放在你想要的位置）
         self.skill_search_input = QLineEdit()
-        self.skill_search_input.setPlaceholderText("🔍 搜尋技能")
+        self.skill_search_input.setPlaceholderText(tr("placeholder.search_skill"))
         self.skill_search_input.setVisible(False)
         
         
@@ -9480,16 +9534,16 @@ class ItemSearchApp(QWidget):
 
         
         # 按鈕
-        self.gen_button = QPushButton("產生")
+        self.gen_button = QPushButton(tr("button.generate"))
         function_layout.addWidget(self.gen_button)
         # 結果輸出
         self.result_output = QTextEdit()
         #self.result_output.setReadOnly(True)
-        function_layout.addWidget(QLabel("產生的語法："))
+        function_layout.addWidget(QLabel(tr("label.generated_syntax")))
         function_layout.addWidget(self.result_output)
 
         # 加入這段到合適 layout 中（中間區塊）
-        self.syntax_result_label = QLabel("🧠 語法解析結果：")
+        self.syntax_result_label = QLabel(tr("label.syntax_parse_result"))
         self.syntax_result_box = QTextEdit()
         self.syntax_result_box.setReadOnly(True)
 
@@ -9497,7 +9551,7 @@ class ItemSearchApp(QWidget):
         function_layout.addWidget(self.syntax_result_box)
 
         # 分頁加入
-        self.function_tab_index = self.tab_widget.addTab(function_tab, "函數指令")
+        self.function_tab_index = self.tab_widget.addTab(function_tab, tr("tab.function_commands"))
         main_layout.addWidget(self.tab_widget)
 
         # 預先初始化一次
@@ -9515,7 +9569,7 @@ class ItemSearchApp(QWidget):
         right_scroll.setWidgetResizable(True)
         right_scroll.setWidget(right_widget)
 
-        self.equip_text_label = QLabel("裝備屬性原始內容")
+        self.equip_text_label = QLabel(tr("label.raw_equipment_text"))
         right_layout.addWidget(self.equip_text_label)
         right_layout.addWidget(self.equip_text)
         self.equip_text.setFixedHeight(160)
@@ -9531,12 +9585,12 @@ class ItemSearchApp(QWidget):
         # 分頁1：單件裝備效果
         self.sim_effect_text = QTextEdit()
         self.sim_effect_text.setReadOnly(True)
-        self.sim_tabs.addTab(self.sim_effect_text, "目前裝備效果")
+        self.sim_tabs.addTab(self.sim_effect_text, tr("tab.current_equipment_effect"))
 
         # 分頁2：總合套裝效果
         self.combo_effect_text = QTextEdit()
         self.combo_effect_text.setReadOnly(True)
-        self.sim_tabs.addTab(self.combo_effect_text, "整體套裝效果")
+        self.sim_tabs.addTab(self.combo_effect_text, tr("tab.overall_set_effect"))
         
         
         # 建立 總效果分頁 的容器
@@ -9545,7 +9599,7 @@ class ItemSearchApp(QWidget):
 
         # 🔍 篩選輸入欄
         self.total_filter_input = QLineEdit()
-        self.total_filter_input.setPlaceholderText("🔍 篩選總效果（例如：詠唱）")
+        self.total_filter_input.setPlaceholderText(tr("placeholder.filter_total_effect"))
         self.total_filter_input.textChanged.connect(self.update_total_effect_display)        
         total_filter_input_sort_mode_combo.addWidget(self.total_filter_input)
         
@@ -9570,13 +9624,13 @@ class ItemSearchApp(QWidget):
         # 將 layout 放進 QWidget，再加進分頁
         total_tab_widget = QWidget()
         total_tab_widget.setLayout(total_tab_layout)
-        self.sim_tabs.addTab(total_tab_widget, "整體總效果")
+        self.sim_tabs.addTab(total_tab_widget, tr("tab.overall_total_effect"))
 
 
 
 
         # 模擬效果隱藏選項
-        self.hide_unrecognized_checkbox = QCheckBox("隱藏辨識內容")
+        self.hide_unrecognized_checkbox = QCheckBox(tr("checkbox.hide_unrecognized"))
         self.hide_unrecognized_checkbox.setChecked(True)  # 預設勾選
         
         self.hide_unrecognized_checkbox.stateChanged.connect(self.trigger_total_effect_update)
@@ -9586,22 +9640,22 @@ class ItemSearchApp(QWidget):
         right_layout.addWidget(self.hide_unrecognized_checkbox)
         
         # 效果解析下方
-        self.hide_physical_checkbox = QCheckBox("隱藏物理")
-        self.hide_magical_checkbox = QCheckBox("隱藏魔法")
+        self.hide_physical_checkbox = QCheckBox(tr("checkbox.hide_physical"))
+        self.hide_magical_checkbox = QCheckBox(tr("checkbox.hide_magical"))
         
         self.hide_physical_checkbox.stateChanged.connect(self.trigger_total_effect_update)
         self.hide_magical_checkbox.stateChanged.connect(self.trigger_total_effect_update)
         #self.hide_physical_checkbox.stateChanged.connect(self.display_item_info)
         #self.hide_magical_checkbox.stateChanged.connect(self.display_item_info)
         # ✅ 套裝來源顯示勾選框
-        self.show_combo_source_checkbox = QCheckBox("顯示來源")
+        self.show_combo_source_checkbox = QCheckBox(tr("checkbox.show_source"))
         self.show_combo_source_checkbox.setChecked(True)  # 預設勾選
         
         self.show_combo_source_checkbox.stateChanged.connect(self.trigger_total_effect_update)
         #self.show_combo_source_checkbox.stateChanged.connect(self.display_all_effects)
 
         # 減傷倍率下拉選單
-        self.damage_reduction_label = QLabel("減傷倍率:")
+        self.damage_reduction_label = QLabel(tr("label.damage_reduction"))
         self.damage_reduction_combobox = QComboBox()
         self.damage_reduction_combobox.addItems(["100%" ,"10%", "1%", "0.1%"])
         self.damage_reduction_combobox.setCurrentIndex(0)
@@ -9703,14 +9757,14 @@ class ItemSearchApp(QWidget):
 
         # 技能過濾輸入欄
         self.skill_filter_input = QLineEdit()
-        self.skill_filter_input.setPlaceholderText("技能過濾")
+        self.skill_filter_input.setPlaceholderText(tr("placeholder.filter_skill"))
         self.skill_filter_input.setFixedWidth(80)
         skill_select_layout_top.addWidget(self.skill_filter_input)
 
         # 🔹 清空按鈕
-        self.clear_filter_button = QPushButton("清空")
+        self.clear_filter_button = QPushButton(tr("button.clear"))
         self.clear_filter_button.setFixedWidth(50)
-        self.clear_filter_button.setToolTip("清空過濾")
+        self.clear_filter_button.setToolTip(tr("tooltip.clear_filter"))
         self.clear_filter_button.clicked.connect(self.skill_filter_input.clear)
         skill_select_layout_top.addWidget(self.clear_filter_button)
 
@@ -9805,7 +9859,7 @@ class ItemSearchApp(QWidget):
 
         # 技能等級
         self.skill_LV_input = QLineEdit()
-        self.skill_LV_input.setPlaceholderText("技能等級")
+        self.skill_LV_input.setPlaceholderText(tr("placeholder.skill_level"))
         #self.skill_LV_input.setReadOnly(True)
         self.skill_LV_input.setFixedWidth(40)
         skill_select_layout_top.addWidget(self.skill_LV_input)
@@ -9820,7 +9874,7 @@ class ItemSearchApp(QWidget):
         # 公式結果欄
         
         self.skill_hits_input = QLineEdit()
-        self.skill_hits_input.setPlaceholderText("次數")
+        self.skill_hits_input.setPlaceholderText(tr("placeholder.hit_count"))
         self.skill_hits_input.setText("1")
         self.skill_hits_input.setReadOnly(True)
         self.skill_hits_input.setFixedWidth(120)
@@ -9829,13 +9883,13 @@ class ItemSearchApp(QWidget):
 
         # 技能公式欄
         self.skill_formula_input = QLineEdit()
-        self.skill_formula_input.setPlaceholderText("技能公式")
+        self.skill_formula_input.setPlaceholderText(tr("placeholder.skill_formula"))
         self.skill_formula_input.setFixedWidth(480)
         skill_select_layout_bottom.addWidget(self.skill_formula_input)
 
         # 公式結果欄
         self.skill_formula_result_input = QLineEdit()
-        self.skill_formula_result_input.setPlaceholderText("公式結果")
+        self.skill_formula_result_input.setPlaceholderText(tr("placeholder.formula_result"))
         self.skill_formula_result_input.setReadOnly(True)
         self.skill_formula_result_input.setFixedWidth(120)
         skill_select_layout_bottom.addWidget(self.skill_formula_result_input)
@@ -9848,16 +9902,16 @@ class ItemSearchApp(QWidget):
         # 建立水平區塊
         button_row = QHBoxLayout()
 
-        self.save_compare_button = QPushButton("儲存比對基準")
+        self.save_compare_button = QPushButton(tr("button.save_compare_baseline"))
         self.save_compare_button.clicked.connect(lambda: (setattr(self, "_last_calc_state", None), self.save_compare_base()))
 
         button_row.addWidget(self.save_compare_button)
 
         # 中間新增勾選框
-        self.auto_compare_checkbox = QCheckBox("持續比對")
+        self.auto_compare_checkbox = QCheckBox(tr("checkbox.continuous_compare"))
         button_row.addWidget(self.auto_compare_checkbox)
         
-        self.compare_button = QPushButton("手動執行比對")
+        self.compare_button = QPushButton(tr("button.run_compare"))
         self.compare_button.clicked.connect(self.compare_with_base)
         button_row.addWidget(self.compare_button)
         
@@ -9866,7 +9920,7 @@ class ItemSearchApp(QWidget):
         # self.reskill_map_button.clicked.connect(filter_skills)
         
         # button_row.addWidget(self.reskill_map_button)
-        self.skillEditor_button = QPushButton("編輯技能")
+        self.skillEditor_button = QPushButton(tr("button.edit_skill"))
         self.skillEditor_button.clicked.connect(lambda: open_skill_editor(self))
         button_row.addWidget(self.skillEditor_button)
 
@@ -9894,16 +9948,16 @@ class ItemSearchApp(QWidget):
         
         # 特殊效果增傷處理區
         self.special_checkboxes = {
-            "wanzih_checkbox": QCheckBox("萬紫/震裂(巔峰4)"),
-            "poison_weak_checkbox": QCheckBox("毒耐性弱化"),
-            "magic_poison_checkbox": QCheckBox("魔力中毒"),
-            "attribute_seal_checkbox": QCheckBox("屬性紋章(水地火風)"),
-            "sneak_attack_checkbox": QCheckBox("潛擊(近遠魔)"),
-            "SPORE_attack_checkbox": QCheckBox("爆炸孢子(遠)"),            
-            "DARKCROW_attack_checkbox": QCheckBox("致命爪痕(近)"),
-            "RUSH_attack_checkbox": QCheckBox("衝擊撼動(近遠)"),            
-            "OLEUM_attack_checkbox": QCheckBox("聖油洗禮(遠)"),
-            "PR_LEXAETERNA_checkbox": QCheckBox("天使之怒"),
+            "wanzih_checkbox": QCheckBox(tr("buff.wanzih_peak4")),
+            "poison_weak_checkbox": QCheckBox(tr("buff.poison_weak")),
+            "magic_poison_checkbox": QCheckBox(tr("buff.magic_poison")),
+            "attribute_seal_checkbox": QCheckBox(tr("buff.attribute_seal")),
+            "sneak_attack_checkbox": QCheckBox(tr("buff.sneak_attack")),
+            "SPORE_attack_checkbox": QCheckBox(tr("buff.spore_attack")),            
+            "DARKCROW_attack_checkbox": QCheckBox(tr("buff.darkcrow_attack")),
+            "RUSH_attack_checkbox": QCheckBox(tr("buff.rush_attack")),            
+            "OLEUM_attack_checkbox": QCheckBox(tr("buff.oleum_attack")),
+            "PR_LEXAETERNA_checkbox": QCheckBox(tr("buff.lexaeterna")),
 
 
 
@@ -9960,7 +10014,7 @@ class ItemSearchApp(QWidget):
         target_layout.addLayout(element_layout)
         
         element_lv_input_layout = QVBoxLayout()
-        element_lv_input_label = QLabel("等級")
+        element_lv_input_label = QLabel(tr("label.level"))
         self.element_lv_input = QLineEdit()
         self.element_lv_input.setFixedWidth(30)
         self.element_lv_input.setPlaceholderText("1")
@@ -9985,11 +10039,11 @@ class ItemSearchApp(QWidget):
 
         
         defc_layout = QVBoxLayout()
-        self.defc_label = QLabel("前DEF")
+        self.defc_label = QLabel(tr("label.front_def"))
         self.defc_input = QLineEdit()
         self.defc_input.setFixedWidth(60)
         self.defc_input.setPlaceholderText("0")
-        self.mdefc_label = QLabel("前MDEF")
+        self.mdefc_label = QLabel(tr("label.front_mdef"))
         self.mdefc_input = QLineEdit()
         self.mdefc_input.setFixedWidth(60)
         self.mdefc_input.setPlaceholderText("0")
@@ -10000,11 +10054,11 @@ class ItemSearchApp(QWidget):
         target_layout.addLayout(defc_layout)
 
         def_layout = QVBoxLayout()
-        self.def_label = QLabel("後DEF")
+        self.def_label = QLabel(tr("label.back_def"))
         self.def_input = QLineEdit()
         self.def_input.setFixedWidth(60)
         self.def_input.setPlaceholderText("0")
-        self.mdef_label = QLabel("後MDEF")
+        self.mdef_label = QLabel(tr("label.back_mdef"))
         self.mdef_input = QLineEdit()
         self.mdef_input.setFixedWidth(60)
         self.mdef_input.setPlaceholderText("0")
@@ -10060,21 +10114,21 @@ class ItemSearchApp(QWidget):
         MD_BETELGEUSE = QHBoxLayout()
 
         # 防禦星數
-        self.MD_BETELGEUSE_label_def = QLabel("參宿四防禦星數")
+        self.MD_BETELGEUSE_label_def = QLabel(tr("label.betelgeuse_def_stars"))
         self.MD_BETELGEUSE_combo_def = QComboBox()
         self.MD_BETELGEUSE_combo_def.addItems([str(i) for i in range(0, 6)])   # 1~5
         self.MD_BETELGEUSE_label_def.setVisible(False)
         self.MD_BETELGEUSE_combo_def.setVisible(False)
 
         # 亡魂顆數
-        self.MD_BETELGEUSE_label_soul = QLabel("參宿四亡魂顆數")
+        self.MD_BETELGEUSE_label_soul = QLabel(tr("label.betelgeuse_souls"))
         self.MD_BETELGEUSE_combo_soul = QComboBox()
         self.MD_BETELGEUSE_combo_soul.addItems([str(i) for i in range(0, 11)])  # 1~10
         self.MD_BETELGEUSE_label_soul.setVisible(False)
         self.MD_BETELGEUSE_combo_soul.setVisible(False)
 
         # 總和顯示
-        self.MD_BETELGEUSE_label_total_title = QLabel("減傷幅度%")
+        self.MD_BETELGEUSE_label_total_title = QLabel(tr("label.reduction_percent"))
         self.MD_BETELGEUSE_label_total = QLabel("0")   # 預設0
         self.MD_BETELGEUSE_label_total_title.setVisible(False)
         self.MD_BETELGEUSE_label_total.setVisible(False)
@@ -10117,15 +10171,15 @@ class ItemSearchApp(QWidget):
 
 
 
-        self.btn_open_monster_lookup = QPushButton("查詢怪物")
+        self.btn_open_monster_lookup = QPushButton(tr("button.lookup_monster"))
         self.btn_open_monster_lookup.clicked.connect(self.open_monster_lookup)
         layout.addWidget(self.btn_open_monster_lookup)
         # 新增按鈕
-        self.replace_calc_button = QPushButton("計算")
+        self.replace_calc_button = QPushButton(tr("button.calculate"))
         self.replace_calc_button.clicked.connect(lambda: (setattr(self, "_last_calc_state", None), self.trigger_total_effect_update()))
         layout.addWidget(self.replace_calc_button)
 
-        self.sim_tabs.addTab(self.custom_calc_tab, "傷害計算")
+        self.sim_tabs.addTab(self.custom_calc_tab, tr("tab.damage_calculation"))
 
 
 
@@ -10188,25 +10242,25 @@ class ItemSearchApp(QWidget):
         menubar = QMenuBar(self)
 
         # === 檔案選單 ===
-        file_menu = menubar.addMenu("檔案")
+        file_menu = menubar.addMenu(tr("menu.file"))
 
-        open_action = QAction("開啟", self)
+        open_action = QAction(tr("menu.open"), self)
         open_action.triggered.connect(self.open_project_file)
         file_menu.addAction(open_action)        
 
-        open_rrf_action = QAction("從RO重播檔(.rrf)匯入裝備", self)
+        open_rrf_action = QAction(tr("menu.import_rrf"), self)
         open_rrf_action.triggered.connect(self.open_rrf_and_import)
         file_menu.addAction(open_rrf_action)        
 
-        save_action = QAction("存檔", self)
+        save_action = QAction(tr("menu.save"), self)
         save_action.triggered.connect(self.save_file)
         file_menu.addAction(save_action)
 
-        save_as_action = QAction("另存新檔", self)
+        save_as_action = QAction(tr("menu.save_as"), self)
         save_as_action.triggered.connect(self.save_as_file)
         file_menu.addAction(save_as_action)
 
-        ROC_save_as_action = QAction("另存到.ROC(ROCalculator)", self)
+        ROC_save_as_action = QAction(tr("menu.save_as_roc"), self)
         ROC_save_as_action.triggered.connect(
             lambda checked=False: self.add_effects_from_variables("data/default.txt", equipid_mapping, status_mapping)
         )   
@@ -10215,35 +10269,35 @@ class ItemSearchApp(QWidget):
         
 
 
-        gamedata_menu = menubar.addMenu("工具")
+        gamedata_menu = menubar.addMenu(tr("menu.tools"))
         # === 建立選單：傷害表 ===
-        action_open_damage = QAction("重播檔傷害表工具", self)
+        action_open_damage = QAction(tr("menu.damage_replay_tool"), self)
         action_open_damage.triggered.connect(self.open_rrfdamage_view)
         gamedata_menu.addAction(action_open_damage)
         # === 建立選單：附魔工具 ===
-        enchant_action = QAction("附魔查詢工具", self)
+        enchant_action = QAction(tr("menu.enchant_tool"), self)
         enchant_action.triggered.connect(self.open_enchant_tool)
 
         gamedata_menu.addAction(enchant_action)
 
         # === 建立選單：改造工具 ===
-        reform_action = QAction("改造查詢工具", self)
+        reform_action = QAction(tr("menu.reform_tool"), self)
         reform_action.triggered.connect(self.open_reform_tool)
 
         gamedata_menu.addAction(reform_action)
 
 
         # === 設定選單 ===
-        settings_menu = menubar.addMenu("設定")
+        settings_menu = menubar.addMenu(tr("menu.settings"))
 
-        preferences_action = QAction("偏好設定", self)
+        preferences_action = QAction(tr("menu.preferences"), self)
         preferences_action.triggered.connect(self.open_compile_set)
         settings_menu.addAction(preferences_action)
         
-        menu_update = menubar.addMenu("更新")
+        menu_update = menubar.addMenu(tr("menu.update"))
 
-        self.action_check_update = QAction("檢查程式與資料更新", self)
-        self.action_do_update = QAction("立即更新主程式", self)
+        self.action_check_update = QAction(tr("menu.check_update"), self)
+        self.action_do_update = QAction(tr("menu.update_now"), self)
         self.action_do_update.setEnabled(False)  # 預設不能按
 
         menu_update.addAction(self.action_check_update)
@@ -10252,9 +10306,9 @@ class ItemSearchApp(QWidget):
         self.action_check_update.triggered.connect(self.check_update)
         self.action_do_update.triggered.connect(self.do_update)
 
-        menu_debug = menubar.addMenu("偵錯")
+        menu_debug = menubar.addMenu(tr("menu.debug"))
         
-        Damage_view_action = QAction("計算歷程顯示", self)
+        Damage_view_action = QAction(tr("menu.damage_history"), self)
         Damage_view_action.triggered.connect(self.open_damage_calculator)
         menu_debug.addAction(Damage_view_action)
 
@@ -10290,7 +10344,7 @@ class ItemSearchApp(QWidget):
         # === 找到主手裝備的 effectlist ===
         equip_list = new_data.get("Equip", [])
         if not equip_list:
-            QMessageBox.warning(self, "錯誤", "模板檔案中沒有 Equip 資料")
+            QMessageBox.warning(self, tr("message.title.error"), tr("message.template_missing_equip"))
             return
         effect_list = equip_list[0].get("effectlist", [])
 
@@ -10420,11 +10474,11 @@ class ItemSearchApp(QWidget):
 
 
         # === 從視窗標題推斷檔名 ===
-        full_title = self.windowTitle().strip() or "RO物品查詢計算工具 - 未命名"
+        full_title = self.windowTitle().strip() or tr("window.main_unnamed")
         if " - " in full_title:
             filename_part = full_title.split(" - ", 1)[1]
         else:
-            filename_part = "未命名"
+            filename_part = tr("filename.unnamed")
 
         for bad_char in '\\/:*?"<>|':
             filename_part = filename_part.replace(bad_char, "_")
@@ -10436,9 +10490,9 @@ class ItemSearchApp(QWidget):
         app = QApplication.instance() or QApplication([])
         file_path, _ = QFileDialog.getSaveFileName(
             self,
-            "另存 ROC 檔",
+            tr("dialog.save_roc_file"),
             suggested_filename,
-            "ROC 檔案 (*.roc)"
+            tr("dialog.filter_roc_file")
         )
 
         if not file_path:
@@ -10455,7 +10509,7 @@ class ItemSearchApp(QWidget):
                 f.write(encoded)
             print(f"✅ 已新增效果並更新 Status，直接輸出 ROC 檔：{file_path}")
         except Exception as e:
-            QMessageBox.critical(self, "錯誤", f"ROC 轉換或儲存失敗：{e}")
+            QMessageBox.critical(self, tr("message.title.error"), tr("message.roc_save_failed", error=e))
             print(f"❌ 轉換失敗：{e}")
 
 
@@ -10469,18 +10523,18 @@ class ItemSearchApp(QWidget):
         default_dir = os.path.join(os.getcwd(), "裝備")
 
         # 預設檔名
-        full_title = self.windowTitle().strip() or "RO物品查詢計算工具 - 未命名"
+        full_title = self.windowTitle().strip() or tr("window.main_unnamed")
         if " - " in full_title:
             filename_part = full_title.split(" - ", 1)[1]
         else:
-            filename_part = "未命名"
+            filename_part = tr("filename.unnamed")
 
         # 路徑 + 檔名
         default_path = os.path.join(default_dir, filename_part)
 
         file_path, _ = QFileDialog.getSaveFileName(
             self,
-            "另存新檔",
+            tr("dialog.save_as"),
             default_path,          # ⭐ 關鍵在這
             "JSON Files (*.json)"
         )
@@ -10542,7 +10596,7 @@ class ItemSearchApp(QWidget):
             self.current_file = file_path
             self.update_window_title()
         except Exception as e:
-            QMessageBox.critical(self, "儲存失敗", f"無法儲存檔案：\n{e}")
+            QMessageBox.critical(self, tr("message.title.save_failed"), tr("message.file_save_failed", error=e))
 
 
     def save_file(self):
@@ -10560,13 +10614,13 @@ class ItemSearchApp(QWidget):
             self.refresh_skill_list()
             self.trigger_total_effect_update()
         except Exception as e:
-            QMessageBox.critical(self, "錯誤", f"載入失敗：\n{str(e)}")
+            QMessageBox.critical(self, tr("message.title.error"), tr("message.load_failed", error=str(e)))
         # ★★★ 讀取成功 → 刪除 JSON 檔 ★★★
         try:
             os.remove(file_path)
             print(f"已刪除暫存 JSON：{file_path}")
             name = file_path.replace("tmp", "").replace("\\", "")
-            self.setWindowTitle(f"RO物品查詢計算工具 {Version} - {name} ")
+            self.setWindowTitle(tr("window.main_with_file", version=Version, filename=name))
             self.current_file = None
         except Exception as e:
             print(f"刪除 JSON 失敗：{e}")
@@ -10582,7 +10636,7 @@ class ItemSearchApp(QWidget):
         bridge_file = "tmp/rrf_output_path.txt"
 
         if not os.path.exists(bridge_file):
-            QMessageBox.warning(self, "錯誤", "沒有收到 rrf_to_App.py 的 JSON 輸出路徑")
+            QMessageBox.warning(self, tr("message.title.error"), tr("message.rrf_json_path_missing"))
             return
 
         # 讀出 JSON 檔案路徑
@@ -10590,7 +10644,7 @@ class ItemSearchApp(QWidget):
             json_path = f.read().strip()
 
         if not os.path.exists(json_path):
-            QMessageBox.warning(self, "錯誤", f"找不到 JSON 檔案：{json_path}")
+            QMessageBox.warning(self, tr("message.title.error"), tr("message.json_file_not_found", path=json_path))
             return
 
         # ★ 自動載入 JSON（不跳視窗）
@@ -10603,7 +10657,7 @@ class ItemSearchApp(QWidget):
     
         file_path, _ = QFileDialog.getOpenFileName(
             self,
-            "選擇專案檔",
+            tr("dialog.select_project_file"),
             default_dir,  # ✅ 預設資料夾
             "JSON Files (*.json)"
         )
@@ -10626,13 +10680,13 @@ class ItemSearchApp(QWidget):
 
 
         except Exception as e:
-            QMessageBox.critical(self, "錯誤", f"載入失敗：\n{str(e)}")
+            QMessageBox.critical(self, tr("message.title.error"), tr("message.load_failed", error=str(e)))
 
 
 
     def clear_current_edit(self):
         self.current_edit_part = None
-        self.current_edit_label.setText("目前部位：")
+        self.current_edit_label.setText(tr("label.current_part"))
         self.unsync_button.setVisible(False)
         self.apply_equip_button.setVisible(False)
         self.unsync_button2.setVisible(False)
