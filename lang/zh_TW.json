@@ -84,6 +84,7 @@
   "skill_editor.field.bonus_add": "遞增/減原始數字",
   "skill_editor.field.bonus_step": "遞增/減數字",
   "skill_editor.field.rangedamage": "技能遠距傷害",
+  "skill_editor.field.delayed_rangedamage": "後計算技能遠距傷害",
   "skill_editor.field.half_bypass_def": "半無視DEF",
   "skill_editor.field.half_bypass_res": "無視RES",
   "skill_editor.field.special_wprange": "裝備武器套用遠距計算",

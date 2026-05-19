@@ -1,5 +1,5 @@
 #部分資料取自ROCalculator,搜尋 ROCalculator 可以知道哪些有使用
-Version = "v0.3.0-260518"
+Version = "v0.3.1-260520"
 
 import sys, builtins, time
 import os
@@ -1577,6 +1577,10 @@ class CSVEditor(QMainWindow):
                 "label": tr("skill_editor.field.rangedamage"),
                 "tooltip": "技能套用遠距傷害計算。"
             },
+            "Delayed_Rangedamage": {
+                "label": tr("skill_editor.field.delayed_rangedamage"),
+                "tooltip": "遠距傷害移到def後計算。"
+            },
             "half_bypass_def": {
                 "label": tr("skill_editor.field.half_bypass_def"),
                 "tooltip": "無視後DEF乘算，數字加算到前DEF。"
@@ -1653,8 +1657,8 @@ class CSVEditor(QMainWindow):
                 ]
                 edit_field = MultiComboField(WPClass_options)
 
-            # ★★★ 新增：Rangedamage 用勾選框 ★★★
-            elif header.lower() in ("rangedamage","half_bypass_def","half_bypass_res","skill_cannon"):
+            # ★★★ 用勾選框 ★★★
+            elif header.lower() in ("rangedamage","half_bypass_def","half_bypass_res","skill_cannon","delayed_rangedamage"):
                 edit_field = QCheckBox()
             else:
                 edit_field = QLineEdit()
@@ -1752,7 +1756,7 @@ class CSVEditor(QMainWindow):
                     widget.setCurrentIndex(idx if idx >= 0 else 0)
                     continue
 
-                if isinstance(widget, QCheckBox) and key in ("rangedamage","half_bypass_def","half_bypass_res","skill_cannon"):
+                if isinstance(widget, QCheckBox) and key in ("rangedamage","half_bypass_def","half_bypass_res","skill_cannon","delayed_rangedamage"):
                     widget.setChecked(str(value).strip() in ("1", "true", "True"))
                     continue
 
@@ -1812,7 +1816,7 @@ class CSVEditor(QMainWindow):
                     new_value = widget.currentData()  # "magic"/"physical"
                 elif isinstance(widget, QComboBox):
                     new_value = widget.currentText()
-                elif isinstance(widget, QCheckBox) and key in ("rangedamage","half_bypass_def","half_bypass_res","skill_cannon"):
+                elif isinstance(widget, QCheckBox) and key in ("rangedamage","half_bypass_def","half_bypass_res","skill_cannon","delayed_rangedamage"):
                     new_value = "1" if widget.isChecked() else "0"
 
                 else:
@@ -4562,14 +4566,14 @@ class ItemSearchApp(QWidget):
         #==========================精煉計算=========================
         #武器ATK精煉計算
         patk_refine_total = 0
-        atk_refine_total, patk_refine_total = self.calc_weapon_refine_atk(weaponR_Level, weaponRefineR, weaponGradeR)
-        atk_refine_total_L, patk_refine_total_L = self.calc_weapon_refine_atk(weaponL_Level, weaponRefineL, weaponGradeL)#atk_refine_total_L 副手不計算ATK 只計算PATK
+        atk_refine_total, patk_refine_total, refineoveratk ,refineoveratk_min = self.calc_weapon_refine_atk(weaponR_Level, weaponRefineR, weaponGradeR)
+        atk_refine_total_L, patk_refine_total_L, refineoveratk_L, refineoveratk_L_min = self.calc_weapon_refine_atk(weaponL_Level, weaponRefineL, weaponGradeL)#atk_refine_total_L 副手不計算ATK 只計算PATK
         #PATK(裝備+精煉+特性素質)
         globals()["total_PATK"] = PATK + int(total_POW/3) + int(total_CON/5) + patk_refine_total + patk_refine_total_L
         #武器MATK精煉計算
         smatk_refine_total = 0
-        matk_refine_total, smatk_refine_total = self.calc_weapon_refine_matk(weaponR_Level, weaponRefineR, weaponGradeR)
-        matk_refine_total_L, smatk_refine_total_L = self.calc_weapon_refine_matk(weaponL_Level, weaponRefineL, weaponGradeL)
+        matk_refine_total, smatk_refine_total, refineovermatk, refineovermatk_min = self.calc_weapon_refine_matk(weaponR_Level, weaponRefineR, weaponGradeR)
+        matk_refine_total_L, smatk_refine_total_L, refineovermatk_L ,refineovermatk_L_min = self.calc_weapon_refine_matk(weaponL_Level, weaponRefineL, weaponGradeL)
         #SMATK(裝備+精煉+特性素質)
         total_SMATK = SMATK + int(total_SPL/3) + int(total_CON/5) + smatk_refine_total + smatk_refine_total_L
         #============================魔法各增傷計算區============================
@@ -4670,19 +4674,29 @@ class ItemSearchApp(QWidget):
         AKTC = ATK_Mweapon + ATK_armor + atk_refine_total + WPINVESTIGATEATK
         #C.RATE
         total_CRATE = CRATE + int(total_CRT/3)
+
+
         if weapon_class in (11,13,14,17,18,19,20,21):#DEX系
             #武器基礎ATK(dex)
-            BasicsWeaponATK_min = ATK_Mweapon * (1+ (total_DEX/200) - (weaponR_Level*0.05))
+            if int(GUSklv(114)) == 1:
+                BasicsWeaponATK_min = ATK_Mweapon * (1+ (total_DEX/200) + (weaponR_Level*0.05))
+            else:
+                BasicsWeaponATK_min = ATK_Mweapon * (1+ (total_DEX/200) - (weaponR_Level*0.05))
+
             BasicsWeaponATK = ATK_Mweapon * (1+ (total_DEX/200) + (weaponR_Level*0.05))
             
         else:#STR系
             #武器基礎ATK(STR)
-            BasicsWeaponATK_min = ATK_Mweapon * (1+ (total_STR/200) - (weaponR_Level*0.05))
+            if int(GUSklv(114)) == 1:
+                BasicsWeaponATK_min = ATK_Mweapon * (1+ (total_STR/200) + (weaponR_Level*0.05))
+            else:
+                BasicsWeaponATK_min = ATK_Mweapon * (1+ (total_STR/200) - (weaponR_Level*0.05))
+
             BasicsWeaponATK = ATK_Mweapon * (1+ (total_STR/200) + (weaponR_Level*0.05))
         
         #print(f"BasicsWeaponATK:{BasicsWeaponATK}")
         #精煉武器ATK
-        refineWeaponATK_min = int(BasicsWeaponATK_min + atk_refine_total)
+        refineWeaponATK_min = int(BasicsWeaponATK_min + atk_refine_total + refineoveratk_min - refineoveratk )
         refineWeaponATK = int(BasicsWeaponATK + atk_refine_total)  
         #print(f"refineWeaponATK:{refineWeaponATK}")
 
@@ -4737,7 +4751,11 @@ class ItemSearchApp(QWidget):
         #後MATK
         MATKC = MATK_armor + MATK_Mweapon + MATK_MweaponL + matk_refine_total + matk_refine_total_L
         #武器MATK
-        MATK_Mweapon_ALL_min = MATKF + ((matk_refine_total + matk_refine_total_L + MATK_Mweapon + MATK_MweaponL) * (1-(weaponR_Level*0.1)))
+        if int(GUSklv(2206)) == 1:
+            MATK_Mweapon_ALL_min = MATKF + ((matk_refine_total + matk_refine_total_L + MATK_Mweapon + MATK_MweaponL + refineovermatk_min + refineovermatk_L_min - refineovermatk - refineovermatk_L) * (1+(weaponR_Level*0.1)))
+        else:
+            MATK_Mweapon_ALL_min = MATKF + ((matk_refine_total + matk_refine_total_L + MATK_Mweapon + MATK_MweaponL + refineovermatk_min + refineovermatk_L_min - refineovermatk - refineovermatk_L) * (1-(weaponR_Level*0.1)))
+        
         MATK_Mweapon_ALL = MATKF + ((matk_refine_total + matk_refine_total_L + MATK_Mweapon + MATK_MweaponL) * (1+(weaponR_Level*0.1)))
         #print(f"武器MATK:{MATK_Mweapon_ALL}")
         #裝備MATK+魔力增幅+武器MATK
@@ -4876,6 +4894,8 @@ class ItemSearchApp(QWidget):
         self.atktype = attack_type
         #技能遠傷判斷
         skill_Rangedamage = int(skill_row["Rangedamage"]) if pd.notna(skill_row.get("Rangedamage")) else 0 
+        #技能遠傷判斷
+        skill_delayed_Rangedamage = int(skill_row["Delayed_Rangedamage"]) if pd.notna(skill_row.get("Delayed_Rangedamage")) else 0 
         #技能砲彈ATK開關
         skill_cannon = int(skill_row["skill_cannon"]) if pd.notna(skill_row.get("skill_cannon")) else 0 
         #print(f"技能遠傷判斷: {skill_Rangedamage}")
@@ -5082,7 +5102,12 @@ class ItemSearchApp(QWidget):
 
                         #技能遠傷進傷
                         if skill_Rangedamage == 1:
-                            MR_AttackDamage = RangeAttackDamage + BowAtk if weapon_class == 11 else RangeAttackDamage
+                            if skill_delayed_Rangedamage == 1:
+                                MR_AttackDamage = 0
+                                delayed_MR_AttackDamage = RangeAttackDamage + BowAtk if weapon_class == 11 else RangeAttackDamage
+                            else:
+                                MR_AttackDamage = RangeAttackDamage + BowAtk if weapon_class == 11 else RangeAttackDamage
+                                delayed_MR_AttackDamage = 0
                             specialatkbuff = special_away_BUFF
                         else:
                             MR_AttackDamage = MeleeAttackDamage
@@ -5162,6 +5187,8 @@ class ItemSearchApp(QWidget):
                                 (damage_nodef,"raw","DEF減傷%"),
                                 #敵人DEF減算
                                 (target_defc,None,"DEF減算"),
+                                #後遠傷% 技能判斷
+                                (delayed_MR_AttackDamage,1,"後計算遠傷%"),
                                 #裝備段技能增傷
                                 (Use_Skills,1,"技能增傷%(裝備段)"),
                                 #技能段技能增傷
@@ -5206,6 +5233,8 @@ class ItemSearchApp(QWidget):
                                 (damage_nodef,"raw","DEF減傷%"),
                                 #敵人DEF減算
                                 (target_defc,None,"DEF減算"),
+                                #後遠傷% 技能判斷
+                                (delayed_MR_AttackDamage,1,"後計算遠傷%"),
                                 #裝備段技能增傷
                                 (Use_Skills,1,"技能增傷%(裝備段)"),
                                 #技能段技能增傷
@@ -5273,15 +5302,15 @@ class ItemSearchApp(QWidget):
                     final_damage = int(final_damage * (1-(MD_BETELGEUSE_data/100)))
                     self.steps.append(["星座塔減傷%", 100-(MD_BETELGEUSE_data)])
                     
-                    #武器值最大化/魔法省悟min = max
-                    if attack_type == "physical" and int(GUSklv(114)) == 1:
-                        final_damage_min = final_damage
-                    elif attack_type == "magic" and int(GUSklv(2206)) == 1:
-                        final_damage_min = final_damage
-                    elif attack_type == "d_b":
-                        final_damage_min = final_damage
-                    # else:
+                    #武器值最大化/魔法省悟min = max #移到基礎ATK位置
+                    # if attack_type == "physical" and int(GUSklv(114)) == 1:
                     #     final_damage_min = final_damage
+                    # elif attack_type == "magic" and int(GUSklv(2206)) == 1:
+                    #     final_damage_min = final_damage
+                    # elif attack_type == "d_b":
+                    #     final_damage_min = final_damage
+                    # # else:
+                    # #     final_damage_min = final_damage
 
                     if skill_hits < 0:# skill_hits < 0 表示這段總傷害要「均分」為多次
                         times = abs(skill_hits)
@@ -5514,7 +5543,7 @@ class ItemSearchApp(QWidget):
                 self.mres_input.setVisible(True)
                 result.append(f"=========================以下各增傷數值===========================")
                 result.append(f"{pad_label('前MATK:')}{MATKF:,}")
-                result.append(f"{pad_label('後MATK:')}{MATKC:,}")
+                result.append(f"{pad_label('後MATK:')}{MATKC - refineovermatk - refineovermatk_L:,}")
                 result.append(f"{pad_label('武器MATK:')}{MATK_Mweapon:,}")
                 result.append(f"{pad_label('裝備MATK+魔力:')}{armorMATK_MAGICPOWER}")
                 result.append(f"{pad_label('MATK%:')}{round(MATK_percent)}%")
@@ -5555,7 +5584,7 @@ class ItemSearchApp(QWidget):
                     result.append(f"{pad_label('前ATK (DEX系):')}{FATK:,}")
                 else:#STR系
                     result.append(f"{pad_label('前ATK(STR系):')}{NATK:,}")
-                result.append(f"{pad_label('後ATK:')}{AKTC + KamuiATK + atk_refine_total_L + ATK_MweaponL:,}")
+                result.append(f"{pad_label('後ATK:')}{AKTC + KamuiATK + atk_refine_total_L + ATK_MweaponL - refineoveratk:,}")
                 result.append(f"{pad_label('武器ATK:')}{ATK_Mweapon:,}")
                 result.append(f"{pad_label('修煉ATK:')}{WeaponMasteryATK:,}")
                 result.append(f"{pad_label('物理ATK%:')}{round(ATK_percent)}%")
@@ -5796,7 +5825,7 @@ class ItemSearchApp(QWidget):
           5 階：依品級每 +1 固定 MATK，加上每 +1 固定 +2 S.MATK。
         """
         if weapon_Level == 0 or weaponRefineR <= 0:
-            return 0, 0
+            return 0, 0, 0, 0
 
         # 每精煉+1 增加 MATK
         base_per_refine   = {1: 2, 2: 3, 3: 5, 4: 7, 5: 0}
@@ -5829,32 +5858,35 @@ class ItemSearchApp(QWidget):
             safe = safe_threshold[weapon_Level]
             steps_after_safe = max(0, weaponRefineR - safe)
             variance = steps_after_safe * extra_after_safe[weapon_Level]
+            variance_min = 1#基礎最小值
 
             # 16 以上額外加成：每超過 1 級，對「1~15」各再加一次（= 15 倍）
             steps_over16 = max(0, weaponRefineR - 15)
             over16 = steps_over16 * 15 * over16_bonus[weapon_Level]
 
-            #matk_total = base + variance + over16
-            matk_total = base + over16#安定後浮動加成暫時取消
+            matk_total = base + variance + over16
+            #matk_total = base + over16#安定後浮動加成暫時取消
             total_SMATK = 0.0
 
         else:  # weapon_Level == 5
             matk_per_refine = level5_grade_bonus.get(weaponGradeR, 0.0)
             matk_total = weaponRefineR * matk_per_refine
             total_SMATK = weaponRefineR * smatk_bonus_per_refine
+            variance = 0
+            variance_min = 0
 
-        return matk_total, total_SMATK
+        return matk_total, total_SMATK, variance , variance_min
         
     def calc_weapon_refine_atk(self, weapon_Level, weaponRefineR, weaponGradeR):
         """
-        回傳： (ATK/MATK 總加成, P.ATK/S.MATK 總加成)
+        回傳： (ATK 總加成, P.ATK 總加成)
         說明：
           1~4 階：每 +1 固定加成；超過安定值後，每 +1 額外給「浮動加成(這裡取上限)」；
                   若精煉 > 15，則每超過 1 級，對「1~15」再各加一次 over16_bonus，共 15 倍。
-          5 階：依品級每 +1 固定 ATK/MATK，加上每 +1 固定 +2 P.ATK/S.MATK。
+          5 階：依品級每 +1 固定 ATK，加上每 +1 固定 +2 P.ATK。
         """
         if weapon_Level == 0 or weaponRefineR <= 0:
-            return 0, 0
+            return 0, 0, 0, 0
 
         # 每精煉+1 增加 ATK/MATK
         base_per_refine   = {1: 2, 2: 3, 3: 5, 4: 7, 5: 0}
@@ -5887,21 +5919,24 @@ class ItemSearchApp(QWidget):
             safe = safe_threshold[weapon_Level]
             steps_after_safe = max(0, weaponRefineR - safe)
             variance = steps_after_safe * extra_after_safe[weapon_Level]
+            variance_min = 1#基礎最小值
 
             # 16 以上額外加成：每超過 1 級，對「1~15」各再加一次（= 15 倍）
             steps_over16 = max(0, weaponRefineR - 15)
             over16 = steps_over16 * 15 * over16_bonus[weapon_Level]
 
-            #atk_total = base + variance + over16
-            atk_total = base + over16#安定後浮動加成暫時取消
+            atk_total = base + variance + over16
+            #atk_total = base + over16#安定後浮動加成暫時取消
             total_PATK = 0.0
 
         else:  # weapon_Level == 5
             atk_per_refine = level5_grade_bonus.get(weaponGradeR, 0.0)
             atk_total = weaponRefineR * atk_per_refine
             total_PATK = weaponRefineR * patk_bonus_per_refine
+            variance = 0
+            variance_min = 0
 
-        return atk_total, total_PATK
+        return atk_total, total_PATK, variance ,variance_min
 
 
 
