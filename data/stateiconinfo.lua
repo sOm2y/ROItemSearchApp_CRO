@@ -4535,4 +4535,16 @@ descript = {
 {"ATK + 7%"}, 
 {"MATK + 7%"}, 
 {"%s", COLOR_TIME}}}
+StateIconList[EFST_IDs.EFST_C_BUFF_16] = {haveTimeLimit = 1, posTimeLimitStr = 2, 
+descript = {
+{"美味Buff ", COLOR_TITLE_BUFF}, 
+{"%s", COLOR_TIME}, 
+{"對一般型敵人的物理/魔法傷害增加。"}, 
+{"對首領型魔物的物理/魔法傷害增加。"}}}
+StateIconList[EFST_IDs.EFST_C_BUFF_17] = {haveTimeLimit = 1, posTimeLimitStr = 2, 
+descript = {
+{"新鮮Buff ", COLOR_TITLE_BUFF}, 
+{"%s", COLOR_TIME}, 
+{"對全種族魔物的物理/魔法傷害增加。"}, 
+{"(玩家除外)"}}}
 

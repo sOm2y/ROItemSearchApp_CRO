@@ -5002,7 +5002,29 @@ ItemDBNameTbl = {
   Time_Gap_TR_Ribbon = 580075,
   Time_Gap_TR_Vilolin = 570075,
   T_Dimension_Ring_WH = 491015,
-  T_Dimension_Ring_TR = 491016
+  T_Dimension_Ring_TR = 491016,
+  S_MT_TL_Earring = 1270035,
+  S_MT_TL_Pendant = 1270036,
+  S_MT_SC_Armor = 1270037,
+  S_MT_SC_Shoes = 1270038,
+  Time_Gap_Staff_AG = 640054,
+  D_God_Boots_TW = 470440,
+  D_God_Boots_LT_TW = 470441,
+  Energy_Xtal_GEMS_TW = 1002990,
+  GEMS_DarkBlood_UPD = 460167,
+  Comet_Life_Power_1 = 315289,
+  Comet_Life_Power_2 = 315290,
+  Comet_Life_Power_3 = 315291,
+  Comet_Life_Power_4 = 315292,
+  Comet_Life_Power_5 = 315293,
+  Space_Cluster_POW1 = 315295,
+  Space_Cluster_STA1 = 315296,
+  Space_Cluster_CON1 = 315297,
+  Space_Cluster_CRT1 = 315298,
+  Space_Cluster_SPL1 = 315299,
+  Space_Cluster_WIS1 = 315300,
+  Drabone_L = 25765,
+  ["Dragon's_Skin"] = 7123
 }
 
 function ItemDB_To_ItemID(in_ItemDB)
