@@ -1,5 +1,5 @@
 #部分資料取自ROCalculator,搜尋 ROCalculator 可以知道哪些有使用
-Version = "v0.3.1-260520"
+Version = "v0.3.2-260529"
 
 import sys, builtins, time
 import os
@@ -4259,7 +4259,7 @@ class ItemSearchApp(QWidget):
                 return int(v)  # True->1, False->0
             return v
 
-        #處理公式中的動態變數
+        #處理公式中的動態變數========================
         def replace_gsklv_calls(formula: str) -> str:
             pattern = r'GSklv\((\d+)\)'  # 找出 GSklv(數字)
             return re.sub(pattern, lambda m: str(GSklv(int(m.group(1)))), formula)

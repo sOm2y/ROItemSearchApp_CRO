@@ -1360,10 +1360,33 @@ def run_rrf_main():
     except Exception as e:
         print(f"刪除 {txt_path} 時發生錯誤：{e}")
 
-    # 依照輸入的 RRF 自動命名 json
-    rrfname = session_data['Charactername'] + "_" + job_info["name"] if main_job_id == job_id else session_data['Charactername'] + "_" + job_info["name"] + "(非4轉)"
-    rrf_filename = os.path.basename(rrfname)        # 例：abc.rrf
-    json_name = os.path.splitext(rrf_filename)[0] + ".json"
+    def replace_windows_invalid_chars(name):
+        table = str.maketrans({
+            '\\': '＼',
+            '/': '／',
+            ':': '：',
+            '*': '＊',
+            '?': '？',
+            '"': '＂',
+            '<': '＜',
+            '>': '＞',
+            '|': '｜',
+        })
+        return name.translate(table)
+
+
+    rrfname = (
+        session_data['Charactername'] + "_" + job_info["name"]
+        if main_job_id == job_id
+        else session_data['Charactername'] + "_" + job_info["name"] + "(非4轉)"
+    )
+
+    rrf_filename = os.path.basename(rrfname)
+    json_base_name = os.path.splitext(rrf_filename)[0]
+
+    json_base_name = replace_windows_invalid_chars(json_base_name)
+
+    json_name = json_base_name + ".json"
     json_output_path = os.path.join("tmp", json_name)
 
     with open(json_output_path, "w", encoding="utf-8") as f:
