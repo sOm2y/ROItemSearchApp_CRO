@@ -5024,7 +5024,15 @@ ItemDBNameTbl = {
   Space_Cluster_SPL1 = 315299,
   Space_Cluster_WIS1 = 315300,
   Drabone_L = 25765,
-  ["Dragon's_Skin"] = 7123
+  ["Dragon's_Skin"] = 7123,
+  S_IG_RS_Earring = 1270039,
+  S_IG_RS_Pendant = 1270040,
+  S_IG_SS_Armor = 1270041,
+  S_IG_SS_Shoes = 1270042,
+  Time_Gap_CD_Staff = 550156,
+  Time_Gap_EM_S_Book = 540096,
+  T_Dimension_Ring_SKE = 491055,
+  T_Dimension_Ring_SOA = 491056
 }
 
 function ItemDB_To_ItemID(in_ItemDB)
