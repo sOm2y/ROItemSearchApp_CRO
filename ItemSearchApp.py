@@ -1,5 +1,5 @@
 #部分資料取自ROCalculator,搜尋 ROCalculator 可以知道哪些有使用
-Version = "v0.3.2-260529"
+Version = "v0.3.3-260606"
 
 import sys, builtins, time
 import os
@@ -5112,6 +5112,7 @@ class ItemSearchApp(QWidget):
                         else:
                             MR_AttackDamage = MeleeAttackDamage
                             specialatkbuff = special_melee_BUFF
+                            delayed_MR_AttackDamage = 0
 
                         #是否技能爆擊/命中增傷
                         if Critical_hit < 0:#負值兩者不吃
