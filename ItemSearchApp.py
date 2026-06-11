@@ -3589,7 +3589,289 @@ class PreferencesDialog(QDialog):
 
 
 
+class InternalDataInspectorDialog(QDialog):
+    """只讀式內部資料查詢視窗。
+
+    目的：讓使用者在 UI 上查看目前載入的 mapping、DataRegistry、技能/裝備狀態與主視窗 snapshot。
+    注意：此視窗刻意不提供 eval / exec，也不允許修改資料，避免把 Debug 工具變成任意程式執行入口。
+    """
+
+    def __init__(self, data_provider, parent=None):
+        super().__init__(parent)
+        self.data_provider = data_provider
+        self.setWindowTitle(tr("window.internal_data_inspector", "內部資料查詢"))
+        self.resize(900, 650)
+
+        layout = QVBoxLayout(self)
+
+        control_row = QHBoxLayout()
+        self.source_combo = QComboBox()
+        self.search_input = QLineEdit()
+        self.search_input.setPlaceholderText(
+            tr("placeholder.internal_data_search", "輸入關鍵字或 key，例如 STR、技能名稱、job id...")
+        )
+
+        self.refresh_button = QPushButton(tr("button.refresh", "重新整理"))
+        self.clear_button = QPushButton(tr("button.clear", "清空"))
+
+        control_row.addWidget(QLabel(tr("label.data_source", "資料來源")))
+        control_row.addWidget(self.source_combo, 1)
+        control_row.addWidget(self.search_input, 2)
+        control_row.addWidget(self.refresh_button)
+        control_row.addWidget(self.clear_button)
+        layout.addLayout(control_row)
+
+        self.result_text = QTextEdit()
+        self.result_text.setReadOnly(True)
+        self.result_text.setLineWrapMode(QTextEdit.NoWrap)
+        layout.addWidget(self.result_text, 1)
+
+        self.status_label = QLabel("")
+        self.status_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        layout.addWidget(self.status_label)
+
+        self.refresh_button.clicked.connect(self.refresh_sources)
+        self.clear_button.clicked.connect(self.search_input.clear)
+        self.source_combo.currentIndexChanged.connect(self.render_current_source)
+        self.search_input.textChanged.connect(self.render_current_source)
+
+        self.refresh_sources()
+
+    def refresh_sources(self):
+        current = self.source_combo.currentText()
+        try:
+            self.sources = self.data_provider() or {}
+        except Exception as e:
+            self.sources = {tr("label.error", "錯誤"): {"error": str(e)}}
+
+        self.source_combo.blockSignals(True)
+        self.source_combo.clear()
+        self.source_combo.addItems(list(self.sources.keys()))
+        if current:
+            idx = self.source_combo.findText(current)
+            if idx >= 0:
+                self.source_combo.setCurrentIndex(idx)
+        self.source_combo.blockSignals(False)
+        self.render_current_source()
+
+    def render_current_source(self):
+        source_name = self.source_combo.currentText()
+        data = self.sources.get(source_name, {})
+        query = self.search_input.text().strip().lower()
+
+        filtered = self._filter_data(data, query) if query else data
+        safe_data = self._to_json_safe(filtered)
+
+        try:
+            text = json.dumps(safe_data, ensure_ascii=False, indent=2)
+        except Exception:
+            text = str(safe_data)
+
+        self.result_text.setPlainText(text)
+        self.status_label.setText(
+            tr(
+                "label.internal_data_status",
+                "來源：{source}｜查詢：{query}｜結果長度：{length}",
+                source=source_name or "-",
+                query=query or tr("label.none", "無"),
+                length=len(text),
+            )
+        )
+
+    def _filter_data(self, data, query):
+        """保留 key 或 value 文字中包含 query 的節點；巢狀 dict/list 會遞迴搜尋。"""
+        if not query:
+            return data
+
+        if isinstance(data, dict):
+            result = {}
+            for k, v in data.items():
+                key_match = query in str(k).lower()
+                value_match = query in str(v).lower()
+                child = self._filter_data(v, query) if isinstance(v, (dict, list, tuple, set)) else None
+
+                if key_match or value_match:
+                    result[k] = v
+                elif child not in ({}, [], (), set(), None):
+                    result[k] = child
+            return result
+
+        if isinstance(data, (list, tuple, set)):
+            result = []
+            for item in data:
+                item_match = query in str(item).lower()
+                child = self._filter_data(item, query) if isinstance(item, (dict, list, tuple, set)) else None
+
+                if item_match:
+                    result.append(item)
+                elif child not in ({}, [], (), set(), None):
+                    result.append(child)
+            return result
+
+        return data if query in str(data).lower() else None
+
+    def _to_json_safe(self, obj, depth=0, max_depth=8):
+        """把 Qt widget / DataFrame / set 等物件轉成可讀 JSON，並限制深度避免 UI 卡住。"""
+        if depth > max_depth:
+            return "..."
+
+        if obj is None or isinstance(obj, (str, int, float, bool)):
+            return obj
+
+        if isinstance(obj, dict):
+            return {
+                str(k): self._to_json_safe(v, depth + 1, max_depth)
+                for k, v in obj.items()
+            }
+
+        if isinstance(obj, (list, tuple)):
+            return [self._to_json_safe(v, depth + 1, max_depth) for v in obj]
+
+        if isinstance(obj, set):
+            return [self._to_json_safe(v, depth + 1, max_depth) for v in sorted(obj, key=str)]
+
+        if isinstance(obj, pd.DataFrame):
+            return {
+                "type": "DataFrame",
+                "shape": list(obj.shape),
+                "columns": [str(c) for c in obj.columns],
+                "preview": obj.head(100).to_dict(orient="records"),
+            }
+
+        if isinstance(obj, pd.Series):
+            return obj.head(100).to_dict()
+
+        if hasattr(obj, "text") and callable(obj.text):
+            try:
+                return {"type": obj.__class__.__name__, "text": obj.text()}
+            except Exception:
+                pass
+
+        if hasattr(obj, "currentText") and callable(obj.currentText):
+            try:
+                return {
+                    "type": obj.__class__.__name__,
+                    "currentText": obj.currentText(),
+                    "currentData": obj.currentData() if hasattr(obj, "currentData") else None,
+                }
+            except Exception:
+                pass
+
+        return str(obj)
+
+
 class ItemSearchApp(QWidget):
+
+    def get_internal_data_snapshot(self):
+        """收集目前 UI 與計算流程常用的只讀狀態，供 Debug 查詢視窗使用。"""
+        snapshot = {
+            "window": {
+                "title": self.windowTitle(),
+                "current_file": getattr(self, "current_file", None),
+                "current_edit_part": getattr(self, "current_edit_part", None),
+            },
+            "input_fields": {},
+            "selected_values": {},
+            "equipment_effects": {
+                "effect_dict_raw": getattr(self, "effect_dict_raw", {}),
+                "base_effect_dict_raw": getattr(self, "base_effect_dict_raw", {}),
+                "total_combined_raw": getattr(self, "total_combined_raw", []),
+            },
+            "skills": {
+                "enabled_skill_levels": enabled_skill_levels,
+                "Use_skill_levels": Use_skill_levels,
+                "current_skill": self.skill_box.currentText() if hasattr(self, "skill_box") else None,
+                "current_skill_id": self.skill_box.currentData() if hasattr(self, "skill_box") else None,
+            },
+            "weapon": {
+                "global_weapon_level_map": global_weapon_level_map,
+                "global_armor_weapon_map": global_armor_weapon_map,
+                "global_armor_level_map": global_armor_level_map,
+                "global_weapon_type_map": global_weapon_type_map,
+                "global_weapon_atk_map": global_weapon_atk_map,
+                "global_weapon_matk_map": global_weapon_matk_map,
+                "slot_item_id_map": slot_item_id_map,
+            },
+        }
+
+        for key, widget in getattr(self, "input_fields", {}).items():
+            try:
+                if hasattr(widget, "text") and callable(widget.text):
+                    snapshot["input_fields"][key] = widget.text()
+                elif hasattr(widget, "currentData") and callable(widget.currentData):
+                    snapshot["input_fields"][key] = {
+                        "currentText": widget.currentText() if hasattr(widget, "currentText") else None,
+                        "currentData": widget.currentData(),
+                    }
+                else:
+                    snapshot["input_fields"][key] = str(widget)
+            except Exception as e:
+                snapshot["input_fields"][key] = f"<讀取失敗: {e}>"
+
+        # 常見下拉/輸入元件：有存在才收集，避免不同版本 UI 造成 AttributeError。
+        for attr in [
+            "name_field", "id_field", "skill_box", "function_selector",
+            "job_combo", "weapon_combo", "monster_name_field"
+        ]:
+            if not hasattr(self, attr):
+                continue
+            widget = getattr(self, attr)
+            try:
+                if hasattr(widget, "currentText"):
+                    snapshot["selected_values"][attr] = {
+                        "currentText": widget.currentText(),
+                        "currentData": widget.currentData() if hasattr(widget, "currentData") else None,
+                    }
+                elif hasattr(widget, "text"):
+                    snapshot["selected_values"][attr] = widget.text()
+                else:
+                    snapshot["selected_values"][attr] = str(widget)
+            except Exception as e:
+                snapshot["selected_values"][attr] = f"<讀取失敗: {e}>"
+
+        return snapshot
+
+    def build_internal_data_sources(self):
+        """Debug Inspector 的資料白名單。不要在這裡加入可執行函式入口。"""
+        return {
+            tr("debug_source.snapshot", "目前狀態 Snapshot"): self.get_internal_data_snapshot(),
+            tr("debug_source.parsed_items", "物品列表"): self.parsed_items,
+            tr("debug_source.equipment_data", "裝備效果"): self.equipment_data,
+            tr("debug_source.data_registry", "料理 輔助技能"): DataRegistry.loaded_data,
+            tr("debug_source.skills", "技能資料 skills"): DataRegistry.loaded_data.get("skills", {}),
+            tr("debug_source.jobs", "職業資料 jobs"): DataRegistry.loaded_data.get("jobs", {}),
+            tr("debug_source.job_hpsp", "職業 HP/SP jobHPSP"): DataRegistry.loaded_data.get("jobHPSP", {}),
+            tr("debug_source.aspd", "攻速資料 ASPD"): DataRegistry.loaded_data.get("ASPD", {}),
+            tr("debug_source.skill_map", "skill_map"): skill_map,
+            tr("debug_source.skill_map_all", "skill_map_all"): skill_map_all,
+            tr("debug_source.skill_df", "skill_df"): skill_df,
+            tr("debug_source.function_defs", "公式 function_defs"): function_defs,
+            tr("debug_source.effect_map", "效果代碼 effect_map"): effect_map,
+            tr("debug_source.element_map", "屬性 element_map"): element_map,
+            tr("debug_source.size_map", "體型 size_map"): size_map,
+            tr("debug_source.race_map", "種族 race_map"): race_map,
+            tr("debug_source.weapon_type_map", "武器類型 weapon_type_map"): weapon_type_map,
+            tr("debug_source.damage_tables", "屬性倍率 damage_tables"): damage_tables,
+            tr("debug_source.refine_parts", "部位 refine_parts"): refine_parts,
+            tr("debug_source.equip_sitetype", "裝備位置 equip_sitetype"): equip_sitetype,
+            tr("debug_source.equipid_mapping", "ROCalculator 裝備轉換 equipid_mapping"): equipid_mapping,
+            tr("debug_source.status_mapping", "ROCalculator 狀態轉換 status_mapping"): status_mapping,
+            tr("debug_source.weapon_mapping", "ROCalculator 武器轉換 weapon_mapping"): weapon_mapping,
+        }
+
+    def open_internal_data_inspector(self):
+        """開啟只讀式內部資料查詢視窗。"""
+        if not hasattr(self, "_internal_data_inspector") or self._internal_data_inspector is None:
+            self._internal_data_inspector = InternalDataInspectorDialog(
+                self.build_internal_data_sources,
+                self,
+            )
+
+        self._internal_data_inspector.refresh_sources()
+        self._internal_data_inspector.show()
+        self._internal_data_inspector.raise_()
+        self._internal_data_inspector.activateWindow()
+
     def _parse_buff_ids(self, raw_buff) -> set[str]:
         """把 buff 轉成 set[str]，支援 '244'、'10,12,244'、['1667','1668']"""
         if raw_buff is None:
@@ -10343,6 +10625,10 @@ class ItemSearchApp(QWidget):
         self.action_do_update.triggered.connect(self.do_update)
 
         menu_debug = menubar.addMenu(tr("menu.debug"))
+
+        internal_data_action = QAction(tr("menu.internal_data_inspector", "內部資料查詢"), self)
+        internal_data_action.triggered.connect(self.open_internal_data_inspector)
+        menu_debug.addAction(internal_data_action)
         
         Damage_view_action = QAction(tr("menu.damage_history"), self)
         Damage_view_action.triggered.connect(self.open_damage_calculator)
