@@ -2121,6 +2121,73 @@ def parse_lua_effects_with_variables(
             return f"{expr}（無法解析）"
 
 
+
+
+    def split_lua_args(args_text: str):
+        """Split simple Lua-style function arguments while preserving nested calls."""
+        args = []
+        current = []
+        depth = 0
+        quote = None
+        escape = False
+
+        for ch in args_text:
+            if quote:
+                current.append(ch)
+                if escape:
+                    escape = False
+                elif ch == "\\":
+                    escape = True
+                elif ch == quote:
+                    quote = None
+                continue
+
+            if ch in ('"', "'"):
+                quote = ch
+                current.append(ch)
+            elif ch in "({[":
+                depth += 1
+                current.append(ch)
+            elif ch in ")}]":
+                depth = max(0, depth - 1)
+                current.append(ch)
+            elif ch == "," and depth == 0:
+                args.append("".join(current).strip())
+                current = []
+            else:
+                current.append(ch)
+
+        tail = "".join(current).strip()
+        if tail:
+            args.append(tail)
+        return args
+
+
+    def get_lua_call_args(func_name: str, line_text: str, flags: int = 0):
+        m = re.match(rf"{func_name}\s*\((.*)\)\s*$", line_text, flags)
+        if not m:
+            return None
+        return split_lua_args(m.group(1))
+
+
+    def eval_lua_arg(args, index: int, default=None):
+        if args is None or index >= len(args):
+            return default
+        return safe_eval_expr(args[index], variables, get_values, refine_inputs, grade)
+
+
+    def map_int_arg(args, index: int, mapping: dict, fallback_prefix: str):
+        if args is None or index >= len(args):
+            return f"{fallback_prefix}?"
+        try:
+            key = int(safe_eval_expr(args[index], variables, get_values, refine_inputs, grade))
+        except Exception:
+            try:
+                key = int(args[index])
+            except Exception:
+                return f"{fallback_prefix}{args[index]}"
+        return mapping.get(key, f"{fallback_prefix}{key}")
+
     for line in lines:
         original_line = line.strip()
         line = original_line.split("--")[0].strip()
@@ -2759,12 +2826,13 @@ def parse_lua_effects_with_variables(
             results.append(f"從 {race_name} 型怪的經驗值 {sign}{val}%")
             continue
 
-        #掉寶機率AddReceiveItem_Equip(value)
-        Item_attack = re.match(r"AddReceiveItem_Equip\(\s*(.+?)\s*\)", line)
+        #掉寶機率ReceiveItem_Equip(value)
+        Item_attack = re.match(r"(Add|Sub)ReceiveItem_Equip\(\s*(.+?)\s*\)", line)
         if Item_attack and condition_met:
-            value_expr = Item_attack.group(1)
+            op, value_expr = Item_attack.group(1,2)
             value_expr = safe_eval_expr(value_expr, variables, get_values, refine_inputs, grade)
-            results.append(f"掉寶率 +{value_expr}%")
+            sign = "+" if op == "Add" else "-"
+            results.append(f"掉寶率 {sign}{value_expr}%")
             continue
 
         register_function("就說通用了你還產生！", "----以上通用分隔線----", [])
@@ -2970,15 +3038,20 @@ def parse_lua_effects_with_variables(
             continue
 
         # AddDamage_HIT(1, value)
-        register_function("AddDamage_HIT", "物理命中傷害", [
+        register_function("AddDamage_HIT", "增加物理命中傷害", [
             {"name": "目標", "map": "unit_map"},
             {"name": "數值%", "type": "value"}
         ])
-        melee_hit = re.match(r"AddDamage_HIT\(\s*1\s*,\s*(.+)\)", line)
+        register_function("SubDamage_HIT", "減少物理命中傷害", [
+            {"name": "目標", "map": "unit_map"},
+            {"name": "數值%", "type": "value"}
+        ])
+        melee_hit = re.match(r"(Add|Sub)Damage_HIT\(\s*1\s*,\s*(.+)\)", line)
         if melee_hit and condition_met:
-            value_expr = melee_hit.group(1)
+            op, value_expr = melee_hit.group(1,2)
             value_expr = safe_eval_expr(value_expr, variables, get_values, refine_inputs, grade)
-            results.append(f"物理命中傷害 +{value_expr}%")
+            sign = "+" if op == "Add" else "-"
+            results.append(f"物理命中傷害 {sign}{value_expr}%")
             continue
 
         # 近距離物理傷害AddMeleeAttackDamage(1, value)
@@ -3229,6 +3302,478 @@ def parse_lua_effects_with_variables(
         ])
 
 #==============以上物理判斷
+
+        # === 解析補完：先加入顯示/總效果清單，暫不接入最終傷害公式 ===
+        # 注意：名稱刻意與既有傷害公式使用的 key 避開，避免新增解析後改變現有計算結果。
+
+
+        # 治癒量 Add/SubHealValue(value)
+        register_function("AddHealValue", "增加治癒量", [{"name": "數值%", "type": "value"}])
+        register_function("SubHealValue", "減少治癒量", [{"name": "數值%", "type": "value"}])
+        heal_value = re.match(r"(Add|Sub)HealValue\s*\((.*)\)\s*$", line)
+        if heal_value and condition_met:
+            op, args_text = heal_value.groups()
+            val = eval_lua_arg(split_lua_args(args_text), 0, 0)
+            sign = "+" if op == "Add" else "-"
+            results.append(f"治癒量 {sign}{val}%")
+            continue
+
+        # 被治癒量 Add/SubHealModifyPercent(value)
+        register_function("AddHealModifyPercent", "增加被治癒量", [{"name": "數值%", "type": "value"}])
+        register_function("SubHealModifyPercent", "減少被治癒量", [{"name": "數值%", "type": "value"}])
+        heal_modify = re.match(r"(Add|Sub)HealModifyPercent\s*\((.*)\)\s*$", line)
+        if heal_modify and condition_met:
+            op, args_text = heal_modify.groups()
+            val = eval_lua_arg(split_lua_args(args_text), 0, 0)
+            sign = "+" if op == "Add" else "-"
+            results.append(f"被治癒量 {sign}{val}%")
+            continue
+
+        # HP/SP 吸收 Add/SubHPdrain(rate, amount) / Add/SubSPdrain(rate, amount)
+        register_function("AddHPdrain", "增加HP吸收", [{"name": "機率%", "type": "value"}, {"name": "吸收量%", "type": "value"}])
+        register_function("SubHPdrain", "減少HP吸收", [{"name": "機率%", "type": "value"}, {"name": "吸收量%", "type": "value"}])
+        register_function("AddSPdrain", "增加SP吸收", [{"name": "機率%", "type": "value"}, {"name": "吸收量%", "type": "value"}])
+        register_function("SubSPdrain", "減少SP吸收", [{"name": "機率%", "type": "value"}, {"name": "吸收量%", "type": "value"}])
+        drain = re.match(r"(Add|Sub)(HP|SP)drain\s*\((.*)\)\s*$", line)
+        if drain and condition_met:
+            op, pool, args_text = drain.groups()
+            args = split_lua_args(args_text)
+            rate = eval_lua_arg(args, 0, 0)
+            amount = eval_lua_arg(args, 1, None)
+            sign = "+" if op == "Add" else "-"
+            if amount is None:
+                results.append(f"{pool}吸收 {sign}{rate}%")
+            else:
+                results.append(f"{pool}吸收機率 {sign}{rate}%")
+                results.append(f"{pool}吸收量 {sign}{amount}%")
+            continue
+
+        # SP 消耗 Add/SubSPconsumption(value)，以及大小寫技能版本 add/subspconsumption(value, skill_id)
+        register_function("AddSPconsumption", "增加SP消耗", [{"name": "數值%", "type": "value"}])
+        register_function("SubSPconsumption", "減少SP消耗", [{"name": "數值%", "type": "value"}])
+        sp_consumption = re.match(r"(Add|Sub)SPconsumption\s*\((.*)\)\s*$", line)
+        if sp_consumption and condition_met:
+            op, args_text = sp_consumption.groups()
+            val = eval_lua_arg(split_lua_args(args_text), 0, 0)
+            sign = "+" if op == "Add" else "-"
+            results.append(f"SP消耗 {sign}{val}%")
+            continue
+
+        register_function("addspconsumption", "增加指定技能SP消耗%", [{"name": "數值%", "type": "value"}, {"name": "技能", "map": "skill_map"}])
+        register_function("subspconsumption", "減少指定技能SP消耗%", [{"name": "數值%", "type": "value"}, {"name": "技能", "map": "skill_map"}])
+        skill_sp_consumption_pct = re.match(r"(add|sub)spconsumption\s*\((.*)\)\s*$", line)
+        if skill_sp_consumption_pct and condition_met:
+            op, args_text = skill_sp_consumption_pct.groups()
+            args = split_lua_args(args_text)
+            val = eval_lua_arg(args, 0, 0)
+            try:
+                skill_id = int(eval_lua_arg(args, 1, 0))
+            except Exception:
+                skill_id = 0
+            skill_name = skill_map.get(skill_id, f"技能ID {skill_id}")
+            sign = "+" if op == "add" else "-"
+            results.append(f"技能【{skill_name}】SP消耗 {sign}{val}%")
+            continue
+
+        # 指定技能 SP 消耗 Add/SubSkillSP(skill_id, value)
+        register_function("AddSkillSP", "增加指定技能SP消耗", [{"name": "技能", "map": "skill_map"}, {"name": "數值", "type": "value"}])
+        register_function("SubSkillSP", "減少指定技能SP消耗", [{"name": "技能", "map": "skill_map"}, {"name": "數值", "type": "value"}])
+        skill_sp = re.match(r"(Add|Sub)SkillSP\s*\((.*)\)\s*$", line)
+        if skill_sp and condition_met:
+            op, args_text = skill_sp.groups()
+            args = split_lua_args(args_text)
+            try:
+                skill_id = int(eval_lua_arg(args, 0, 0))
+            except Exception:
+                skill_id = 0
+            skill_name = skill_map.get(skill_id, f"技能ID {skill_id}")
+            val = eval_lua_arg(args, 1, 0)
+            sign = "+" if op == "Add" else "-"
+            results.append(f"技能【{skill_name}】SP消耗 {sign}{val}")
+            continue
+
+        # 受近距離物理傷害AddMeleeAttackDamage(0, value)
+        # register_function("AddMeleeAttackDamage", "增加近距離物理傷害", [
+        #     {"name": "目標", "map": "unit_map"},
+        #     {"name": "數值%", "type": "value"}
+        # ])
+        # register_function("SubMeleeAttackDamage", "減少近距離物理傷害", [
+        #     {"name": "目標", "map": "unit_map"},
+        #     {"name": "數值%", "type": "value"}
+        # ])
+        melee_dmg = re.match(r"(Add|Sub)MeleeAttackDamage\(\s*0\s*,\s*(.+)\)", line)
+        if melee_dmg and condition_met:
+            op, value_expr = melee_dmg.group(1,2)
+            value_expr = safe_eval_expr(value_expr, variables, get_values, refine_inputs, grade)
+            sign = "+" if op == "Add" else "-"
+            results.append(f"受到近距離物理傷害 {sign}{value_expr}%")
+            continue
+
+        # 受遠距離物理傷害AddRangeAttackDamage(0, value)
+        # register_function("AddRangeAttackDamage", "增加遠距離物理傷害", [
+        #     {"name": "目標", "map": "unit_map"},
+        #     {"name": "數值%", "type": "value"}
+        # ])
+        # register_function("SubRangeAttackDamage", "減少遠距離物理傷害", [
+        #     {"name": "目標", "map": "unit_map"},
+        #     {"name": "數值%", "type": "value"}
+        # ])
+        range_dmg = re.match(r"(Add|Sub)RangeAttackDamage\(\s*0\s*,\s*(.+)\)", line)
+        if range_dmg and condition_met:
+            op, value_expr = range_dmg.group(1,2)
+            value_expr = safe_eval_expr(value_expr, variables, get_values, refine_inputs, grade)
+            sign = "+" if op == "Add" else "-"
+            results.append(f"受到遠距離物理傷害 {sign}{value_expr}%")
+            continue
+
+
+        # 對屬性攻擊耐性 Add/SubAttrTolerace(element, value)
+        register_function("AddAttrTolerace", "增加屬性攻擊抗性", [{"name": "屬性", "map": "element_map"}, {"name": "數值%", "type": "value"}])
+        register_function("SubAttrTolerace", "減少屬性攻擊抗性", [{"name": "屬性", "map": "element_map"}, {"name": "數值%", "type": "value"}])
+        attr_tol = re.match(r"(Add|Sub)AttrTolerace\s*\((.*)\)\s*$", line)
+        if attr_tol and condition_met:
+            op, args_text = attr_tol.groups()
+            args = split_lua_args(args_text)
+            elem_name = map_int_arg(args, 0, element_map, "屬性")
+            val = eval_lua_arg(args, 1, 0)
+            sign = "+" if op == "Add" else "-"
+            results.append(f"對 {elem_name} 攻擊抗性 {sign}{val}%")
+            continue
+
+        # 對屬性物理攻擊耐性 add/subattrtolerace(element, value)
+        register_function("addattrtolerace", "增加屬性物理攻擊抗性", [{"name": "屬性", "map": "element_map"}, {"name": "數值%", "type": "value"}])
+        register_function("subattrtolerace", "減少屬性物理攻擊抗性", [{"name": "屬性", "map": "element_map"}, {"name": "數值%", "type": "value"}])
+        p_attr_tol = re.match(r"(add|sub)attrtolerace\s*\((.*)\)\s*$", line)
+        if p_attr_tol and condition_met:
+            op, args_text = p_attr_tol.groups()
+            args = split_lua_args(args_text)
+            elem_name = map_int_arg(args, 0, element_map, "屬性")
+            val = eval_lua_arg(args, 1, 0)
+            sign = "+" if op == "add" else "-"
+            results.append(f"對 {elem_name} 攻擊抗性 {sign}{val}%")
+            continue
+
+        # Add/Sub Damage_Size（受體型物理）
+        size_dmg = re.match(r"(Add|Sub)Damage_Size\(\s*0\s*,\s*(\d+)\s*,\s*(.+)\s*\)", line)
+        if size_dmg and condition_met:            
+            op, size_id, value_expr = size_dmg.groups()
+            size_str = size_map.get(int(size_id), f"體型{size_id}")
+            value_expr = safe_eval_expr(value_expr, variables, get_values, refine_inputs, grade)
+            sign = "+" if op == "Add" else "-"
+            results.append(f"受到 {size_str} 敵人的物理傷害 {sign}{value_expr}%")
+            continue
+
+        # Add/Sub MDamage_Size（受體型魔法）
+        mdamage_size = re.match(r"(Add|Sub)MDamage_Size\(\s*0\s*,\s*(\d+)\s*,\s*(.+)\s*\)", line)
+        if mdamage_size and condition_met:
+            op, size_id, value_expr = mdamage_size.groups()
+            size_name = size_map.get(int(size_id), f"尺寸{size_id}")
+            val = safe_eval_expr(value_expr, variables, get_values, refine_inputs, grade)
+            sign = "+" if op == "Add" else "-"
+            results.append(f"受到 {size_name} 敵人的魔法傷害 {sign}{val}%")
+            continue
+
+        # 對種族承傷/耐性 Add/SubRaceTolerace(race, value)
+        # register_function("AddRaceTolerace", "增加種族抗性", [{"name": "種族", "map": "race_map"}, {"name": "數值%", "type": "value"}])
+        # register_function("SubRaceTolerace", "減少種族抗性", [{"name": "種族", "map": "race_map"}, {"name": "數值%", "type": "value"}])
+        race_tol = re.match(r"(Add|Sub)RaceTolerace\s*\((.*)\)\s*$", line)
+        if race_tol and condition_met:
+            op, args_text = race_tol.groups()
+            args = split_lua_args(args_text)
+            race_name = map_int_arg(args, 0, race_map, "種族")
+            val = eval_lua_arg(args, 1, 0)
+            # Tolerace 是耐性：Add = 承傷下降；Sub = 承傷上升
+            sign = "-" if op == "Add" else "+"
+            results.append(f"受到 {race_name} 型怪的傷害 {sign}{val}%")
+            continue
+
+        # AddDamage_Property（對指定種族與屬性）
+        # register_function("AddDamage_Property", "增加屬性敵人物理傷害", [
+        #     {"name": "目標", "map": "unit_map"},
+        #     {"name": "屬性", "map": "element_map"},
+        #     {"name": "數值%", "type": "value"}
+        # ])
+        # register_function("SubDamage_Property", "減少屬性敵人物理傷害", [
+        #     {"name": "目標", "map": "unit_map"},
+        #     {"name": "屬性", "map": "element_map"},
+        #     {"name": "數值%", "type": "value"}
+        # ])
+        add_damage_prop = re.match(r"(Add|Sub)Damage_Property\(\s*0\s*,\s*(\d+)\s*,\s*(.+)\s*\)", line)
+        if add_damage_prop and condition_met:
+            op, elem_id, value_expr = add_damage_prop.groups()
+            elem_name = element_map.get(int(elem_id), f"屬性{elem_id}")
+            val = safe_eval_expr(value_expr, variables, get_values, refine_inputs, grade)
+            sign = "+" if op == "Add" else "-"
+            results.append(f"受到 {elem_name} 對象的物理傷害 {sign}{val}%")
+            continue
+
+        # Add/Sub MDamage_Property（對指定種族與屬性）
+        # register_function("AddMDamage_Property", "增加屬性對象魔法傷害", [
+        #     {"name": "目標", "map": "unit_map"},
+        #     {"name": "屬性", "map": "element_map"},
+        #     {"name": "數值%", "type": "value"}
+        # ])
+        # register_function("SubMDamage_Property", "減少屬性對象魔法傷害", [
+        #     {"name": "目標", "map": "unit_map"},
+        #     {"name": "屬性", "map": "element_map"},
+        #     {"name": "數值%", "type": "value"}
+        # ])
+
+        add_mdamage_prop = re.match(r"(Add|Sub)MDamage_Property\(\s*0\s*,\s*(\d+)\s*,\s*(.+)\s*\)", line)
+        if add_mdamage_prop and condition_met:
+            op, elem_id, value_expr = add_mdamage_prop.groups()
+            elem_name = element_map.get(int(elem_id), f"屬性{elem_id}")
+            val = safe_eval_expr(value_expr, variables, get_values, refine_inputs, grade)
+            sign = "+" if op == "Add" else "-"
+            results.append(f"受到 {elem_name} 對象的魔法傷害 {sign}{val}%")
+            continue
+
+
+        # 受到階級敵人傷害 Add/SubClassAddDamage(class_id, 0, value)
+        class_dmg = re.match(r"Class(Add|Sub)Damage\(\s*(\d+)\s*,\s*0\s*,\s*(.+?)\s*\)", line)
+        if class_dmg and condition_met:
+            op, class_id, expr_src = class_dmg.groups()
+            class_name = class_map.get(int(class_id), f"階級{class_id}")
+            val = safe_eval_expr(expr_src, variables, get_values, refine_inputs, grade)
+            sign = "+" if op == "Add" else "-"
+            results.append(f"受到 {class_name} 階級的物理傷害 {sign}{val}%")
+            continue
+
+        # # 自身對種族承傷 RaceSub/AddDamageSelf(race, value)
+        # register_function("RaceSubDamageSelf", "減少自身受到種族傷害", [{"name": "種族", "map": "race_map"}, {"name": "數值%", "type": "value"}])
+        # register_function("RaceAddDamageSelf", "增加自身受到種族傷害", [{"name": "種族", "map": "race_map"}, {"name": "數值%", "type": "value"}])
+        race_self = re.match(r"Race(Sub|Add)DamageSelf\s*\((.*)\)\s*$", line)
+        if race_self and condition_met:
+            op, args_text = race_self.groups()
+            args = split_lua_args(args_text)
+            race_name = map_int_arg(args, 0, race_map, "種族")
+            val = eval_lua_arg(args, 1, 0)
+            sign = "-" if op == "Sub" else "+"
+            results.append(f"受到 {race_name} 型怪的傷害 {sign}{val}%")
+            continue
+
+        # # 受到某種族武器傷害 Add/SubAttackedWeaponPowerRaceTolerance(race, value)
+        # register_function("AddAttackedWeaponPowerRaceTolerance", "增加受到種族武器傷害", [{"name": "種族", "map": "race_map"}, {"name": "數值%", "type": "value"}])
+        # register_function("SubAttackedWeaponPowerRaceTolerance", "減少受到種族武器傷害", [{"name": "種族", "map": "race_map"}, {"name": "數值%", "type": "value"}])
+        # race_weapon_tol = re.match(r"(Add|Sub)AttackedWeaponPowerRaceTolerance\s*\((.*)\)\s*$", line)
+        # if race_weapon_tol and condition_met:
+        #     op, args_text = race_weapon_tol.groups()
+        #     args = split_lua_args(args_text)
+        #     race_name = map_int_arg(args, 0, race_map, "種族")
+        #     val = eval_lua_arg(args, 1, 0)
+        #     sign = "+" if op == "Add" else "-"
+        #     results.append(f"受到 {race_name} 型怪的武器傷害 {sign}{val}%")
+        #     continue
+
+        # # 遠距離武器傷害/受到遠距離武器傷害
+        # register_function("AddAttackRangeWeaponPower", "增加遠距離武器傷害", [{"name": "目標", "map": "unit_map"}, {"name": "數值%", "type": "value"}])
+        # register_function("SubAttackRangeWeaponPower", "減少遠距離武器傷害", [{"name": "目標", "map": "unit_map"}, {"name": "數值%", "type": "value"}])
+        # atk_range_weapon = re.match(r"(Add|Sub)AttackRangeWeaponPower\s*\((.*)\)\s*$", line)
+        # if atk_range_weapon and condition_met:
+        #     op, args_text = atk_range_weapon.groups()
+        #     args = split_lua_args(args_text)
+        #     val = eval_lua_arg(args, 1 if len(args) > 1 else 0, 0)
+        #     sign = "+" if op == "Add" else "-"
+        #     results.append(f"遠距離武器傷害 {sign}{val}%")
+        #     continue
+
+        # register_function("AddAttackedRangeWeaponPower", "增加受到遠距離武器傷害", [{"name": "目標", "map": "unit_map"}, {"name": "數值%", "type": "value"}])
+        # register_function("SubAttackedRangeWeaponPower", "減少受到遠距離武器傷害", [{"name": "目標", "map": "unit_map"}, {"name": "數值%", "type": "value"}])
+        # attacked_range_weapon = re.match(r"(Add|Sub)AttackedRangeWeaponPower\s*\((.*)\)\s*$", line)
+        # if attacked_range_weapon and condition_met:
+        #     op, args_text = attacked_range_weapon.groups()
+        #     args = split_lua_args(args_text)
+        #     val = eval_lua_arg(args, 1 if len(args) > 1 else 0, 0)
+        #     sign = "+" if op == "Add" else "-"
+        #     results.append(f"受到遠距離武器傷害 {sign}{val}%")
+        #     continue
+
+        # # 只補反向版本，避免覆蓋既有 Add 版本的公式輸出 key
+        # register_function("SubBowAttackDamage", "減少弓攻擊力", [{"name": "目標", "map": "unit_map"}, {"name": "數值%", "type": "value"}])
+        # sub_bow = get_lua_call_args("SubBowAttackDamage", line)
+        # if sub_bow and condition_met:
+        #     val = eval_lua_arg(sub_bow, 1 if len(sub_bow) > 1 else 0, 0)
+        #     results.append(f"弓攻擊力（未套公式） -{val}%")
+        #     continue
+
+
+        # register_function("SubGuideAttack", "減少誘導攻擊機率", [{"name": "數值%", "type": "value"}])
+        # sub_guide = get_lua_call_args("SubGuideAttack", line)
+        # if sub_guide and condition_met:
+        #     val = eval_lua_arg(sub_guide, 0, 0)
+        #     results.append(f"誘導攻擊機率 -{val}%")
+        #     continue
+
+        # 對種族 CRI Add/SubCRIPercent_Race(race, value)
+        register_function("AddCRIPercent_Race", "增加對種族CRI", [{"name": "種族", "map": "race_map"}, {"name": "數值%", "type": "value"}])
+        register_function("SubCRIPercent_Race", "減少對種族CRI", [{"name": "種族", "map": "race_map"}, {"name": "數值%", "type": "value"}])
+        cri_race = re.match(r"(Add|Sub)CRIPercent_Race\s*\((.*)\)\s*$", line)
+        if cri_race and condition_met:
+            op, args_text = cri_race.groups()
+            args = split_lua_args(args_text)
+            race_name = map_int_arg(args, 0, race_map, "種族")
+            val = eval_lua_arg(args, 1, 0)
+            sign = "+" if op == "Add" else "-"
+            results.append(f"對 {race_name} 型怪的CRI {sign}{val}%")
+            continue
+
+        # 反射類
+        register_function("AddMeleeAttackReflect", "增加近距離物理反射", [{"name": "數值%", "type": "value"}])
+        register_function("SubMeleeAttackReflect", "減少近距離物理反射", [{"name": "數值%", "type": "value"}])
+        melee_reflect = re.match(r"(Add|Sub)MeleeAttackReflect\s*\((.*)\)\s*$", line)
+        if melee_reflect and condition_met:
+            op, args_text = melee_reflect.groups()
+            val = eval_lua_arg(split_lua_args(args_text), 0, 0)
+            sign = "+" if op == "Add" else "-"
+            results.append(f"近距離物理反射 {sign}{val}%")
+            continue
+
+        register_function("AddReflectMagic", "增加魔法反射", [{"name": "數值%", "type": "value"}])
+        register_function("SubReflectMagic", "減少魔法反射", [{"name": "數值%", "type": "value"}])
+        magic_reflect = re.match(r"(Add|Sub)ReflectMagic\s*\((.*)\)\s*$", line)
+        if magic_reflect and condition_met:
+            op, args_text = magic_reflect.groups()
+            val = eval_lua_arg(split_lua_args(args_text), 0, 0)
+            sign = "+" if op == "Add" else "-"
+            results.append(f"魔法反射 {sign}{val}%")
+            continue
+
+        register_function("AddReflectTolerace", "增加反射傷害耐性", [{"name": "數值%", "type": "value"}])
+        register_function("SubReflectTolerace", "減少反射傷害耐性", [{"name": "數值%", "type": "value"}])
+        reflect_tol = re.match(r"(Add|Sub)ReflectTolerace\s*\((.*)\)\s*$", line)
+        if reflect_tol and condition_met:
+            op, args_text = reflect_tol.groups()
+            val = eval_lua_arg(split_lua_args(args_text), 0, 0)
+            sign = "+" if op == "Add" else "-"
+            results.append(f"反射傷害耐性 {sign}{val}%")
+            continue
+
+        # 增減「指定技能傷害(裝備段)」合併處理
+        # register_function("AddDamage_SKID", "增加受到技能傷害", [
+        #     {"name": "目標", "map": "unit_map"},
+        #     {"name": "技能", "map": "skill_map"},
+        #     {"name": "數值%", "type": "value"}
+        # ])
+        # register_function("SubDamage_SKID", "減少受到技能傷害", [
+        #     {"name": "目標", "map": "unit_map"},
+        #     {"name": "技能", "map": "skill_map"},
+        #     {"name": "數值%", "type": "value"}
+        # ])
+
+        add_sub_dmg_skid = re.match(r"(Add|Sub)Damage_SKID\(\s*0\s*,\s*(\d+)\s*,\s*(.+)\s*\)\s*$", line)
+        if add_sub_dmg_skid and condition_met:
+            op, skill_id, value_expr = add_sub_dmg_skid.groups()
+            skill_name = skill_map.get(int(skill_id), f"技能ID {skill_id}")
+            val = safe_eval_expr(value_expr, variables, get_values, refine_inputs, grade)
+
+            if isinstance(val, int):
+                sign = "+" if op == "Add" else "-"
+                results.append(f"受到技能【{skill_name}】傷害 {sign}{val}%")
+            else:
+                sign = "+" if op == "Add" else "-"
+                results.append(f"受到技能【{skill_name}】傷害 {sign}({val})%（無法解析）")
+            continue
+
+        # # Reset 類：輸出為「取消無視」，避免被現有無視防禦公式讀取
+        # reset_ignore_class = get_lua_call_args("ResetIgnoreDEFClass", line)
+        # if reset_ignore_class and condition_met:
+        #     class_name = map_int_arg(reset_ignore_class, 0, class_map, "階級")
+        #     results.append(f"取消無視 {class_name} 階級的物理防禦")
+        #     continue
+
+        # reset_ignore_class_pct = get_lua_call_args("ResetIgnoreDEFClass_Percent", line) or get_lua_call_args("ResetIgnoreDefClass_Percent", line)
+        # if reset_ignore_class_pct and condition_met:
+        #     class_name = map_int_arg(reset_ignore_class_pct, 0, class_map, "階級")
+        #     val = eval_lua_arg(reset_ignore_class_pct, 1, 0)
+        #     results.append(f"取消無視 {class_name} 階級的物理防禦 {val}%")
+        #     continue
+
+        # reset_ignore_race = get_lua_call_args("ResetIgnoreDEFRace", line)
+        # if reset_ignore_race and condition_met:
+        #     race_name = map_int_arg(reset_ignore_race, 0, race_map, "種族")
+        #     results.append(f"取消無視 {race_name} 型怪的物理防禦")
+        #     continue
+
+        # reset_ignore_race_pct = get_lua_call_args("ResetIgnoreDefRace_Percent", line)
+        # if reset_ignore_race_pct and condition_met:
+        #     race_name = map_int_arg(reset_ignore_race_pct, 0, race_map, "種族")
+        #     val = eval_lua_arg(reset_ignore_race_pct, 1, 0)
+        #     results.append(f"取消無視 {race_name} 型怪的物理防禦 {val}%")
+        #     continue
+
+        # reset_ignore_mdef_class = get_lua_call_args("ResetIgnoreMdefClass", line)
+        # if reset_ignore_mdef_class and condition_met:
+        #     class_name = map_int_arg(reset_ignore_mdef_class, 0, class_map, "階級")
+        #     val = eval_lua_arg(reset_ignore_mdef_class, 1, None)
+        #     if val is None:
+        #         results.append(f"取消無視 {class_name} 階級的魔法防禦")
+        #     else:
+        #         results.append(f"取消無視 {class_name} 階級的魔法防禦 {val}%")
+        #     continue
+
+        # reset_ignore_mdef_race = get_lua_call_args("ResetIgnoreMdefRace", line)
+        # if reset_ignore_mdef_race and condition_met:
+        #     race_name = map_int_arg(reset_ignore_mdef_race, 0, race_map, "種族")
+        #     val = eval_lua_arg(reset_ignore_mdef_race, 1, None)
+        #     if val is None:
+        #         results.append(f"取消無視 {race_name} 型怪的魔法防禦")
+        #     else:
+        #         results.append(f"取消無視 {race_name} 型怪的魔法防禦 {val}%")
+        #     continue
+
+        # 純狀態/特殊效果，先顯示不計算
+        register_function("NoDispell", "詠唱不中斷", [])
+        register_function("Magicimmune", "不受魔法效果影響", [])
+        register_function("NoJamstone", "不消耗魔力礦石", [])
+        register_function("NoMadogearfuel", "不消耗魔導機甲燃料", [])
+        register_function("AddNeverknockback", "不會被擊退", [])
+        register_function("Clairvoyance", "可看見隱匿目標", [])
+        register_function("Reincarnation", "復活時恢復HP/SP", [])
+        register_function("SplashAttack", "普攻範圍增加", [])
+        plain_effect_map = {
+            "NoDispell": "詠唱不中斷",
+            "Magicimmune": "不受魔法效果影響",
+            "NoJamstone": "使用技能不消耗魔力礦石",
+            "NoMadogearfuel": "不消耗魔導機甲燃料",
+            "AddNeverknockback": "不會被擊退",
+            "Clairvoyance": "可看見隱匿目標",
+            "Reincarnation": "復活時恢復 HP/SP 100%",
+            "SplashAttack": "普攻範圍增加",
+        }
+        plain_effect = re.match(r"(NoDispell|Magicimmune|NoJamstone|NoMadogearfuel|AddNeverknockback|Clairvoyance|Reincarnation|SplashAttack)\s*(?:\((.*)\))?\s*$", line)
+        if plain_effect and condition_met:
+            results.append(plain_effect_map.get(plain_effect.group(1), plain_effect.group(1)))
+            continue
+
+        # Condition(effect_id, duration, chance)
+        register_function("Condition", "賦予狀態", [
+            {"name": "狀態", "type": "value"},
+            {"name": "持續時間", "type": "value"},
+            {"name": "機率", "type": "value"}
+        ])
+        condition_effect = get_lua_call_args("Condition", line)
+        if condition_effect and condition_met:
+            status_map = {
+                13: "霸體",
+                14: "移動速度增加",
+                15: "攻擊速度增加",
+                21: "集中",
+                26: "看見隱匿目標",
+            }
+            try:
+                status_id = int(eval_lua_arg(condition_effect, 0, 0))
+            except Exception:
+                status_id = 0
+            status_name = status_map.get(status_id, f"狀態ID {status_id}")
+            duration = eval_lua_arg(condition_effect, 1, None)
+            chance = eval_lua_arg(condition_effect, 2, None)
+            extra = []
+            if duration is not None:
+                extra.append(f"持續 {duration}")
+            if chance is not None:
+                extra.append(f"機率 {chance}%")
+            results.append(f"賦予狀態：{status_name}" + (f"（{'，'.join(extra)}）" if extra else ""))
+            continue
 
 #待處理判斷
 #通用(恢復效果、SP消耗
@@ -4657,9 +5202,11 @@ class ItemSearchApp(QWidget):
         globals()["Use_Skills"] = sum(val for val, _ in effect_dict.get((f"技能【{selected_skill_name}】傷害(裝備段)", "%"), []))
         #=============參考動態變數自動抓技能%=(技能段)==============      
         passive_skill_buff = sum(val for val, _ in effect_dict.get((f"技能【{selected_skill_name}】傷害(技能段)", "%"), []))
-        #=====================其他物理增傷========================
+        #=====================其他物理增傷/抗性========================
         globals()["MeleeAttackDamage"] = sum(val for val, _ in effect_dict.get((f"近距離物理傷害", "%"), []))
         globals()["RangeAttackDamage"] = sum(val for val, _ in effect_dict.get((f"遠距離物理傷害", "%"), []))
+        globals()["body_MeleeAttackDamage"] = sum(val for val, _ in effect_dict.get((f"受到近距離物理傷害", "%"), []))
+        globals()["body_RangeAttackDamage"] = sum(val for val, _ in effect_dict.get((f"受到遠距離物理傷害", "%"), []))
         globals()["Damage_CRI"] = sum(val for val, _ in effect_dict.get((f"爆擊傷害", "%"), []))
         globals()["Damage_HIT"] = sum(val for val, _ in effect_dict.get((f"物理命中傷害", "%"), []))
         globals()["BowAtk"] = sum(val for val, _ in effect_dict.get((f"弓攻擊力", "%"), []))
@@ -5952,6 +6499,12 @@ class ItemSearchApp(QWidget):
             self.compare_with_base()
         #self.custom_calc_box.setPlainText("\n".join(result))
 
+        #減傷顯示
+        body_results = []
+        body_results.append(f"===========================減傷顯示===================================")
+
+        self.body_custom_calc_box.setHtml(self.generate_highlighted_html(body_results))
+
 
     def _config_path(self):
 
@@ -6054,32 +6607,44 @@ class ItemSearchApp(QWidget):
             value = sum(val for val, _ in effect_dict.get(key, []))
             setattr(self, f"{prefix}_{idx}", value)
 
+    def apply_body_effect_mapping(self, effect_dict, prefix, names, key_template, index_override=None):
+        for i, name in enumerate(names):
+            idx = index_override[i] if index_override else i
+            key = (key_template.format(name), "%")
+            value = sum(val for val, _ in effect_dict.get(key, []))
+            setattr(self, f"body_{prefix}_{idx}", value)
+
     def apply_all_damage_effects(self, effect_dict):
-        # === 體型加成 ===
+        # === 體型加成/抗性 ===
         size_names = ["小型", "中型", "大型"]
         for prefix in ["MD", "D"]:
             self.apply_effect_mapping(effect_dict, f"{prefix}_size", size_names, f"對 {{}} 敵人的{ '魔法' if prefix == 'MD' else '物理' }傷害")
+            self.apply_body_effect_mapping(effect_dict, f"body_{prefix}_size", size_names, f"受到 {{}} 敵人的{ '魔法' if prefix == 'MD' else '物理' }傷害")
 
-        # === 屬性對象加成 ===
+        # === 屬性對象加成/抗性 ===
         element_target = ["無屬性", "水屬性", "地屬性", "火屬性", "風屬性",
                           "毒屬性", "聖屬性", "暗屬性", "念屬性", "不死屬性", "全屬性"]
         for prefix in ["MD", "D"]:
             self.apply_effect_mapping(effect_dict, f"{prefix}_element", element_target, f"對 {{}} 對象的{ '魔法' if prefix == 'MD' else '物理' }傷害")
+            self.apply_body_effect_mapping(effect_dict, f"body_{prefix}_element", element_target, f"受到 {{}} 對象的{ '魔法' if prefix == 'MD' else '物理' }傷害")
 
-        # === 屬性來源加成（屬性攻擊） ===
+        # === 屬性來源加成/抗性（屬性攻擊） ===
         for prefix in ["MD", "D"]:
             self.apply_effect_mapping(effect_dict, f"{prefix}_Damage", element_target, f"{{}} 的{ '魔法' if prefix == 'MD' else '物理' }傷害")
+            self.apply_body_effect_mapping(effect_dict, f"body_{prefix}_Damage", element_target, f"對 {{}} 的攻擊抗性")
 
-        # === 種族加成 ===
+        # === 種族加成/抗性 ===
         race_names = ["無形", "不死", "動物", "植物", "昆蟲", "魚貝", "惡魔", "人形", "天使", "龍族", "全種族"]
         race_indexes = list(range(10)) + [9999]
         for prefix in ["MD", "D"]:
             self.apply_effect_mapping(effect_dict, f"{prefix}_Race", race_names, f"對 {{}} 型怪的{ '魔法' if prefix == 'MD' else '物理' }傷害", race_indexes)
+            self.apply_body_effect_mapping(effect_dict, f"body_{prefix}_Race", race_names, f"受到 {{}} 型怪的傷害", race_indexes)
 
-        # === 階級加成 ===
+        # === 階級加成/抗性 ===
         class_names = ["一般", "首領"]
         for prefix in ["MD", "D"]:
             self.apply_effect_mapping(effect_dict, f"{prefix}_class", class_names, f"對 {{}} 階級的{ '魔法' if prefix == 'MD' else '物理' }傷害")
+            self.apply_effect_mapping(effect_dict, f"{prefix}_class", class_names, f"受到 {{}} 階級的物理傷害")
 
         # === 無視階級防禦 ===
         class_def_names = ["一般", "首領", "玩家"]
