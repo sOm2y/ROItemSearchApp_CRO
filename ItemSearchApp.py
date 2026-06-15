@@ -1,5 +1,5 @@
 #部分資料取自ROCalculator,搜尋 ROCalculator 可以知道哪些有使用
-Version = "v0.3.3-260606"
+Version = "v0.3.4-260615"
 
 import sys, builtins, time
 import os
@@ -4892,6 +4892,9 @@ class ItemSearchApp(QWidget):
             #print(f"base_equip_{stat} : {base_equip}")
 
         #current_text = self.custom_calc_box.toPlainText()
+        # 減傷計算分頁的目標欄位維持與傷害計算同步；初始化/讀檔/查怪時也能自動補齊。
+        self._sync_damage_to_body_target_fields()
+
         skill_key = self.skill_box.currentData()
         skill_lv = int(self.skill_LV_input.text()) if self.skill_LV_input.text().isdigit() else 0
 
@@ -5481,7 +5484,7 @@ class ItemSearchApp(QWidget):
                 width += 2 if ord(c) > 255 else 1
             return width
 
-        def pad_label(label: str, total_width: int = 20) -> str:
+        def pad_label(label: str, total_width: int = 22) -> str:
             """依據視覺寬度補空格，讓冒號後對齊"""
             space_count = total_width - visual_length(label)
             return label + " " * max(space_count, 0)
@@ -6501,9 +6504,94 @@ class ItemSearchApp(QWidget):
 
         #減傷顯示
         body_results = []
-        body_results.append(f"===========================減傷顯示===================================")
+        # body_results.append(f"===========================減傷顯示===========================")
+        # body_results.append(f"{pad_label('體型:')}{size_map.get(target_size, target_size)}")
+        # body_results.append(f"{pad_label('屬性:')}{element_map.get(target_element, target_element)} Lv{target_element_lv}")
+        # body_results.append(f"{pad_label('種族:')}{race_map.get(target_race, target_race)}")
+        # body_results.append(f"{pad_label('階級:')}{class_map.get(target_class, target_class)}")
+        # body_results.append(f"==================================================================")
 
-        self.body_custom_calc_box.setHtml(self.generate_highlighted_html(body_results))
+        body_size_phys = get_effect_multiplier('body_D_size', target_size)
+        body_element_phys = get_effect_multiplier('body_D_element', target_element) + get_effect_multiplier('body_D_element', 10)
+        body_race_phys = get_effect_multiplier('body_D_Race', target_race) + get_effect_multiplier('body_D_Race', 9999)
+        body_class_phys = get_effect_multiplier('body_D_class', target_class)
+        body_attr_resist = get_effect_multiplier('body_D_Damage', target_element) + get_effect_multiplier('body_D_Damage', 10)
+        body_melee_phys = body_MeleeAttackDamage
+        body_range_phys = body_RangeAttackDamage
+
+        body_results.append(f"===========================後段減傷===========================")
+        body_results.append(f"{pad_label('受到體型物理傷害:')}{body_size_phys:+.0f}%")
+        body_results.append(f"{pad_label('受到屬性對象物理傷害:')}{body_element_phys:+.0f}%")
+        body_results.append(f"{pad_label('受到階級物理傷害:')}{body_class_phys:+.0f}%")          
+        body_results.append(f"{pad_label('屬性攻擊抗性:')}{body_attr_resist:+.0f}%")     
+        body_results.append(f"===========================全段減傷===========================")
+        body_results.append(f"{pad_label('受到種族物理傷害:')}{body_race_phys:+.0f}%")
+        body_results.append(f"{pad_label('受到近距離物理傷害:')}{body_melee_phys:+.0f}%")
+        body_results.append(f"{pad_label('受到遠距離物理傷害:')}{body_range_phys:+.0f}%")
+
+        if hasattr(self, "body_custom_calc_box"):
+            self.body_custom_calc_box.setHtml(self.generate_highlighted_html(body_results))
+
+
+    def _set_combo_data_blocked(self, combo, data):
+        idx = combo.findData(data)
+        if idx < 0:
+            return
+        old_state = combo.blockSignals(True)
+        try:
+            combo.setCurrentIndex(idx)
+        finally:
+            combo.blockSignals(old_state)
+
+    def _set_line_text_blocked(self, line_edit, text):
+        old_state = line_edit.blockSignals(True)
+        try:
+            line_edit.setText(str(text))
+        finally:
+            line_edit.blockSignals(old_state)
+
+    def _sync_target_fields(self, source_prefix: str, target_prefix: str):
+        if getattr(self, "_syncing_target_fields", False):
+            return
+
+        combo_pairs = [
+            (f"{source_prefix}size_box", f"{target_prefix}size_box"),
+            (f"{source_prefix}element_box", f"{target_prefix}element_box"),
+            (f"{source_prefix}race_box", f"{target_prefix}race_box"),
+            (f"{source_prefix}class_box", f"{target_prefix}class_box"),
+        ]
+        line_pairs = [
+            (f"{source_prefix}element_lv_input", f"{target_prefix}element_lv_input"),
+        ]
+
+        names = [name for pair in combo_pairs + line_pairs for name in pair]
+        if not all(hasattr(self, name) for name in names):
+            return
+
+        self._syncing_target_fields = True
+        try:
+            for src_name, dst_name in combo_pairs:
+                self._set_combo_data_blocked(getattr(self, dst_name), getattr(self, src_name).currentData())
+            for src_name, dst_name in line_pairs:
+                self._set_line_text_blocked(getattr(self, dst_name), getattr(self, src_name).text())
+        finally:
+            self._syncing_target_fields = False
+
+    def _sync_damage_to_body_target_fields(self):
+        self._sync_target_fields("", "body_")
+
+    def _sync_body_to_damage_target_fields(self):
+        self._sync_target_fields("body_", "")
+
+    def _on_damage_target_fields_changed(self):
+        self._sync_damage_to_body_target_fields()
+        setattr(self, "_last_calc_state", None)
+        self.trigger_total_effect_update()
+
+    def _on_body_target_fields_changed(self):
+        self._sync_body_to_damage_target_fields()
+        setattr(self, "_last_calc_state", None)
+        self.trigger_total_effect_update()
 
 
     def _config_path(self):
@@ -6619,32 +6707,32 @@ class ItemSearchApp(QWidget):
         size_names = ["小型", "中型", "大型"]
         for prefix in ["MD", "D"]:
             self.apply_effect_mapping(effect_dict, f"{prefix}_size", size_names, f"對 {{}} 敵人的{ '魔法' if prefix == 'MD' else '物理' }傷害")
-            self.apply_body_effect_mapping(effect_dict, f"body_{prefix}_size", size_names, f"受到 {{}} 敵人的{ '魔法' if prefix == 'MD' else '物理' }傷害")
+            self.apply_body_effect_mapping(effect_dict, f"{prefix}_size", size_names, f"受到 {{}} 敵人的{ '魔法' if prefix == 'MD' else '物理' }傷害")
 
         # === 屬性對象加成/抗性 ===
         element_target = ["無屬性", "水屬性", "地屬性", "火屬性", "風屬性",
                           "毒屬性", "聖屬性", "暗屬性", "念屬性", "不死屬性", "全屬性"]
         for prefix in ["MD", "D"]:
             self.apply_effect_mapping(effect_dict, f"{prefix}_element", element_target, f"對 {{}} 對象的{ '魔法' if prefix == 'MD' else '物理' }傷害")
-            self.apply_body_effect_mapping(effect_dict, f"body_{prefix}_element", element_target, f"受到 {{}} 對象的{ '魔法' if prefix == 'MD' else '物理' }傷害")
+            self.apply_body_effect_mapping(effect_dict, f"{prefix}_element", element_target, f"受到 {{}} 對象的{ '魔法' if prefix == 'MD' else '物理' }傷害")
 
         # === 屬性來源加成/抗性（屬性攻擊） ===
         for prefix in ["MD", "D"]:
             self.apply_effect_mapping(effect_dict, f"{prefix}_Damage", element_target, f"{{}} 的{ '魔法' if prefix == 'MD' else '物理' }傷害")
-            self.apply_body_effect_mapping(effect_dict, f"body_{prefix}_Damage", element_target, f"對 {{}} 的攻擊抗性")
+            self.apply_body_effect_mapping(effect_dict, f"{prefix}_Damage", element_target, f"對 {{}} 攻擊抗性")
 
         # === 種族加成/抗性 ===
         race_names = ["無形", "不死", "動物", "植物", "昆蟲", "魚貝", "惡魔", "人形", "天使", "龍族", "全種族"]
         race_indexes = list(range(10)) + [9999]
         for prefix in ["MD", "D"]:
             self.apply_effect_mapping(effect_dict, f"{prefix}_Race", race_names, f"對 {{}} 型怪的{ '魔法' if prefix == 'MD' else '物理' }傷害", race_indexes)
-            self.apply_body_effect_mapping(effect_dict, f"body_{prefix}_Race", race_names, f"受到 {{}} 型怪的傷害", race_indexes)
+            self.apply_body_effect_mapping(effect_dict, f"{prefix}_Race", race_names, f"受到 {{}} 型怪的傷害", race_indexes)
 
         # === 階級加成/抗性 ===
         class_names = ["一般", "首領"]
         for prefix in ["MD", "D"]:
             self.apply_effect_mapping(effect_dict, f"{prefix}_class", class_names, f"對 {{}} 階級的{ '魔法' if prefix == 'MD' else '物理' }傷害")
-            self.apply_effect_mapping(effect_dict, f"{prefix}_class", class_names, f"受到 {{}} 階級的物理傷害")
+            self.apply_body_effect_mapping(effect_dict, f"{prefix}_class", class_names, f"受到 {{}} 階級的{ '魔法' if prefix == 'MD' else '物理' }傷害")
 
         # === 無視階級防禦 ===
         class_def_names = ["一般", "首領", "玩家"]
@@ -10978,18 +11066,13 @@ class ItemSearchApp(QWidget):
         
         layout.addLayout(target_layout)
         
-        # ComboBox 的綁定 修改觸發計算
-        self.size_box.currentIndexChanged.connect(self.replace_custom_calc_content)
-        self.element_box.currentIndexChanged.connect(lambda: (setattr(self, "_last_calc_state", None), self.trigger_total_effect_update()))
-        self.race_box.currentIndexChanged.connect(self.replace_custom_calc_content)
-        self.class_box.currentIndexChanged.connect(self.replace_custom_calc_content)
+        # ComboBox 的綁定 修改觸發計算；同時同步到「減傷計算」分頁
+        self.size_box.currentIndexChanged.connect(self._on_damage_target_fields_changed)
         self.attack_element_box.currentIndexChanged.connect(self.replace_custom_calc_content)
 
         # LineEdit 的綁定（使用 editingFinished 避免每次打字都觸發）
         #self.monsterDamage_input.editingFinished.connect(self.replace_custom_calc_content)#指定魔物增傷UI
-        self.def_input.editingFinished.connect(self.replace_custom_calc_content)
-        self.defc_input.editingFinished.connect(self.replace_custom_calc_content)
-        self.res_input.editingFinished.connect(self.replace_custom_calc_content)
+        self.element_lv_input.editingFinished.connect(self._on_damage_target_fields_changed)
         self.mdef_input.editingFinished.connect(self.replace_custom_calc_content)
         self.mdefc_input.editingFinished.connect(self.replace_custom_calc_content)
         self.mres_input.editingFinished.connect(self.replace_custom_calc_content)
@@ -11063,6 +11146,55 @@ class ItemSearchApp(QWidget):
         layout.addWidget(self.replace_calc_button)
 
         self.sim_tabs.addTab(self.custom_calc_tab, tr("tab.damage_calculation"))
+
+        # 建立新分頁：減傷計算（與傷害計算目標欄位連動）
+        self.body_custom_calc_tab = QWidget()
+        body_layout = QVBoxLayout(self.body_custom_calc_tab)
+        self.btn_open_monster_lookup_2 = QPushButton(tr("button.lookup_monster"))
+        self.btn_open_monster_lookup_2.clicked.connect(self.open_monster_lookup)
+        body_layout.addWidget(self.btn_open_monster_lookup_2)
+
+        body_target_layout = QHBoxLayout()
+
+        body_size_layout, self.body_size_box = make_combobox("體型", size_map)
+        body_target_layout.addLayout(body_size_layout)
+
+        body_element_layout, self.body_element_box = make_combobox("屬性", element_map, visible_element_keys)
+        body_target_layout.addLayout(body_element_layout)
+
+        body_element_lv_input_layout = QVBoxLayout()
+        body_element_lv_input_label = QLabel(tr("label.level"))
+        self.body_element_lv_input = QLineEdit()
+        self.body_element_lv_input.setFixedWidth(30)
+        self.body_element_lv_input.setPlaceholderText("1")
+        self.body_element_lv_input.setValidator(QIntValidator(1, 4, self))
+        body_element_lv_input_layout.addWidget(body_element_lv_input_label)
+        body_element_lv_input_layout.addWidget(self.body_element_lv_input)
+        body_target_layout.addLayout(body_element_lv_input_layout)
+
+        body_race_layout, self.body_race_box = make_combobox("種族", race_map, visible_race_keys)
+        body_target_layout.addLayout(body_race_layout)
+
+        body_class_layout, self.body_class_box = make_combobox("階級", class_map, visible_class_keys)
+        body_target_layout.addLayout(body_class_layout)
+
+
+        body_layout.addLayout(body_target_layout)
+
+        # 多行文字框：減傷計算輸出
+        self.body_custom_calc_box = QTextEdit()
+        self.body_custom_calc_box.setFont(monospace_font)
+        body_layout.addWidget(self.body_custom_calc_box)
+
+        # 初始化同步，並允許在減傷計算分頁修改後反向同步到傷害計算。
+        self._sync_damage_to_body_target_fields()
+        self.body_size_box.currentIndexChanged.connect(self._on_body_target_fields_changed)
+        self.body_element_box.currentIndexChanged.connect(self._on_body_target_fields_changed)
+        self.body_race_box.currentIndexChanged.connect(self._on_body_target_fields_changed)
+        self.body_class_box.currentIndexChanged.connect(self._on_body_target_fields_changed)
+        self.body_element_lv_input.editingFinished.connect(self._on_body_target_fields_changed)
+
+        self.sim_tabs.addTab(self.body_custom_calc_tab, tr("tab.damage_reduction", "減傷計算"))
 
 
 
