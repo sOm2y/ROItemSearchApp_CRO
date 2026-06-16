@@ -38,8 +38,33 @@ Item = {
   [18009] = {
     Type = "Cannonball",
     Stat = {5, 120}
+  },
+  [20260617001] = {
+    Type = "armor",
+    Stat = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0 },
+        SubSpellCastTime(((get(35)+get(33))/50)*4)
+        AddSkillMDamage(10, (get(35)+get(33))/50)
+        SubSpellDelay((get(36)+get(37))/50)
+        AddSkillMDamage(10, (get(36)+get(37))/50)
+        Combiitem = {2026061700001}
+  },
+  [20260617002] = {
+    Type = "armor",
+    Stat = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0 },
+        temp2 = get(36)+get(37)
+        SubSpellCastTime(((get(35)+get(33))/40)*5)
+        AddExtParam(1, 140, ((get(35)+get(33))/40)*2)
+        AddExtParam(1, 167, (temp2/40)*3)
+        AddExtParam(1, 140, (get(36)+get(37))/40)
+        Combiitem = {2026061700001}
   }
 }
 Combiitem = {
+  [2026061700001] = {
+    Item = {20260617001, 20260617002},
+    AddExtParam(1, 237, 5)
+    AddExtParam(1, 238, 5)
+    AddMDamage_Property(1, 10, 10)
+  },
 }
 
