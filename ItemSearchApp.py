@@ -2097,28 +2097,160 @@ def parse_lua_effects_with_variables(
 
 
 
-    def safe_eval_expr(expr, variables, get_values, refine_inputs, grade):
-        expr = re.sub(r"get\((\d+)\)", lambda m: str(get_values.get(int(m.group(1)), 0)), expr)
-        expr = re.sub(r"GetRefineLevel\((\d+)\)", lambda m: str(refine_inputs.get(int(m.group(1)), 0)), expr)
-        expr = re.sub(r"GetEquipGradeLevel\((\d+)\)", lambda m: str(grade), expr)
-        expr = re.sub(r"GetEquipArmorLv\((\d+)\)",lambda m: str(global_armor_level_map.get(int(m.group(1)), 0)),expr) # 防具等級GetEquipArmorLv(數字部位)
-        expr = re.sub(r"GetEquipWeaponLv\((\d+)\)",lambda m: str(global_weapon_level_map.get(int(m.group(1)), 0)),expr) # 武器等級GetEquipWeaponLv(數字部位)
+    # 快取常用 Lua expression pattern，避免此函式被大量呼叫時重複建立正則。
+    regex_cache = getattr(parse_lua_effects_with_variables, "_regex_cache", None)
+    if regex_cache is None:
+        regex_cache = {
+            "GET": re.compile(r"get\((\d+)\)"),
+            "REFINE_LOCATION": re.compile(r"GetRefineLevel\s*\(\s*GetLocation\s*\(\s*\)\s*\)"),
+            "REFINE": re.compile(r"GetRefineLevel\((\d+)\)"),
+            "GRADE_LOCATION": re.compile(r"GetEquipGradeLevel\s*\(\s*GetLocation\s*\(\s*\)\s*\)"),
+            "GRADE": re.compile(r"GetEquipGradeLevel\((\d+)\)"),
+            "ARMOR_LOCATION": re.compile(r"GetEquipArmorLv\s*\(\s*GetLocation\s*\(\s*\)\s*\)"),
+            "ARMOR": re.compile(r"GetEquipArmorLv\((\d+)\)"),
+            "WEAPON_LV_LOCATION": re.compile(r"GetEquipWeaponLv\s*\(\s*GetLocation\s*\(\s*\)\s*\)"),
+            "WEAPON_LV": re.compile(r"GetEquipWeaponLv\((\d+)\)"),
+            "WEAPON_CLASS_LOCATION": re.compile(r"GetWeaponClass\s*\(\s*GetLocation\s*\(\s*\)\s*\)"),
+            "ITEM_ID_LOCATION": re.compile(r"GetItemIDLocation\((\d+)\)"),
+            "SKILL_LEVEL": re.compile(r"GetSkillLevel\((\d+)\)"),
+            "PET_RELATIONSHIP": re.compile(r"GetPetRelationship\s*\(\s*\)"),
+            "ALLOWED_EVAL": re.compile(r"^[0-9A-Za-z_+\-*/%().<>=!&|,\[\]\s]+$"),
+        }
+        parse_lua_effects_with_variables._regex_cache = regex_cache
 
-        # 將變數名稱替換成實際數值
+    _RE_GET = regex_cache["GET"]
+    _RE_REFINE_LOCATION = regex_cache["REFINE_LOCATION"]
+    _RE_REFINE = regex_cache["REFINE"]
+    _RE_GRADE_LOCATION = regex_cache["GRADE_LOCATION"]
+    _RE_GRADE = regex_cache["GRADE"]
+    _RE_ARMOR_LOCATION = regex_cache["ARMOR_LOCATION"]
+    _RE_ARMOR = regex_cache["ARMOR"]
+    _RE_WEAPON_LV_LOCATION = regex_cache["WEAPON_LV_LOCATION"]
+    _RE_WEAPON_LV = regex_cache["WEAPON_LV"]
+    _RE_WEAPON_CLASS_LOCATION = regex_cache["WEAPON_CLASS_LOCATION"]
+    _RE_ITEM_ID_LOCATION = regex_cache["ITEM_ID_LOCATION"]
+    _RE_SKILL_LEVEL = regex_cache["SKILL_LEVEL"]
+    _RE_PET_RELATIONSHIP = regex_cache["PET_RELATIONSHIP"]
+    _RE_ALLOWED_EVAL = regex_cache["ALLOWED_EVAL"]
+
+    def get_grade_value(slot=None):
+        """Return grade for a specific slot; supports both int grade and per-slot dict grade."""
+        if isinstance(grade, dict):
+            target_slot = current_location_slot if slot is None else slot
+            try:
+                return grade.get(int(target_slot), 0) if target_slot is not None else 0
+            except Exception:
+                return 0
+        try:
+            return int(grade or 0)
+        except Exception:
+            return 0
+
+    def normalize_lua_expr(expr, variables, get_values, refine_inputs):
+        """Normalize simple Lua expressions into Python-evaluable expressions."""
+        expr = str(expr).strip()
+
+        expr = _RE_GET.sub(lambda m: str(get_values.get(int(m.group(1)), 0)), expr)
+        expr = _RE_REFINE_LOCATION.sub(lambda m: str(refine_inputs.get(current_location_slot, 0) if current_location_slot is not None else 0), expr)
+        expr = _RE_REFINE.sub(lambda m: str(refine_inputs.get(int(m.group(1)), 0)), expr)
+        expr = _RE_GRADE_LOCATION.sub(lambda m: str(get_grade_value()), expr)
+        expr = _RE_GRADE.sub(lambda m: str(get_grade_value(m.group(1))), expr)
+        expr = _RE_ARMOR_LOCATION.sub(lambda m: str(global_armor_level_map.get(current_location_slot, 0) if current_location_slot is not None else 0), expr)
+        expr = _RE_ARMOR.sub(lambda m: str(global_armor_level_map.get(int(m.group(1)), 0)), expr)
+        expr = _RE_WEAPON_LV_LOCATION.sub(lambda m: str(global_weapon_level_map.get(current_location_slot, 0) if current_location_slot is not None else 0), expr)
+        expr = _RE_WEAPON_LV.sub(lambda m: str(global_weapon_level_map.get(int(m.group(1)), 0)), expr)
+        expr = _RE_WEAPON_CLASS_LOCATION.sub(lambda m: str(global_weapon_type_map.get(current_location_slot, 0) if current_location_slot is not None else 0), expr)
+        expr = _RE_ITEM_ID_LOCATION.sub(lambda m: str(slot_item_id_map.get(int(m.group(1)), 0)), expr)
+        expr = _RE_SKILL_LEVEL.sub(lambda m: str(enabled_skill_levels.get(int(m.group(1)), 0)), expr)
+        expr = _RE_PET_RELATIONSHIP.sub(lambda m: str(get_grade_value()), expr)
+
+        pure_jobs = globals().get("GetPureJob", [])
+        expr = re.sub(r"GetPureJob\(\)\s*==\s*(\d+)", lambda m: f"({int(m.group(1))} in {list(pure_jobs)})", expr)
+        expr = re.sub(r"GetPureJob\(\)\s*~=\s*(\d+)", lambda m: f"({int(m.group(1))} not in {list(pure_jobs)})", expr)
+
+        expr = expr.replace("~=", "!=").replace("&&", " and ").replace("||", " or ")
+        expr = re.sub(r"\btrue\b", "True", expr, flags=re.IGNORECASE)
+        expr = re.sub(r"\bfalse\b", "False", expr, flags=re.IGNORECASE)
+        expr = re.sub(r"\bnil\b", "0", expr, flags=re.IGNORECASE)
+
+        # 僅替換純數值變數；dict/list 等內部狀態不應塞回 eval 字串。
         for v in sorted(variables.keys(), key=lambda x: -len(x)):
-            expr = re.sub(rf'\b{re.escape(v)}\b', str(variables[v]), expr)
+            value = variables[v]
+            if isinstance(value, bool):
+                value = int(value)
+            if isinstance(value, (int, float)):
+                expr = re.sub(rf'\b{re.escape(v)}\b', str(value), expr)
 
-        # 補括號
+        # 補括號，容忍部分 Lua 資料少寫右括號的狀況。
         if expr.count("(") > expr.count(")"):
             expr += ")" * (expr.count("(") - expr.count(")"))
 
+        return expr
+
+    def _eval_python_expr(expr, local_vars=None):
+        if not _RE_ALLOWED_EVAL.fullmatch(expr):
+            raise ValueError(f"含不允許字元: {expr}")
+
+        import ast
+        import math
+
+        def __idiv(a, b):
+            # 除完立刻取整；正數情況等同 floor
+            return int(a / b)
+
+        class IntDivTransformer(ast.NodeTransformer):
+            def visit_BinOp(self, node):
+                self.generic_visit(node)
+
+                if isinstance(node.op, ast.Div):
+                    return ast.copy_location(
+                        ast.Call(
+                            func=ast.Name(id="__idiv", ctx=ast.Load()),
+                            args=[node.left, node.right],
+                            keywords=[]
+                        ),
+                        node
+                    )
+
+                return node
+
+        tree = ast.parse(expr, mode="eval")
+        tree = IntDivTransformer().visit(tree)
+        ast.fix_missing_locations(tree)
+
+        env = {
+            "math": math,
+            "__idiv": __idiv,
+        }
+
+        if local_vars:
+            env.update({
+                k: v for k, v in local_vars.items()
+                if isinstance(v, (int, float, bool))
+            })
+
+        return eval(
+            compile(tree, "<expr>", "eval"),
+            {"__builtins__": None},
+            env
+        )
+
+    def safe_eval_expr(expr, variables, get_values, refine_inputs, grade):
+        normalized = normalize_lua_expr(expr, variables, get_values, refine_inputs)
         try:
-            # 把 math 跟 temp 等變數放進 local 環境
-            safe_locals = {"math": __import__("math")}
-            safe_locals.update(variables)
-            return int(eval(expr, {"__builtins__": None}, safe_locals))
+            value = _eval_python_expr(normalized, variables)
+            if isinstance(value, bool):
+                return int(value)
+            return int(value)
+        except Exception:
+            return f"{normalized}（無法解析）"
+
+    def eval_condition_expr(expr):
+        normalized = normalize_lua_expr(expr, variables, get_values, refine_inputs)
+        try:
+            return bool(_eval_python_expr(normalized, variables)), normalized, None
         except Exception as e:
-            return f"{expr}（無法解析）"
+            return False, normalized, e
 
 
 
@@ -2245,10 +2377,10 @@ def parse_lua_effects_with_variables(
             continue
 
         # 🔽  GetPetRelationship() 替換為傳入的裝備階級
-        line = re.sub(r"GetPetRelationship\s*\(\s*\)", str(grade), line)
+        line = re.sub(r"GetPetRelationship\s*\(\s*\)", str(get_grade_value()), line)
 
         # 將 GetEquipGradeLevel(GetLocation()) 替換為傳入的裝備階級
-        line = re.sub(r"GetEquipGradeLevel\s*\(\s*GetLocation\s*\(\s*\)\s*\)", str(grade), line)
+        line = re.sub(r"GetEquipGradeLevel\s*\(\s*GetLocation\s*\(\s*\)\s*\)", str(get_grade_value()), line)
         # 補充解析 Type 與 Stat 同行的情況（裝備類別與屬性）
         type_stat_match = re.match(r'Type\s*=\s*"(.*?)"\s*,\s*Stat\s*=\s*\{(.*?)\}', line)
         if type_stat_match:
@@ -2321,39 +2453,11 @@ def parse_lua_effects_with_variables(
                 continue
 
             expr = if_match.group(1)
-            expr = re.sub(r"get\((\d+)\)", lambda m: str(get_values.get(int(m.group(1)), 0)), expr)
-            expr = re.sub(r"GetRefineLevel\((\d+)\)", lambda m: str(refine_inputs.get(int(m.group(1)), 0)), expr)
-            expr = re.sub(r"GetEquipGradeLevel\((\d+)\)", lambda m: str(grade), expr)
-            expr = re.sub(r"GetItemIDLocation\((\d+)\)", lambda m: str(slot_item_id_map.get(int(m.group(1)), 0)), expr)
-            # GetPureJob() == X  ->  X in <list>
-            expr = re.sub(
-                r"GetPureJob\(\)\s*==\s*(\d+)",
-                lambda m: f"({int(m.group(1))} in {GetPureJob})",
-                expr
-            )
-
-            # GetPureJob() ~= X  ->  X not in <list>
-            expr = re.sub(
-                r"GetPureJob\(\)\s*~=\s*(\d+)",
-                lambda m: f"({int(m.group(1))} not in {GetPureJob})",
-                expr
-            )
-
-            for v in sorted(variables.keys(), key=lambda x: -len(x)):
-                expr = re.sub(rf'\b{re.escape(v)}\b', str(variables[v]), expr)
-
-            expr = expr.replace("~=", "!=")
-            expr = expr.replace(" and ", " and ")
-            expr = expr.replace(" or ", " or ")
-            expr = expr.replace(" not ", " not ")
-
-            try:
-                result = eval(expr, safe_globals, safe_locals)
-                condition_met = bool(result)
-                results.append(f"{'✅ if 條件成立' if condition_met else '❌ if 條件不成立'} : {if_match.group(1)}")
-            except Exception as e:
-                condition_met = False
-                results.append(f"⚠️ 無法解析條件: {if_match.group(1)}，錯誤: {e}")
+            condition_met, normalized_expr, err = eval_condition_expr(expr)
+            if err is None:
+                results.append(f"{'✅ if 條件成立' if condition_met else '❌ if 條件不成立'} : {expr}")
+            else:
+                results.append(f"⚠️ 無法解析條件: {expr}，轉換後: {normalized_expr}，錯誤: {err}")
 
             block_stack.append({"active": condition_met, "branch_taken": condition_met})
             continue
@@ -2372,25 +2476,11 @@ def parse_lua_effects_with_variables(
                 continue
 
             expr = elseif_match.group(1)
-            expr = re.sub(r"get\((\d+)\)", lambda m: str(get_values.get(int(m.group(1)), 0)), expr)
-            expr = re.sub(r"GetRefineLevel\((\d+)\)", lambda m: str(refine_inputs.get(int(m.group(1)), 0)), expr)
-            expr = re.sub(r"GetEquipGradeLevel\((\d+)\)", lambda m: str(grade), expr)
-            expr = re.sub(r"GetItemIDLocation\((\d+)\)", lambda m: str(slot_item_id_map.get(int(m.group(1)), 0)), expr)
-            
-            for v in sorted(variables.keys(), key=lambda x: -len(x)):
-                expr = re.sub(rf'\b{re.escape(v)}\b', str(variables[v]), expr)
-            expr = expr.replace("~=", "!=")
-            expr = expr.replace(" and ", " and ")
-            expr = expr.replace(" or ", " or ")
-            expr = expr.replace(" not ", " not ")
-
-            try:
-                result = eval(expr, safe_globals, safe_locals)
-                condition_met = bool(result)
+            condition_met, normalized_expr, err = eval_condition_expr(expr)
+            if err is None:
                 results.append(f"{'✅ elseif 條件成立' if condition_met else '❌ elseif 條件不成立'} : {expr}")
-            except Exception as e:
-                condition_met = False
-                results.append(f"⚠️ 無法解析條件: {expr}，錯誤: {e}")
+            else:
+                results.append(f"⚠️ 無法解析條件: {expr}，轉換後: {normalized_expr}，錯誤: {err}")
 
             
             block_stack.append({"active": condition_met, "branch_taken": condition_met})
@@ -2468,7 +2558,7 @@ def parse_lua_effects_with_variables(
             var, slot = grade_assign.groups()
             try:
                 # 如果 grade 是 dict，取對應部位；否則直接用整數
-                value = grade.get(int(slot), 0) if isinstance(grade, dict) else grade
+                value = get_grade_value(slot)
                 #print(f"[DEBUG] slot {slot} 的 grade 值: {value} 來源: {original_line.strip()}")
                 
                 variables[var] = value
@@ -2523,18 +2613,15 @@ def parse_lua_effects_with_variables(
         var_math = re.match(r"(\w+)\s*=\s*math\.floor\((.+)\)", line)
         if var_math:
             var, expr = var_math.groups()
-            expr = re.sub(r"get\((\d+)\)", lambda m: str(get_values.get(int(m.group(1)), 0)), expr)
-            expr = re.sub(r"GetRefineLevel\((\d+)\)", lambda m: str(refine_inputs.get(int(m.group(1)), 0)), expr)
-            expr = re.sub(r"GetEquipGradeLevel\((\d+)\)", lambda m: str(grade), expr)
-            
-            for v in sorted(variables.keys(), key=lambda x: -len(x)):
-                expr = re.sub(rf'\b{re.escape(v)}\b', str(variables[v]), expr)
+            normalized_expr = normalize_lua_expr(expr, variables, get_values, refine_inputs)
             try:
-                value = int(eval(f"math.floor({expr})", safe_globals, safe_locals))
+                value = safe_eval_expr(f"math.floor({expr})", variables, get_values, refine_inputs, grade)
+                if isinstance(value, str):
+                    raise ValueError(value)
                 variables[var] = value
-                results.append(f"📌 `{var}` = {value}（floor({expr})）")
+                results.append(f"📌 `{var}` = {value}（floor({normalized_expr})）")
             except Exception as e:
-                results.append(f"⚠️ 無法計算 `{var}` = floor({expr})，錯誤：{e}")
+                results.append(f"⚠️ 無法計算 `{var}` = floor({normalized_expr})，錯誤：{e}")
             continue
 
         # 一般變數指定
@@ -2551,15 +2638,6 @@ def parse_lua_effects_with_variables(
                 results.append(f"🟡一般變數 無法辨識: {original_line}")
                 continue
 
-            # 替換函數式的數值
-            expr = re.sub(r"get\((\d+)\)", lambda m: str(get_values.get(int(m.group(1)), 0)), expr)
-            expr = re.sub(r"GetRefineLevel\((\d+)\)", lambda m: str(refine_inputs.get(int(m.group(1)), 0)), expr)
-            expr = re.sub(r"GetEquipGradeLevel\((\d+)\)", lambda m: str(grade), expr)
-            expr = re.sub(
-                r"GetSkillLevel\((\d+)\)",
-                lambda m: str(enabled_skill_levels.get(int(m.group(1)), 0)),
-                expr
-            )            
             variables.update({
                 "target_element": target_element,#給機匠被動
                 "skill_focus_AGI": skill_focus_AGI,#給心神凝聚處理的
@@ -2567,13 +2645,15 @@ def parse_lua_effects_with_variables(
                 "total_AGI": total_AGI, #給點穴反
             })
 
-            # ✅ 改用 eval + variables 做上下文，不再手動替換
+            normalized_expr = normalize_lua_expr(expr, variables, get_values, refine_inputs)
             try:
-                value = int(eval(expr, {"__builtins__": None}, variables))
+                value = safe_eval_expr(expr, variables, get_values, refine_inputs, grade)
+                if isinstance(value, str):
+                    raise ValueError(value)
                 variables[var] = value
                 results.append(f"📌 `{var}` = {value}")
             except Exception as e:
-                results.append(f"⚠️ 無法計算 `{var}` = {expr}，錯誤：{e}")
+                results.append(f"⚠️ 無法計算 `{var}` = {normalized_expr}，錯誤：{e}")
             continue
             
 
@@ -3804,34 +3884,57 @@ def parse_lua_effects_with_variables(
 
         # 所有邏輯都未匹配時：顯示無法辨識語句
 
+    def _format_number(value):
+        if isinstance(value, float) and value.is_integer():
+            value = int(value)
+        if isinstance(value, int):
+            return f"{value:+d}"
+        return f"{value:+.2f}".rstrip("0").rstrip(".")
+
     def combine_effects(results):
-        combined = defaultdict(int)
+        combined = defaultdict(float)
         final_lines = []
         
         for line in results:
-            # 支援加總格式：「效果說明 +數值」或「效果說明 -數值」
-            match = re.match(r"(.+?) ([+-]\d+)([%]?)$", line)
+            # 支援加總格式：「效果說明 +數值」、「效果說明 -數值%」與「效果說明 -0.20 秒」
+            match = re.match(r"(.+?) ([+-]\d+(?:\.\d+)?)(%|秒)?$", line)
             if match:
                 key = match.group(1).strip()
-                value = int(match.group(2))
-                suffix = match.group(3)  # % 結尾
+                value = float(match.group(2))
+                suffix = match.group(3) or ""
                 combined[(key, suffix)] += value
             else:
                 final_lines.append(line)
 
         for (key, suffix), total in combined.items():
-            final_lines.append(f"{key} {total:+d}{suffix}")
+            final_lines.append(f"{key} {_format_number(total)}{suffix}")
 
         return final_lines
 
-        results.append(f"🟡 無法辨識: {original_line}")
+    def filter_hidden_effects(lines):
+        if not hide_physical and not hide_magical:
+            return lines
+
+        physical_keywords = (
+            "物理", "ATK", "P.ATK", "CRI", "C.RATE", "HIT",
+            "近距離", "遠距離", "爆擊", "暴擊", "武器", "誘導攻擊"
+        )
+        magical_keywords = (
+            "魔法", "MATK", "S.MATK", "MDEF", "MRES", "變動詠唱", "固定詠唱", "詠唱"
+        )
+
+        filtered = []
+        for line in lines:
+            if hide_physical and any(keyword in line for keyword in physical_keywords):
+                continue
+            if hide_magical and any(keyword in line for keyword in magical_keywords):
+                continue
+            filtered.append(line)
+        return filtered
 
    
-    if hide_unrecognized:
-        return combine_effects(results)
-        
-    else:
-        return results
+    final_results = combine_effects(results) if hide_unrecognized else results
+    return filter_hidden_effects(final_results)
 
 def convert_description_to_html(description_lines):#視覺化說明欄
     html_lines = []
