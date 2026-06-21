@@ -9,7 +9,7 @@
 #職業名稱跟JOB補正#ROCalculator
 job_dict = {
     0: {"GetPureJob": [0],"id": "","id_jobneme": "","id_jobneme_OL": "","selectskill": "", "name": "", "TJobMaxPoint": [0,0,0,0,0,0,0,0,0,0,0,0],"point":"0"},
-    4252: {"GetPureJob": [1,7,4002,4008,4054,4252],"id": "RK","id_jobneme": "Dragon_Knight","id_jobneme_OL": "Swordman/Knight/Knight_H/Rune_Knight","selectskill": "RK/DK", "name": "盧恩龍爵", "TJobMaxPoint": [6,8,7,8,8,6,10,7,3,5,7,8],"point":"49/49/20/69/59","HP_SP_widget": True,"MHP_MSP":True},
+    4252: {"GetPureJob": [1,7,4002,4008,4054,4060,4252],"id": "RK","id_jobneme": "Dragon_Knight","id_jobneme_OL": "Swordman/Knight/Knight_H/Rune_Knight","selectskill": "RK/DK", "name": "盧恩龍爵", "TJobMaxPoint": [6,8,7,8,8,6,10,7,3,5,7,8],"point":"49/49/20/69/59","HP_SP_widget": True,"MHP_MSP":True},
     4253: {"GetPureJob": [5,10,4006,4011,4058,4064,4253],"id": "ME","id_jobneme": "Meister","id_jobneme_OL": "Merchant/Blacksmith/Blacksmith_H/Mechanic","selectskill": "NC/MT", "name": "機甲神匠", "TJobMaxPoint": [10,6,10,6,5,6,10,10,6,0,7,7],"point":"49/49/20/69/59","MHP_MSP":True},
     4254: {"GetPureJob": [6,12,4007,4013,4059,4065,4254],"id": "GX","id_jobneme": "Shadow_Cross","id_jobneme_OL": "Thief/Assassin/Assassin_H/Guillotine_Cross","selectskill": "GC/ASC/SHC", "name": "十字影武", "TJobMaxPoint": [8,11,6,5,9,4,12,8,4,0,8,8],"point":"49/49/20/69/59","MHP_MSP":True},
     4255: {"GetPureJob": [2,9,4003,4010,4055,4061,4255],"id": "WL","id_jobneme": "Arch_Mage","id_jobneme_OL": "Magician/Wizard/Wizard_H/Warlock","selectskill": "WL/AG", "name": "禁咒魔導士", "TJobMaxPoint": [1,7,8,15,8,4,0,8,8,14,9,1],"point":"49/49/20/69/59","MHP_MSP":True},
