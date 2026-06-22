@@ -1,5 +1,5 @@
 #部分資料取自ROCalculator,搜尋 ROCalculator 可以知道哪些有使用
-Version = "v0.3.4-260615"
+Version = "v0.3.5-260622"
 
 import sys, builtins, time
 import os
@@ -343,7 +343,7 @@ DataRegistry.register(
     var_name="job_dict",
     default={
     0: {"id": "","id_jobneme": "","id_jobneme_OL": "","selectskill": "", "name": "沒有資料", "TJobMaxPoint": [0,0,0,0,0,0,0,0,0,0,0,0],"point":"0"}}, 
-    on_reload=lambda win: win.reload_job_list()  # 若職業列表要更新
+    on_reload=lambda win: win.reload_job_list()  # 職業列表更新
 )
 
 DataRegistry.register(
@@ -351,7 +351,7 @@ DataRegistry.register(
     path="data/job_dict.py",
     var_name="job_4th_hpsp",
     default={},
-    on_reload=lambda win: win.reload_job_list()  # 若職業列表要更新
+    on_reload=lambda win: win.reload_job_list()  # 職業列表更新
 )
 
 DataRegistry.register(
@@ -360,7 +360,7 @@ DataRegistry.register(
     var_name="WPASPDdata",
     default={
     0: {0:144}},
-    on_reload=lambda win: win.reload_job_list()  # 若職業列表要更新
+    on_reload=lambda win: win.reload_job_list()  # 職業列表更新
 )
 # 外部py載入清單
 DataRegistry.reload_all()#先讀取所有外部py並設定預設
@@ -543,7 +543,7 @@ weapon_class_codes = {#輸出用
     23: "Rods",  # 雙手仗
 }
 #weapon_class
-weapon_type_size_penalty = {#物體武器體型修正
+weapon_type_size_penalty = {#武器體型修正
     0: [100, 100, 100],# 空手
     1: [100, 75, 50],  # 短劍
     2: [75, 100, 75],  # 單手劍
@@ -557,7 +557,7 @@ weapon_type_size_penalty = {#物體武器體型修正
     11: [100, 100, 75],  # 弓
     12: [100, 100, 75],  # 拳套
     13: [75, 100, 75],  # 樂器
-    14: [75, 100, 50],  # 鞭子
+    14: [75, 100, 75],  # 鞭子
     15: [100, 100, 50],  # 書
     16: [75, 100, 75],  # 拳刃
     17: [100, 100, 100],  # 左輪手槍
