@@ -4547,4 +4547,26 @@ descript = {
 {"%s", COLOR_TIME}, 
 {"對全種族魔物的物理/魔法傷害增加。"}, 
 {"(玩家除外)"}}}
+StateIconList[EFST_IDs.EFST_CONTENTS_23] = {haveTimeLimit = 1, posTimeLimitStr = 2, 
+descript = {
+{"增益BUFF", COLOR_TITLE_BUFF}, 
+{"%s", COLOR_TIME}, 
+{"對此地圖登場魔物的物理/魔法傷害增加"}, 
+{"霸勒門德生物圈 : 深層1樓"}}}
+StateIconList[EFST_IDs.EFST_CONTENTS_24] = {haveTimeLimit = 1, posTimeLimitStr = 2, 
+descript = {
+{"增益BUFF", COLOR_TITLE_BUFF}, 
+{"%s", COLOR_TIME}, 
+{"對此地圖登場魔物的物理/魔法傷害增加"}, 
+{"時間庭園 : 被遺忘的時間第1區"}, 
+{"時間庭園 : 被遺忘的時間第2區"}}}
+StateIconList[EFST_IDs.EFST_CONTENTS_25] = {haveTimeLimit = 1, posTimeLimitStr = 2, 
+descript = {
+{"增益BUFF", COLOR_TITLE_BUFF}, 
+{"%s", COLOR_TIME}, 
+{"對此地圖登場魔物的物理/魔法傷害增加"}, 
+{"(MVP首領魔物外)"}, 
+{"尼芙菲姆南瓜登場"}, 
+{"古代神殿阿克赫特"}, 
+{"未知的藍洞"}}}
 
