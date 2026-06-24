@@ -6909,11 +6909,13 @@ class ItemSearchApp(QWidget):
             variance = steps_after_safe * extra_after_safe[weapon_Level]
             variance_min = 1#基礎最小值
 
-            # 16 以上額外加成：每超過 1 級，對「1~15」各再加一次（= 15 倍）
+            # 16 以上 更換下一階額外加成
             steps_over16 = max(0, weaponRefineR - 15)
-            over16 = steps_over16 * 15 * over16_bonus[weapon_Level]
+            # over16 = steps_over16 * 15 * over16_bonus[weapon_Level]
+            if steps_over16 > 0:
+                base = weaponRefineR * over16_bonus[weapon_Level]
 
-            matk_total = base + variance + over16
+            matk_total = base + variance# + over16
             #matk_total = base + over16#安定後浮動加成暫時取消
             total_SMATK = 0.0
 
@@ -6970,11 +6972,13 @@ class ItemSearchApp(QWidget):
             variance = steps_after_safe * extra_after_safe[weapon_Level]
             variance_min = 1#基礎最小值
 
-            # 16 以上額外加成：每超過 1 級，對「1~15」各再加一次（= 15 倍）
+            # 16 以上 更換下一階額外加成
             steps_over16 = max(0, weaponRefineR - 15)
-            over16 = steps_over16 * 15 * over16_bonus[weapon_Level]
+            # over16 = steps_over16 * 15 * over16_bonus[weapon_Level]
+            if steps_over16 > 0:
+                base = weaponRefineR * over16_bonus[weapon_Level]
 
-            atk_total = base + variance + over16
+            atk_total = base + variance# + over16
             #atk_total = base + over16#安定後浮動加成暫時取消
             total_PATK = 0.0
 
