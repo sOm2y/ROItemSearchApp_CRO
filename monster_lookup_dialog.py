@@ -255,9 +255,11 @@ class MonsterLookupDialog(QDialog):
     # -------- parse --------
     def parse_monster(self, data: dict) -> dict:
         stats = data.get("stats", {})
-
+        attack_data = stats.get("attack") or {}
+        mattack_data = stats.get("magicAttack") or {}
         name = data.get("name") or data.get("dbname", "")
         level = int(stats.get("level", 0))
+        s_tr = int(stats.get("str") or 0)
         vit = int(stats.get("vit") or 0)
         inte = int(stats.get("int") or 0)
 
@@ -268,6 +270,12 @@ class MonsterLookupDialog(QDialog):
         mdef_before = int(int(level / 4) + int(vit / 10) + int(inte / 5))
 
         element_id, element_lv = decode_element(stats.get("element", 0))
+
+        f_atk = int(level + s_tr)
+        c_atk = int(attack_data.get("maximum") or 0)
+        f_matk = int(level + inte)
+        c_matk = int(mattack_data.get("maximum") or 0)
+        #print(f"==================前atk{f_atk}後atk{c_atk}前MATK{f_matk}後MATK{c_matk}")
 
         return {
             "name": name,
@@ -282,4 +290,8 @@ class MonsterLookupDialog(QDialog):
             "mdef_after": mdef_after,
             "res": int(stats.get("res", 0)),
             "mres": int(stats.get("mres", 0)),
+            "monster_f_atk": f_atk,
+            "monster_c_atk": c_atk,
+            "monster_f_matk": f_matk,
+            "monster_c_matk": c_matk,
         }

@@ -17,8 +17,14 @@
     "rechargeTime": 1200,
     "atk1": 25067,
     "atk2": 9981,
-    "attack": null,
-    "magicAttack": null,
+    "attack": {
+      "minimum": 20380,
+      "maximum": 30407
+    },
+    "magicAttack": {
+      "minimum": 7313,
+      "maximum": 13302
+    },
     "defense": 527,
     "baseExperience": 0,
     "jobExperience": 0,

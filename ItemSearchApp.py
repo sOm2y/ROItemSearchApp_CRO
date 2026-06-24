@@ -4810,6 +4810,12 @@ class ItemSearchApp(QWidget):
         self.res_input.setText(str(m["res"]))
         self.mres_input.setText(str(m["mres"]))
 
+        self.monster_f_atk = str(m["monster_f_atk"])
+        self.monster_c_atk = str(m["monster_c_atk"])
+        self.monster_f_matk = str(m["monster_f_matk"])
+        self.monster_c_matk = str(m["monster_c_matk"])
+
+
     def open_monster_lookup(self):
         dlg = MonsterLookupDialog(self)
         dlg.monsterSelected.connect(self.apply_monster_to_main_ui)
@@ -6613,6 +6619,10 @@ class ItemSearchApp(QWidget):
         # body_results.append(f"{pad_label('種族:')}{race_map.get(target_race, target_race)}")
         # body_results.append(f"{pad_label('階級:')}{class_map.get(target_class, target_class)}")
         # body_results.append(f"==================================================================")
+        body_results.append(f"===========================怪物能力===========================")
+        body_results.append(f"ATK {self.monster_f_atk} + {self.monster_c_atk}")
+        body_results.append(f"MATK {self.monster_f_matk} + {self.monster_c_matk}")
+
 
         body_size_phys = get_effect_multiplier('body_D_size', target_size)
         body_element_phys = get_effect_multiplier('body_D_element', target_element) + get_effect_multiplier('body_D_element', 10)
@@ -11251,6 +11261,12 @@ class ItemSearchApp(QWidget):
         self.sim_tabs.addTab(self.custom_calc_tab, tr("tab.damage_calculation"))
 
         # 建立新分頁：減傷計算（與傷害計算目標欄位連動）
+        # 初始化魔物攻擊值
+        self.monster_f_atk = 0
+        self.monster_c_atk = 0
+        self.monster_f_matk = 0
+        self.monster_c_matk = 0
+
         self.body_custom_calc_tab = QWidget()
         body_layout = QVBoxLayout(self.body_custom_calc_tab)
         self.btn_open_monster_lookup_2 = QPushButton(tr("button.lookup_monster"))
@@ -11273,7 +11289,7 @@ class ItemSearchApp(QWidget):
         self.body_element_lv_input.setValidator(QIntValidator(1, 4, self))
         body_element_lv_input_layout.addWidget(body_element_lv_input_label)
         body_element_lv_input_layout.addWidget(self.body_element_lv_input)
-        body_target_layout.addLayout(body_element_lv_input_layout)
+        #body_target_layout.addLayout(body_element_lv_input_layout)
 
         body_race_layout, self.body_race_box = make_combobox("種族", race_map, visible_race_keys)
         body_target_layout.addLayout(body_race_layout)
