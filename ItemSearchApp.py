@@ -1,5 +1,5 @@
 #部分資料取自ROCalculator,搜尋 ROCalculator 可以知道哪些有使用
-Version = "v0.3.5-260622"
+Version = "v0.3.6-260627"
 
 import sys, builtins, time
 import os
@@ -5139,6 +5139,7 @@ class ItemSearchApp(QWidget):
         # 從下拉選單與欄位取得目標資訊
         target_size    = self.size_box.currentData()
         target_element = self.element_box.currentData()#複製到trigger_total_effect_update先取得
+        monster_attack_element = self.monster_body_element_box.currentData()
         target_race    = self.race_box.currentData()
         target_class   = self.class_box.currentData()
         User_attack_element = self.attack_element_box.currentData()
@@ -5416,10 +5417,13 @@ class ItemSearchApp(QWidget):
             if reduction > 0.99:
                 return 1.0
             adj = d_ef - (d_ef * reduction) - reduction
+            if adj <= -399:
+                adj = -399
             numerator = 4000 + adj
             denominator = 4000 + adj * 10
+
             resistance = numerator / denominator
-            return min(resistance, 1.0)  # ⬅️ 保證不超過 1.0
+            return max(resistance, -0.99)  # 範圍限制在-0.99~1 來源:https://forum.gamer.com.tw/C.php?bsn=4212&snA=440067&tnum=5&bPage=2
         #====================MRES,MDEF計算===================
         #====================MDEF計算==================
         def calc_final_mdef_damage(mdef: float, reduction_percent: float) -> float:
@@ -5434,10 +5438,12 @@ class ItemSearchApp(QWidget):
             if reduction > 0.99:
                 return 1.0
             adj = mdef - (mdef * reduction) - reduction
+            if adj <= -99:
+                adj = -99
             numerator = 1000 + adj
             denominator = 1000 + adj * 10
             resistance = numerator / denominator
-            return min(resistance, 1.0)  # ⬅️ 保證不超過 1.0
+            return max(resistance, -0.99)  # 範圍限制在-0.99~1 來源:https://forum.gamer.com.tw/C.php?bsn=4212&snA=440067&tnum=5&bPage=2
         #====================RES/MRES計算==================
         def calc_final_res_damage(mres: float, reduction_percent: float) -> float:
 
@@ -5637,8 +5643,12 @@ class ItemSearchApp(QWidget):
         
         #print(f"BasicsWeaponATK:{BasicsWeaponATK}")
         #精煉武器ATK
-        refineWeaponATK_min = int(BasicsWeaponATK_min + atk_refine_total + refineoveratk_min - refineoveratk )
-        refineWeaponATK = int(BasicsWeaponATK + atk_refine_total)  
+        if weapon_class in (11,13,14,17,18,19,20,21):#DEX系
+            refineWeaponATK_min = int(BasicsWeaponATK_min + atk_refine_total - refineoveratk )
+            refineWeaponATK = int(BasicsWeaponATK + atk_refine_total - refineoveratk)  
+        else:#STR系
+            refineWeaponATK_min = int(BasicsWeaponATK_min + atk_refine_total + refineoveratk_min - refineoveratk )
+            refineWeaponATK = int(BasicsWeaponATK + atk_refine_total)  
         #print(f"refineWeaponATK:{refineWeaponATK}")
 
         #武器體型修正
@@ -6524,9 +6534,10 @@ class ItemSearchApp(QWidget):
                 result.append(f"=========================以下各增傷數值===========================")
                 if weapon_class in (11,13,14,17,18,19,20,21):#DEX系
                     result.append(f"{pad_label('前ATK (DEX系):')}{FATK:,}")
+                    result.append(f"{pad_label('後ATK (DEX系):')}{AKTC + KamuiATK + atk_refine_total_L + ATK_MweaponL:,}")
                 else:#STR系
                     result.append(f"{pad_label('前ATK(STR系):')}{NATK:,}")
-                result.append(f"{pad_label('後ATK:')}{AKTC + KamuiATK + atk_refine_total_L + ATK_MweaponL - refineoveratk:,}")
+                    result.append(f"{pad_label('後ATK(STR系):')}{AKTC + KamuiATK + atk_refine_total_L + ATK_MweaponL - refineoveratk:,}")
                 result.append(f"{pad_label('武器ATK:')}{ATK_Mweapon:,}")
                 result.append(f"{pad_label('修煉ATK:')}{WeaponMasteryATK:,}")
                 result.append(f"{pad_label('物理ATK%:')}{round(ATK_percent)}%")
@@ -6612,6 +6623,47 @@ class ItemSearchApp(QWidget):
         #self.custom_calc_box.setPlainText("\n".join(result))
 
         #減傷顯示
+
+        body_size_phys = get_effect_multiplier('body_D_size', target_size)
+        body_size_phys_m = get_effect_multiplier('body_MD_size', target_size)
+        body_element_phys = get_effect_multiplier('body_D_element', target_element) + get_effect_multiplier('body_D_element', 10)
+        body_element_phys_m = get_effect_multiplier('body_MD_element', target_element) + get_effect_multiplier('body_MD_element', 10)
+        body_race_phys = get_effect_multiplier('body_D_Race', target_race) + get_effect_multiplier('body_D_Race', 9999)
+        body_class_phys = get_effect_multiplier('body_D_class', target_class)
+        body_class_phys_m = get_effect_multiplier('body_MD_class', target_class)
+        body_attr_resist = get_effect_multiplier('body_D_Damage', monster_attack_element) + get_effect_multiplier('body_D_Damage', 10)
+        body_melee_phys = body_MeleeAttackDamage
+        body_range_phys = body_RangeAttackDamage
+        body_DEF = sum(val for val, _ in effect_dict.get(("DEF", ""), []))
+        body_MDEF = sum(val for val, _ in effect_dict.get(("MDEF", ""), []))
+        body_RES = sum(val for val, _ in effect_dict.get(("RES", ""), []))
+        body_MRES = sum(val for val, _ in effect_dict.get(("MRES", ""), []))
+
+        if Subweapon_class == 0:
+            armor_result = self.get_total_armor_bonus(
+                global_armor_level_map,
+                exclude_slots={4,110,30,31,32,33,34,35,41,42,43,44,100,101,102},
+            )
+        else:
+            armor_result = self.get_total_armor_bonus(
+                global_armor_level_map,
+                exclude_slots={4,3,110,30,31,32,33,34,35,41,42,43,44,100,101,102},
+            )
+
+        f_def = int((base_lv/2) + (total_AGI/5) + (total_VIT/2))
+        c_def = int(armor_result['DEF']+body_DEF)
+        f_mdef = int((base_lv/4) + (total_VIT/5) + (total_DEX/5) + total_INT)
+        stat_res = int(total_STA + (int(total_STA/3)*5))
+        stat_mres = int(total_WIS + (int(total_WIS/3)*5))
+        total_res = int(stat_res+armor_result['RES']+body_RES)
+        total_mres = int(stat_mres+armor_result['RES']+body_MRES)
+
+        c_atktotal = max((1+body_size_phys/100) * (1+body_element_phys/100) * (1+body_class_phys/100) * (1-body_attr_resist/100),0)
+        
+        fc_melee_akttotal = max((1+body_race_phys/100) * (1+body_melee_phys/100),0) * (calc_final_res_damage(total_res,0)) * (calc_final_def_damage(c_def,0))
+        fc_range_akttotal = max((1+body_race_phys/100) * (1+body_range_phys/100),0) * (calc_final_res_damage(total_res,0)) * (calc_final_def_damage(c_def,0))
+        fc_magic_akttotal = max((1+body_size_phys_m/100) * (1+body_element_phys_m/100) * (1+body_class_phys_m/100) * (1-body_attr_resist/100) * (1+body_race_phys/100),0) * (calc_final_res_damage(total_mres,0)) * (calc_final_def_damage(body_MDEF,0))
+        
         body_results = []
         # body_results.append(f"===========================減傷顯示===========================")
         # body_results.append(f"{pad_label('體型:')}{size_map.get(target_size, target_size)}")
@@ -6620,27 +6672,45 @@ class ItemSearchApp(QWidget):
         # body_results.append(f"{pad_label('階級:')}{class_map.get(target_class, target_class)}")
         # body_results.append(f"==================================================================")
         body_results.append(f"===========================怪物能力===========================")
-        body_results.append(f"ATK {self.monster_f_atk} + {self.monster_c_atk}")
-        body_results.append(f"MATK {self.monster_f_matk} + {self.monster_c_matk}")
+        body_results.append(f"{pad_label('ATK:')}{self.monster_f_atk} + {self.monster_c_atk}")
+        body_results.append(f"{pad_label('MATK:')}{self.monster_f_matk} + {self.monster_c_matk}")
+        # body_results.append(f"===========================計算===========================")
+        # excelmfatk = (int(self.monster_f_atk) * (fc_melee_akttotal))
+        # excelrfatk = (int(self.monster_f_atk) * (fc_range_akttotal))
+        # excelcatk = (int(self.monster_c_atk) * (c_atktotal))
+        # body_results.append(f"前ATK(近) = {self.monster_f_atk} * {fc_melee_akttotal*100:.0f} = {excelmfatk:.0f}")
+        # body_results.append(f"前ATK(遠) = {self.monster_f_atk} * {fc_range_akttotal*100:.0f} = {excelrfatk:.0f}")
+        # body_results.append(f"後ATK     = {self.monster_c_atk} * {c_atktotal*100:.0f} = {excelcatk:.0f}")
+        body_results.append(f"===========================角色防禦===========================")
+        body_results.append(f"{pad_label('DEF:')}{f_def} + {c_def}")
+        body_results.append(f"{pad_label('MDEF:')}{f_mdef} + {body_MDEF}")
+        body_results.append(f"{pad_label('RES:')}{total_res}")
+        body_results.append(f"{pad_label('MRES:')}{total_mres}")
+        body_results.append(f"=========================後段物理減傷=========================")
+        body_results.append(f"{pad_label('受到體型物理傷害:')}{body_size_phys:.0f}%")
+        body_results.append(f"{pad_label('受到屬性對象物理傷害:')}{body_element_phys:.0f}%")
+        body_results.append(f"{pad_label('受到階級物理傷害:')}{body_class_phys:.0f}%")
+        body_results.append(f"{pad_label('屬性物理攻擊傷害抗性:')}{body_attr_resist:.0f}%")
+        body_results.append(f"{pad_label('後段物理減傷倍率%')}{c_atktotal*100:.0f}%")
+        body_results.append(f"=========================全段物理減傷=========================")
+        body_results.append(f"{pad_label('受到種族物理傷害:')}{body_race_phys:.0f}%")
+        body_results.append(f"{pad_label('受到近距離物理傷害:')}{body_melee_phys:.0f}%")
+        body_results.append(f"{pad_label('受到遠距離物理傷害:')}{body_range_phys:.0f}%")        
+        body_results.append(f"{pad_label('RES計算倍率:')}{calc_final_res_damage(total_res,0)*100:.2f}%")
+        body_results.append(f"{pad_label('DEF計算倍率:')}{calc_final_def_damage(c_def,0)*100:.2f}%")
+        body_results.append(f"{pad_label('全段(近)減傷倍率%')}{fc_melee_akttotal*100:.0f}%")
+        body_results.append(f"{pad_label('全段(遠)減傷倍率%')}{fc_range_akttotal*100:.0f}%")
+        body_results.append(f"=========================全段魔法減傷=========================")        
+        body_results.append(f"{pad_label('受到種族魔法傷害:')}{body_race_phys:.0f}%")
+        body_results.append(f"{pad_label('受到體型魔法傷害:')}{body_size_phys_m:.0f}%")
+        body_results.append(f"{pad_label('受到屬性對象魔法傷害:')}{body_element_phys_m:.0f}%")
+        body_results.append(f"{pad_label('受到階級魔法傷害:')}{body_class_phys_m:.0f}%")
+        body_results.append(f"{pad_label('屬性魔法攻擊傷害抗性:')}{body_attr_resist:.0f}%")
+        body_results.append(f"{pad_label('MRES計算倍率:')}{calc_final_res_damage(total_mres,0)*100:.2f}%")
+        body_results.append(f"{pad_label('MDEF計算倍率:')}{calc_final_mdef_damage(body_MDEF,0)*100:.2f}%")        
+        body_results.append(f"{pad_label('全段(魔法)減傷倍率%')}{fc_magic_akttotal*100:.0f}%")
 
 
-        body_size_phys = get_effect_multiplier('body_D_size', target_size)
-        body_element_phys = get_effect_multiplier('body_D_element', target_element) + get_effect_multiplier('body_D_element', 10)
-        body_race_phys = get_effect_multiplier('body_D_Race', target_race) + get_effect_multiplier('body_D_Race', 9999)
-        body_class_phys = get_effect_multiplier('body_D_class', target_class)
-        body_attr_resist = get_effect_multiplier('body_D_Damage', target_element) + get_effect_multiplier('body_D_Damage', 10)
-        body_melee_phys = body_MeleeAttackDamage
-        body_range_phys = body_RangeAttackDamage
-
-        body_results.append(f"===========================後段減傷===========================")
-        body_results.append(f"{pad_label('受到體型物理傷害:')}{body_size_phys:+.0f}%")
-        body_results.append(f"{pad_label('受到屬性對象物理傷害:')}{body_element_phys:+.0f}%")
-        body_results.append(f"{pad_label('受到階級物理傷害:')}{body_class_phys:+.0f}%")          
-        body_results.append(f"{pad_label('屬性攻擊抗性:')}{body_attr_resist:+.0f}%")     
-        body_results.append(f"===========================全段減傷===========================")
-        body_results.append(f"{pad_label('受到種族物理傷害:')}{body_race_phys:+.0f}%")
-        body_results.append(f"{pad_label('受到近距離物理傷害:')}{body_melee_phys:+.0f}%")
-        body_results.append(f"{pad_label('受到遠距離物理傷害:')}{body_range_phys:+.0f}%")
 
         if hasattr(self, "body_custom_calc_box"):
             self.body_custom_calc_box.setHtml(self.generate_highlighted_html(body_results))
@@ -6882,7 +6952,7 @@ class ItemSearchApp(QWidget):
         extra_after_safe  = {1: 3, 2: 5, 3: 8, 4: 14, 5: 0}
         # 精煉 16 以上，每超過 1 級，對 1~15 各再加的數值
         over16_bonus      = {1: 3, 2: 5, 3: 7, 4: 10, 5: 0}
-        # 安定值
+        # 安定值   
         safe_threshold    = {1: 7, 2: 6, 3: 5, 4: 4, 5: 0}
 
         # 五階各品級的每 +1 MATK
@@ -6991,7 +7061,152 @@ class ItemSearchApp(QWidget):
 
         return atk_total, total_PATK, variance ,variance_min
 
+    def get_armor_bonus(self, refine: int, armor_level: int) -> dict:
+        """
+        計算單一防具的精煉 DEF、RES。
 
+        DEF 累加規則：
+            +1～+4   每次 +1
+            +5～+8   每次 +2
+            +9～+12  每次 +3
+            +13～+16 每次 +4
+            +17～+20 每次 +5
+
+        防具等級：
+            1級防具：DEF 使用原始累加值，RES = 0
+            2級防具：DEF 為原始累加值 × 1.2，RES = 精煉 × 2
+        """
+        try:
+            refine = int(refine)
+            armor_level = int(armor_level)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("精煉值與防具等級必須是整數") from exc
+
+        if not 0 <= refine <= 20:
+            raise ValueError(
+                f"精煉值必須介於 0～20，目前為：{refine}"
+            )
+
+        if armor_level not in (1, 2):
+            return {
+                "DEF": 0.0,
+                "RES": 0,
+            }
+
+        # 每 4 點精煉提升一個 DEF 增量階段
+        full_groups = refine // 4
+        remainder = refine % 4
+
+        # 例如 +10：
+        # 4×1 + 4×2 + 2×3 = 18
+        def_units = (
+            4 * full_groups * (full_groups + 1) // 2
+            + remainder * (full_groups + 1)
+        )
+
+        if armor_level == 1:
+            def_bonus = def_units
+            res_bonus = 0
+        else:
+            def_bonus = def_units * 1.2
+            res_bonus = refine * 2
+
+        return {
+            "DEF": round(def_bonus, 1),
+            "RES": int(res_bonus),
+        }
+
+
+    def get_total_armor_bonus(
+        self,
+        armor_level_map: dict,
+        exclude_parts=None,
+        exclude_slots=None,
+        exclude_types=None,
+    ) -> dict:
+        """從 UI 讀取所有部位精煉值，並加總防具精煉 DEF、RES。"""
+
+        exclude_parts = set(exclude_parts or ())
+        exclude_slots = set(exclude_slots or ())
+        exclude_types = set(exclude_types or ())
+
+        total_def = 0.0
+        total_res = 0
+        details = {}
+
+        # 關鍵修正：slot/type 要從 refine_parts 取得
+        for part_name, part_info in refine_parts.items():
+            slot = part_info.get("slot")
+            part_type = part_info.get("type")
+
+            if part_name in exclude_parts:
+                continue
+
+            if slot in exclude_slots:
+                continue
+
+            if part_type in exclude_types:
+                continue
+
+            ui_data = self.refine_inputs_ui.get(part_name)
+            if not ui_data:
+                continue
+
+            # 沒穿裝備時不計算
+            equip_widget = ui_data.get("equip")
+            if equip_widget is not None:
+                if not equip_widget.text().strip():
+                    continue
+
+            refine_widget = ui_data.get("refine")
+            if refine_widget is None:
+                continue
+
+            refine_text = refine_widget.text().strip()
+
+            try:
+                refine = int(refine_text or 0)
+            except ValueError as exc:
+                raise ValueError(
+                    f"{part_name} 的精煉值格式錯誤：{refine_text!r}"
+                ) from exc
+
+            # 同時相容 int key 與 str key
+            armor_level_raw = armor_level_map.get(
+                slot,
+                armor_level_map.get(str(slot), 0),
+            )
+
+            try:
+                armor_level = int(armor_level_raw or 0)
+            except (TypeError, ValueError):
+                armor_level = 0
+
+            if armor_level not in (1, 2):
+                continue
+
+            bonus = self.get_armor_bonus(
+                refine=refine,
+                armor_level=armor_level,
+            )
+
+            total_def += bonus["DEF"]
+            total_res += bonus["RES"]
+
+            details[part_name] = {
+                "slot": slot,
+                "type": part_type,
+                "refine": refine,
+                "armor_level": armor_level,
+                "DEF": bonus["DEF"],
+                "RES": bonus["RES"],
+            }
+
+        return {
+            "DEF": round(total_def, 1),
+            "RES": int(total_res),
+            "details": details,
+        }
 
     def update_note_widget_with_delay(self, widget: QTextEdit, text: str):
         widget.setPlainText(text)
@@ -9688,6 +9903,7 @@ class ItemSearchApp(QWidget):
                     return info["slot"]
             return 9999  # 未知來源排最後
 
+
         # 三欄主視窗布局
         main_layout = QHBoxLayout()
         
@@ -10362,7 +10578,8 @@ class ItemSearchApp(QWidget):
 
         tab_widget.addTab(equip_page, tr("tab.equipment_settings"))
         
-        
+        # 建立 UI 時保存部位設定
+        self.refine_parts = refine_parts
 
         # === 新增技能分頁（含搜尋） ===
         skill_page = QWidget()
@@ -11301,6 +11518,8 @@ class ItemSearchApp(QWidget):
         body_class_layout, self.body_class_box = make_combobox("階級", class_map, visible_class_keys)
         body_target_layout.addLayout(body_class_layout)
 
+        monster_body_element_layout, self.monster_body_element_box = make_combobox("受攻擊屬性", element_map, visible_element_keys)
+        body_target_layout.addLayout(monster_body_element_layout)
 
         body_layout.addLayout(body_target_layout)
 
@@ -11313,6 +11532,7 @@ class ItemSearchApp(QWidget):
         self._sync_damage_to_body_target_fields()
         self.body_size_box.currentIndexChanged.connect(self._on_body_target_fields_changed)
         self.body_element_box.currentIndexChanged.connect(self._on_body_target_fields_changed)
+        self.monster_body_element_box.currentIndexChanged.connect(self._on_body_target_fields_changed)
         self.body_race_box.currentIndexChanged.connect(self._on_body_target_fields_changed)
         self.body_class_box.currentIndexChanged.connect(self._on_body_target_fields_changed)
         self.body_element_lv_input.editingFinished.connect(self._on_body_target_fields_changed)
