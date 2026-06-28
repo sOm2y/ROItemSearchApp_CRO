@@ -1,5 +1,5 @@
 #部分資料取自ROCalculator,搜尋 ROCalculator 可以知道哪些有使用
-Version = "v0.3.7-260628"
+Version = "v0.3.8-260628"
 
 import sys, builtins, time
 import os
@@ -18,6 +18,8 @@ from dotenv import load_dotenv
 from datetime import datetime, timezone
 
 import requests
+
+
 
 class LangManager:
     """Simple JSON language-pack loader for user-facing UI text."""
@@ -233,6 +235,14 @@ from PySide6.QtWidgets import (
 
 from decimal import Decimal, ROUND_HALF_UP
 from datetime import datetime
+
+class NoWheelComboBox(QComboBox):#忽略滾輪的下拉式選單
+    def wheelEvent(self, event):
+        if self.view().isVisible():
+            super().wheelEvent(event)
+        else:
+            event.ignore()
+
 
 enabled_skill_levels = {}  # 存放已啟用技能的等級
 Use_skill_levels = {}#已啟用的技能id
@@ -10421,7 +10431,7 @@ class ItemSearchApp(QWidget):
             equip_row_layout.addWidget(refine_input)
 
             # ▶️ 階級下拉
-            grade_combo = QComboBox()
+            grade_combo = NoWheelComboBox()
             if part_name == "符文石碑":
                 grade_combo.addItems(["0", "1", "2", "3", "4", "5", "6"])
                 grade_combo.setMaximumWidth(50)
