@@ -1,5 +1,5 @@
 #部分資料取自ROCalculator,搜尋 ROCalculator 可以知道哪些有使用
-Version = "v0.3.6-260627"
+Version = "v0.3.7-260628"
 
 import sys, builtins, time
 import os
@@ -3802,14 +3802,14 @@ def parse_lua_effects_with_variables(
         #     continue
 
         # 純狀態/特殊效果，先顯示不計算
-        register_function("NoDispell", "詠唱不中斷", [])
-        register_function("Magicimmune", "不受魔法效果影響", [])
-        register_function("NoJamstone", "不消耗魔力礦石", [])
-        register_function("NoMadogearfuel", "不消耗魔導機甲燃料", [])
-        register_function("AddNeverknockback", "不會被擊退", [])
-        register_function("Clairvoyance", "可看見隱匿目標", [])
-        register_function("Reincarnation", "復活時恢復HP/SP", [])
-        register_function("SplashAttack", "普攻範圍增加", [])
+        # register_function("NoDispell", "詠唱不中斷", [])
+        # register_function("Magicimmune", "不受魔法效果影響", [])
+        # register_function("NoJamstone", "不消耗魔力礦石", [])
+        # register_function("NoMadogearfuel", "不消耗魔導機甲燃料", [])
+        # register_function("AddNeverknockback", "不會被擊退", [])
+        # register_function("Clairvoyance", "可看見隱匿目標", [])
+        # register_function("Reincarnation", "復活時恢復HP/SP", [])
+        # register_function("SplashAttack", "普攻範圍增加", [])
         plain_effect_map = {
             "NoDispell": "詠唱不中斷",
             "Magicimmune": "不受魔法效果影響",
@@ -3826,38 +3826,36 @@ def parse_lua_effects_with_variables(
             continue
 
         # Condition(effect_id, duration, chance)
-        register_function("Condition", "賦予狀態", [
-            {"name": "狀態", "type": "value"},
-            {"name": "持續時間", "type": "value"},
-            {"name": "機率", "type": "value"}
-        ])
-        condition_effect = get_lua_call_args("Condition", line)
-        if condition_effect and condition_met:
-            status_map = {
-                13: "霸體",
-                14: "移動速度增加",
-                15: "攻擊速度增加",
-                21: "集中",
-                26: "看見隱匿目標",
-            }
-            try:
-                status_id = int(eval_lua_arg(condition_effect, 0, 0))
-            except Exception:
-                status_id = 0
-            status_name = status_map.get(status_id, f"狀態ID {status_id}")
-            duration = eval_lua_arg(condition_effect, 1, None)
-            chance = eval_lua_arg(condition_effect, 2, None)
-            extra = []
-            if duration is not None:
-                extra.append(f"持續 {duration}")
-            if chance is not None:
-                extra.append(f"機率 {chance}%")
-            results.append(f"賦予狀態：{status_name}" + (f"（{'，'.join(extra)}）" if extra else ""))
-            continue
+        # register_function("Condition", "賦予狀態", [
+        #     {"name": "狀態", "type": "value"},
+        #     {"name": "持續時間", "type": "value"},
+        #     {"name": "機率", "type": "value"}
+        # ])
+        # condition_effect = get_lua_call_args("Condition", line)
+        # if condition_effect and condition_met:
+        #     status_map = {
+        #         13: "霸體",
+        #         14: "移動速度增加",
+        #         15: "攻擊速度增加",
+        #         21: "集中",
+        #         26: "看見隱匿目標",
+        #     }
+        #     try:
+        #         status_id = int(eval_lua_arg(condition_effect, 0, 0))
+        #     except Exception:
+        #         status_id = 0
+        #     status_name = status_map.get(status_id, f"狀態ID {status_id}")
+        #     duration = eval_lua_arg(condition_effect, 1, None)
+        #     chance = eval_lua_arg(condition_effect, 2, None)
+        #     extra = []
+        #     if duration is not None:
+        #         extra.append(f"持續 {duration}")
+        #     if chance is not None:
+        #         extra.append(f"機率 {chance}%")
+        #     results.append(f"賦予狀態：{status_name}" + (f"（{'，'.join(extra)}）" if extra else ""))
+        #     continue
 
 #待處理判斷
-#通用(恢復效果、SP消耗
-#自身(對某種族減傷、對某種族抗性、
 #物理(物理反射%、對屬性減少傷害、對某種族的CRI+%
 #魔法(魔法反射
 #================以下判斷失敗或不成立區塊
@@ -5207,6 +5205,19 @@ class ItemSearchApp(QWidget):
             pattern = r'GUSklv\((\d+)\)'  # 找出 GUSklv(數字)
             return re.sub(pattern, lambda m: str(GUSklv(int(m.group(1)))), formula)
 
+        def replace_size_calls(formula: str, target_size: int) -> str:
+            pattern = r'size\(([^)]*)\)'
+
+            def repl(m):
+                values = [v.strip() for v in m.group(1).split(',')]
+
+                if target_size < 0 or target_size > len(values):
+                    raise ValueError(f"target_size={target_size} 超出 size() 範圍")
+
+                return values[target_size]
+
+            return re.sub(pattern, repl, formula)
+
         def replace_custom_calls(formula):#例如超自然波 書跟杖打擊
             import re
     
@@ -5958,6 +5969,7 @@ class ItemSearchApp(QWidget):
 
                 full_formula = replace_gsklv_calls(full_formula)#替換gsklv
                 full_formula = replace_gusklv_calls(full_formula)#替換gusklv
+                full_formula = replace_size_calls(full_formula,target_size)#替換size
                 full_formula = replace_custom_calls(full_formula)#替換wpon(0)2:1
                 full_formula_show,full_formula = eval_formula_with_vars(full_formula, allowed_vars)# 手動變數替換後的字串公式 支援捨去計算               
                 skill_SpecialATK_show , skill_SpecialATK = eval_formula_with_vars(str(skill_row["skill_SpecialATK"]).strip() if pd.notna(skill_row.get("skill_SpecialATK")) else "0", allowed_vars) #技能隱藏段
