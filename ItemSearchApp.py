@@ -1,5 +1,5 @@
 #部分資料取自ROCalculator,搜尋 ROCalculator 可以知道哪些有使用
-Version = "v0.3.8-260628"
+Version = "v0.3.9-260630"
 
 import sys, builtins, time
 import os
@@ -6713,15 +6713,17 @@ class ItemSearchApp(QWidget):
         body_results.append(f"{pad_label('受到屬性對象物理傷害:')}{body_element_phys:.0f}%")
         body_results.append(f"{pad_label('受到階級物理傷害:')}{body_class_phys:.0f}%")
         body_results.append(f"{pad_label('屬性物理攻擊傷害抗性:')}{body_attr_resist:.0f}%")
-        body_results.append(f"{pad_label('後段物理減傷倍率%')}{c_atktotal*100:.0f}%")
+        body_results.append(f"總計：")
+        body_results.append(f"{pad_label('　後段物理減免後傷害:')}{c_atktotal*100:.0f}% (數字越少傷害越低。)")
         body_results.append(f"=========================全段物理減傷=========================")
         body_results.append(f"{pad_label('受到種族物理傷害:')}{body_race_phys:.0f}%")
         body_results.append(f"{pad_label('受到近距離物理傷害:')}{body_melee_phys:.0f}%")
         body_results.append(f"{pad_label('受到遠距離物理傷害:')}{body_range_phys:.0f}%")        
         body_results.append(f"{pad_label('RES計算倍率:')}{calc_final_res_damage(total_res,0)*100:.2f}%")
         body_results.append(f"{pad_label('DEF計算倍率:')}{calc_final_def_damage(c_def,0)*100:.2f}%")
-        body_results.append(f"{pad_label('全段(近)減傷倍率%')}{fc_melee_akttotal*100:.0f}%")
-        body_results.append(f"{pad_label('全段(遠)減傷倍率%')}{fc_range_akttotal*100:.0f}%")
+        body_results.append(f"總計：")
+        body_results.append(f"{pad_label('　全段(近)減免後傷害:')}{fc_melee_akttotal*100:.0f}% (數字越少傷害越低。)")
+        body_results.append(f"{pad_label('　全段(遠)減免後傷害:')}{fc_range_akttotal*100:.0f}% (數字越少傷害越低。)")
         body_results.append(f"=========================全段魔法減傷=========================")        
         body_results.append(f"{pad_label('受到種族魔法傷害:')}{body_race_phys:.0f}%")
         body_results.append(f"{pad_label('受到體型魔法傷害:')}{body_size_phys_m:.0f}%")
@@ -6729,8 +6731,9 @@ class ItemSearchApp(QWidget):
         body_results.append(f"{pad_label('受到階級魔法傷害:')}{body_class_phys_m:.0f}%")
         body_results.append(f"{pad_label('屬性魔法攻擊傷害抗性:')}{body_attr_resist:.0f}%")
         body_results.append(f"{pad_label('MRES計算倍率:')}{calc_final_res_damage(total_mres,0)*100:.2f}%")
-        body_results.append(f"{pad_label('MDEF計算倍率:')}{calc_final_mdef_damage(body_MDEF,0)*100:.2f}%")        
-        body_results.append(f"{pad_label('全段(魔法)減傷倍率%')}{fc_magic_akttotal*100:.0f}%")
+        body_results.append(f"{pad_label('MDEF計算倍率:')}{calc_final_mdef_damage(body_MDEF,0)*100:.2f}%")    
+        body_results.append(f"總計：")    
+        body_results.append(f"{pad_label('　魔法減免後傷害:')}{fc_magic_akttotal*100:.0f}% (數字越少傷害越低。)")
 
 
 
