@@ -21,26 +21,30 @@ all_skill_entries = {#範例[    "": {"buff":"","type": "技能/料理","code":[
     "智慧棒棒條": {"buff":"274","type": "料理","code":["AddExtParam(0,106,15)"],"exclusive": "food_int"}, 
     "靈巧棒棒條": {"buff":"275","type": "料理","code":["AddExtParam(0,107,15)"],"exclusive": "food_dex"},
     "幸運棒棒條": {"buff":"276","type": "料理","code":["AddExtParam(0,108,15)"],"exclusive": "food_luk"},
-
     "特性增強藥劑": {"buff":"1509","type": "料理","code":["AddExtParam(1, 234, 5)","AddExtParam(1, 235, 5)","AddExtParam(1, 236, 5)","AddExtParam(1, 238, 5)","AddExtParam(1, 237, 5)","AddExtParam(1, 239, 5)","AddExtParam(1, 242, 10)","AddExtParam(1, 243, 10)"]},
-
-    #20料
-    
+    #20料    
     "烤野豬": {"buff":"491","type": "料理","code":["AddExtParam(0,103,20)"]},
     "捕蟲藥草煎": {"buff":"495","type": "料理","code":["AddExtParam(0,104,20)"]},
     "米洛斯燒肉": {"buff":"493","type": "料理","code":["AddExtParam(0,105,20)"]},
     "狼血雞尾酒": {"buff":"492","type": "料理","code":["AddExtParam(0,106,20)"]},
     "小雪獸冰茶": {"buff":"494","type": "料理","code":["AddExtParam(0,107,20)"]},
     "畢帝特龍尾麵": {"buff":"496","type": "料理","code":["AddExtParam(0,108,20)"]},
-
+    #
+    "力量防護卷軸": {"buff":"996","type": "料理","code":["AddExtParam(1, 45, 500)","AddExtParam(1, 47, 200)"]},
+    
     #活動---------
     #櫻花, 春花季
     "蒙布朗蛋糕": {"buff":"1469","type": "料理","code":["AddMDamage_Size(1, 0, 10)","AddMDamage_Size(1, 1, 10)","AddMDamage_Size(1, 2, 10)","AddDamage_Size(1, 0, 10)","AddDamage_Size(1, 1, 10)","AddDamage_Size(1, 2, 10)"]},
     "櫻花年糕": {"buff":"1470","type": "料理","code":["AddMDamage_Property(1, 10, 10)","AddDamage_Property(1, 10, 10)"]},
     "甜甜可麗餅": {"buff":"1471","type": "料理","code":["AddExtParam(1, 111, 10)","AddExtParam(1, 112, 10)"]},
     "豐滿花樹枝": {"buff":"1472","type": "料理","code":["AddSkillMDamage(10, 10)","AddRangeAttackDamage(1, 10)","AddMeleeAttackDamage(1, 10)"]},
-    
-
+    #海洋週
+    "夏季韓式宴會麵": {"buff":"1473","type": "料理","code":["AddMDamage_Property(1, 10, 10)","AddDamage_Property(1, 10, 10)"]},
+    "香料烤魷魚": {"buff":"1474","type": "料理","code":["AddMDamage_Size(1, 0, 10)","AddMDamage_Size(1, 1, 10)","AddMDamage_Size(1, 2, 10)","AddDamage_Size(1, 0, 10)","AddDamage_Size(1, 1, 10)","AddDamage_Size(1, 2, 10)"]},
+    "甜甜西瓜布丁": {"buff":"1475","type": "料理","code":["AddMeleeAttackDamage(1, 10)","AddRangeAttackDamage(1, 10)","AddSkillMDamage(10, 10)"]},
+    "冰涼西瓜汁": {"buff":"1476","type": "料理","code":["AddExtParam(1, 207, 15)","AddExtParam(1, 140, 15)"]},
+    "冰涼紅豆剉冰": {"buff":"1477","type": "料理","code":["AddExtParam(1, 111, 10)","AddExtParam(1, 112, 10)"]},
+    "鹹奶油爆米花": {"buff":"1478","type": "料理","code":["SubSpellCastTime(10)","AddExtParam(1, 54, 2)"]},
     #學術節料理
     "學術節米餅": {"buff":"1485","type": "料理","code":["AddMDamage_Size(1, 0, 10)","AddMDamage_Size(1, 1, 10)","AddMDamage_Size(1, 2, 10)","AddDamage_Size(1, 0, 10)","AddDamage_Size(1, 1, 10)","AddDamage_Size(1, 2, 10)","AddExtParam(1, 239, 15)"]},
     "學術節餅乾": {"buff":"1486","type": "料理","code":["AddMeleeAttackDamage(1, 12)","AddRangeAttackDamage(1,  12)","AddSkillMDamage(10, 12)","AddExtParam(1, 50, 30)"]},
@@ -50,6 +54,7 @@ all_skill_entries = {#範例[    "": {"buff":"","type": "技能/料理","code":[
     "肉量加倍三明治": {"buff":"1489","type": "料理","code":["AddMDamage_Size(1, 0, 15)","AddMDamage_Size(1, 1, 15)","AddMDamage_Size(1, 2, 15)","AddMDamage_Property(1, 10, 10)","AddDamage_Size(1, 0, 15)","AddDamage_Size(1, 1, 15)","AddDamage_Size(1, 2, 15)","AddDamage_Property(1, 10, 10)"]},
     "暖胃香料紅酒": {"buff":"1490","type": "料理","code":["AddExtParam(1, 207, 10)","AddExtParam(1, 140, 10)","AddMeleeAttackDamage(1, 10)","AddRangeAttackDamage(1, 10)","AddSkillMDamage(10, 10)"]},
     "暖心蛋酒": {"buff":"1491","type": "料理","code":["AddExtParam(1, 111, 10)","AddExtParam(1, 112, 10)","SubSpellCastTime(10)"]},
+    #活動---------
 
     #攻速水
     "集中藥水": {"buff":"37","type": "料理","code":["AddExtParam(1, 301, 10)"],"exclusive": "ASPD_1"},
@@ -88,6 +93,7 @@ all_skill_entries = {#範例[    "": {"buff":"","type": "技能/料理","code":[
     "天使之賜福": {"buff":"","id": ["AB","SN","SU"],"type": "技能","code": ["AddExtParam(0,103,10)","AddExtParam(0,106,10)","AddExtParam(0,107,10)","AddExtParam(0,49,20)"]},
     "純白百合花": {"buff":"12","id": "AB","type": "技能","code":["temp = 70 / 10","AddExtParam(0,104,12 + math.floor(temp))","AddExtParam(0,167,10 + math.floor(temp))"]},
     "加速術": {"buff":"","id":  ["AB","SN","SU"],"type": "技能","code":["AddExtParam(0,104,12)","AddExtParam(0,167,10)"]},
+    "天使之障壁": {"buff":"9","id":  ["AB","SN","SU"],"type": "技能","code":["AddExtParam(1, 109, 500)"]},
     "神聖權能": {"buff":"1201","id": "AB","type": "技能","code":["AddExtParam(1, 242, 50)","AddExtParam(1, 243, 50)"]},
     "全心奉獻": {"buff":"1227","id": "AB","type": "技能","code":["AddExtParam(1, 235, 10)","AddExtParam(1, 236, 10)","AddExtParam(1, 237, 10)"],"exclusive": "STA.WIS.SPL"},
     "祝福讚歌": {"buff":"1228","id": "AB","type": "技能","code":["AddExtParam(1, 234, 10)","AddExtParam(1, 238, 10)","AddExtParam(1, 239, 10)"],"exclusive": "POW.CON.CRT"},
@@ -186,8 +192,9 @@ all_skill_entries = {#範例[    "": {"buff":"","type": "技能/料理","code":[
     #禁咒
     "終極念力": {"buff":"717","id": "WL","type": "技能","code":["SubSpellCastTime(50)","AddDamage_passive_SKID(1, 13, 200)","AddDamage_passive_SKID(1, 11, 200)","AddDamage_passive_SKID(1, 400, 200)","AddDamage_passive_SKID(1, 2202, 200)","AddDamage_passive_SKID(1, 2201, 200)","AddDamage_passive_SKID(1, 5220, 200)"]},
     "魔力增幅": {"buff":"113","id": "WL","type": "技能","code":["UseSkill(366)"]},
-    "魔力巔峰Lv4(毀滅颶風)": {"buff":"1151","id": "WL","type": "技能","code":["UseSkill(5232)","AddSkillMDamage(4, 30)","AddExtParam(1, 200, 100)"],"exclusive": "CLIMAX"},
+    "魔力巔峰Lv1(水晶波爆)": {"buff":"1184","id": "WL","type": "技能","code":["UseSkill(5232)","AddExtParam(1, 45, 300)","AddExtParam(1, 47, 100)","addattrtolerace(1, 30)","AddSkillMDamage(1, 30)"]},
     "魔力巔峰Lv3": {"buff":"1152","id": "WL","type": "技能","code":["UseSkill(5232)","AddDamage_SKID(1, 5222, 300)","AddDamage_SKID(1, 5218, 200)","AddDamage_SKID(1, 5215, 150)"],"exclusive": "CLIMAX"},
+    "魔力巔峰Lv4(毀滅颶風)": {"buff":"1151","id": "WL","type": "技能","code":["UseSkill(5232)","AddSkillMDamage(4, 30)","AddExtParam(1, 200, 100)"]},
     "魔法省悟": {"buff":"355","id": "WL","type": "技能","code":["UseSkill(2206)"]},
     
     #終初
