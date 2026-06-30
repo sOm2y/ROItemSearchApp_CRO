@@ -1,5 +1,5 @@
 #部分資料取自ROCalculator,搜尋 ROCalculator 可以知道哪些有使用
-Version = "v0.3.9-260630"
+Version = "v0.3.10-260630"
 
 import sys, builtins, time
 import os
@@ -803,7 +803,8 @@ TSTATUS_POINT_COSTS = [#取自ROCalculator(特性數值點術
     159,162,165,168,171,178,181,184,187,190,
     197,200,203,206,209,216,219,222,225,228,
     235,238,241,244,247,254,257,260,263,266,
-    273,276,279,282,285,292
+    273,276,279,282,285,292,295,298,301,304,
+    311,314,317,320,323,330,
 ]
 
 
@@ -6684,7 +6685,7 @@ class ItemSearchApp(QWidget):
         
         fc_melee_akttotal = max((1+body_race_phys/100) * (1+body_melee_phys/100),0) * (calc_final_res_damage(total_res,0)) * (calc_final_def_damage(c_def,0))
         fc_range_akttotal = max((1+body_race_phys/100) * (1+body_range_phys/100),0) * (calc_final_res_damage(total_res,0)) * (calc_final_def_damage(c_def,0))
-        fc_magic_akttotal = max((1+body_size_phys_m/100) * (1+body_element_phys_m/100) * (1+body_class_phys_m/100) * (1-body_attr_resist/100) * (1+body_race_phys/100),0) * (calc_final_res_damage(total_mres,0)) * (calc_final_def_damage(body_MDEF,0))
+        fc_magic_akttotal = max((1+body_size_phys_m/100) * (1+body_element_phys_m/100) * (1+body_class_phys_m/100) * (1-body_attr_resist/100) * (1+body_race_phys/100),0) * (calc_final_res_damage(total_mres,0)) * (calc_final_mdef_damage(body_MDEF,0))
         
         body_results = []
         # body_results.append(f"===========================減傷顯示===========================")
