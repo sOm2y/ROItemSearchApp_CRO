@@ -5039,7 +5039,12 @@ ItemDBNameTbl = {
   S_HN_DB_Shoes = 1270090,
   Time_Gap_HN_Staff = 550152,
   Energy_Xtal_BAM_TW = 1003069,
-  Battle_Aura_Manteau_UPD = 480869
+  Battle_Aura_Manteau_UPD = 480869,
+  S_DK_SS_Earring = 24918,
+  S_DK_SS_Pendant = 24919,
+  S_DK_HS_Armor = 24920,
+  S_DK_HS_Shoes = 24921,
+  Time_Gap_WH_Bow = 700108
 }
 
 function ItemDB_To_ItemID(in_ItemDB)
