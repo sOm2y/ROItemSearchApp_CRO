@@ -1,5 +1,5 @@
 #部分資料取自ROCalculator,搜尋 ROCalculator 可以知道哪些有使用
-Version = "v0.3.11-260702"
+Version = "v0.3.12-260704"
 
 import sys, builtins, time
 import os
@@ -19,6 +19,70 @@ from datetime import datetime, timezone
 
 import requests
 
+#介面縮放倍率設定 0.5~3倍
+DEFAULT_UI_SCALE_FACTOR = 1.0
+UI_SCALE_FACTOR_MIN = 0.5
+UI_SCALE_FACTOR_MAX = 3.0
+
+
+def get_app_base_dir():
+    """取得程式根目錄；打包後使用 exe 所在目錄。"""
+    if getattr(sys, "frozen", False):
+        return os.path.dirname(sys.executable)
+    return os.path.dirname(os.path.abspath(__file__))
+
+
+def get_config_path():
+    """回傳共用設定檔路徑。"""
+    data_dir = os.path.join(get_app_base_dir(), "data")
+    os.makedirs(data_dir, exist_ok=True)
+    return os.path.join(data_dir, "config.json")
+
+
+def normalize_ui_scale_factor(value, default=DEFAULT_UI_SCALE_FACTOR) -> float:
+    """將設定值轉為可用的 Qt 縮放倍率，避免無效值造成啟動異常。"""
+    try:
+        scale = float(value)
+    except (TypeError, ValueError):
+        return float(default)
+
+    if not UI_SCALE_FACTOR_MIN <= scale <= UI_SCALE_FACTOR_MAX:
+        return float(default)
+    return scale
+
+
+def load_config_data() -> dict:
+    """讀取 config.json；檔案不存在或格式錯誤時回傳空設定。"""
+    try:
+        with open(get_config_path(), "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return data if isinstance(data, dict) else {}
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+
+def get_startup_ui_scale_factor(argv=None) -> float:
+    """取得啟動縮放倍率；命令列 x倍率 優先於 config.json。"""
+    argv = argv or sys.argv
+
+    # 保留舊用法，並支援 x1.25、x1.5、x2 等倍率。
+    for arg in argv[1:]:
+        if not isinstance(arg, str) or not arg.lower().startswith("x"):
+            continue
+        try:
+            return normalize_ui_scale_factor(float(arg[1:]))
+        except (TypeError, ValueError):
+            continue
+
+    cfg = load_config_data()
+    return normalize_ui_scale_factor(
+        cfg.get("ui_scale_factor", DEFAULT_UI_SCALE_FACTOR)
+    )
+
+
+def format_ui_scale_factor(scale: float) -> str:
+    """輸出適合 QT_SCALE_FACTOR 與 JSON 使用的精簡數字字串。"""
+    return f"{normalize_ui_scale_factor(scale):g}"
 
 
 class LangManager:
@@ -4704,10 +4768,16 @@ import json, os
 from PySide6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QComboBox, QPushButton
 
 class PreferencesDialog(QDialog):
-    def __init__(self, current_mode: str, current_api_key: str = "", parent=None):
+    def __init__(
+        self,
+        current_mode: str,
+        current_api_key: str = "",
+        current_ui_scale: float = DEFAULT_UI_SCALE_FACTOR,
+        parent=None,
+    ):
         super().__init__(parent)
         self.setWindowTitle(tr("window.preferences"))
-        self.resize(260, 180)  # 高度加一點
+        self.resize(340, 250)
 
         layout = QVBoxLayout(self)
 
@@ -4727,6 +4797,37 @@ class PreferencesDialog(QDialog):
 
         hl.addWidget(self.mode_combo)
         layout.addLayout(hl)
+
+        # 介面縮放倍率（Qt 需在 QApplication 建立前套用，因此下次啟動生效）
+        scale_row = QHBoxLayout()
+        scale_row.addWidget(QLabel(tr("label.ui_scale", "介面縮放")))
+        self.ui_scale_combo = QComboBox()
+        scale_options = [
+            ("100%", 1.0),
+            ("125%", 1.25),
+            ("150%", 1.5),
+            ("175%", 1.75),
+            ("200%", 2.0),
+        ]
+        for text, value in scale_options:
+            self.ui_scale_combo.addItem(text, userData=value)
+
+        current_ui_scale = normalize_ui_scale_factor(current_ui_scale)
+        scale_idx = self.ui_scale_combo.findData(current_ui_scale)
+        if scale_idx < 0:
+            custom_text = f"{current_ui_scale * 100:g}%"
+            self.ui_scale_combo.addItem(custom_text, userData=current_ui_scale)
+            scale_idx = self.ui_scale_combo.count() - 1
+        self.ui_scale_combo.setCurrentIndex(scale_idx)
+        scale_row.addWidget(self.ui_scale_combo)
+        layout.addLayout(scale_row)
+
+        scale_tip = QLabel(
+            tr("label.ui_scale_tip", "變更縮放倍率後，重新啟動程式才會生效。")
+        )
+        scale_tip.setWordWrap(True)
+        layout.addWidget(scale_tip)
+
         # 說明
         tip = QLabel(tr("label.update_mode_tip"))
         tip.setWordWrap(True)
@@ -4771,6 +4872,9 @@ class PreferencesDialog(QDialog):
 
     def api_key(self) -> str:
         return self.api_edit.text().strip()
+
+    def selected_ui_scale(self) -> float:
+        return normalize_ui_scale_factor(self.ui_scale_combo.currentData())
 
 
 
@@ -7332,30 +7436,27 @@ class ItemSearchApp(QWidget):
 
 
     def _config_path(self):
-
-        if getattr(sys, "frozen", False):
-            base_dir = os.path.dirname(sys.executable)
-        else:
-            base_dir = os.path.dirname(os.path.abspath(__file__))
-        data_dir = os.path.join(base_dir, "data")
-        os.makedirs(data_dir, exist_ok=True)
-        return os.path.join(data_dir, "config.json")
+        return get_config_path()
 
     def load_config(self):
         self.update_mode = "online_only"
         self.api_key = ""
-        try:
-            with open(self._config_path(), "r", encoding="utf-8") as f:
-                cfg = json.load(f)
-            self.update_mode = cfg.get("update_mode", self.update_mode)
-            self.api_key = cfg.get("api_key", self.api_key)
-        except Exception:
-            pass
+        self.ui_scale_factor = DEFAULT_UI_SCALE_FACTOR
+
+        cfg = load_config_data()
+        self.update_mode = cfg.get("update_mode", self.update_mode)
+        self.api_key = cfg.get("api_key", self.api_key)
+        self.ui_scale_factor = normalize_ui_scale_factor(
+            cfg.get("ui_scale_factor", self.ui_scale_factor)
+        )
 
     def save_config(self):
         cfg = {
             "update_mode": getattr(self, "update_mode", "online_only"),
             "api_key": getattr(self, "api_key", ""),
+            "ui_scale_factor": normalize_ui_scale_factor(
+                getattr(self, "ui_scale_factor", DEFAULT_UI_SCALE_FACTOR)
+            ),
         }
         try:
             with open(self._config_path(), "w", encoding="utf-8") as f:
@@ -7376,16 +7477,30 @@ class ItemSearchApp(QWidget):
 
     def open_compile_set(self):
         self.load_config()
+        previous_ui_scale = normalize_ui_scale_factor(
+            getattr(self, "ui_scale_factor", DEFAULT_UI_SCALE_FACTOR)
+        )
         dlg = PreferencesDialog(
             current_mode=self.update_mode,
             current_api_key=getattr(self, "api_key", ""),
+            current_ui_scale=previous_ui_scale,
             parent=self
         )
         if dlg.exec() == QDialog.Accepted:
             self.update_mode = dlg.selected_mode()
             self.api_key = dlg.api_key()
+            self.ui_scale_factor = dlg.selected_ui_scale()
             self.save_config()
-            #QMessageBox.information(self, "偏好設定", f"設定模式為：{self.update_mode}/n 已完成key儲存")
+
+            if self.ui_scale_factor != previous_ui_scale:
+                QMessageBox.information(
+                    self,
+                    tr("window.preferences"),
+                    tr(
+                        "message.ui_scale_restart_required",
+                        "介面縮放已儲存，請重新啟動程式以套用新倍率。",
+                    ),
+                )
 
 
 
@@ -12925,6 +13040,9 @@ class ItemSearchApp(QWidget):
             
 
 if __name__ == "__main__":
+    # 必須在建立 QApplication 前設定，否則 Qt 不會套用新的縮放倍率。
+    startup_ui_scale = get_startup_ui_scale_factor(sys.argv)
+    os.environ["QT_SCALE_FACTOR"] = format_ui_scale_factor(startup_ui_scale)
 
     app = QApplication(sys.argv)
 
