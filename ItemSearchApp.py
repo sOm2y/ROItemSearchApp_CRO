@@ -1,5 +1,5 @@
 #部分資料取自ROCalculator,搜尋 ROCalculator 可以知道哪些有使用
-Version = "v0.3.10-260630"
+Version = "v0.3.11-260702"
 
 import sys, builtins, time
 import os
@@ -225,12 +225,13 @@ import math
 from collections import defaultdict
 import pandas as pd
 from PySide6.QtCore import Qt, QThread, Signal, QTimer, QPoint, QEvent, QPropertyAnimation, QEasingCurve
-from PySide6.QtGui import QFont ,QAction,QIntValidator,QPalette, QColor
+from PySide6.QtGui import QFont ,QAction,QIntValidator,QPalette, QColor, QTextCursor
 from sympy import sympify, symbols, Symbol
 from PySide6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QLineEdit, QLabel,QGroupBox, QToolButton,QSizePolicy,
     QComboBox, QTextEdit, QMessageBox, QHBoxLayout, QScrollArea, QCheckBox, QMenuBar, QFileDialog,
     QPushButton, QTabWidget, QFormLayout, QSpinBox  ,QDoubleSpinBox  ,QFrame , QGridLayout,QDialog, QListWidget, QButtonGroup,QSlider,
+    QCompleter,
 )
 
 from decimal import Decimal, ROUND_HALF_UP
@@ -243,6 +244,533 @@ class NoWheelComboBox(QComboBox):#忽略滾輪的下拉式選單
         else:
             event.ignore()
 
+class FunctionSyntaxTextEdit(QTextEdit):
+    """函數語法輸入框：支援函數名稱與 map 參數值下拉補完。"""
+    COMPLETION_DESC_SEP = "  —  "
+    PARAM_DESC_SEP = " = "
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._completer = None
+        self._completion_kind = "function"  # function | param
+        self._function_defs = {}
+        self._function_items = []
+        self._function_insert_map = {}
+        self._function_templates = {}
+        self._function_search_text = {}
+        self._map_registry = {}
+
+        # 中文輸入法（IME）常走 inputMethodEvent，不一定會觸發 keyPressEvent。
+        # 用 textChanged / cursorPositionChanged 統一延遲刷新，讓中文提交後也會即時更新候選清單。
+        self._completion_refresh_timer = QTimer(self)
+        self._completion_refresh_timer.setSingleShot(True)
+        self._completion_refresh_timer.setInterval(0)
+        self._completion_refresh_timer.timeout.connect(self._refresh_completion_popup)
+        self.textChanged.connect(self._schedule_completion_refresh)
+        self.cursorPositionChanged.connect(self._schedule_completion_refresh)
+
+    def set_map_registry(self, maps: dict):
+        """提供 map 參數補完資料來源，例如 size_map、element_map、skill_map。"""
+        self._map_registry = maps or {}
+
+    # ---------- function template ----------
+    def set_function_defs(self, defs: dict):
+        """
+        依 function_defs 建立函數補完清單。
+
+        功能：
+        - 輸入 Add / Sub / Race 等英文片段，可列出包含該片段的函數。
+        - 選取函數後，插入可解析的語法模板。
+        - 若參數來自 map，例如 size_map / element_map，會自動選取該參數並顯示
+          「0 = 小型」「0 = 無屬性」這類下拉補完。
+        """
+        self._function_defs = defs or {}
+        self._function_items = []
+        self._function_insert_map = {}
+        self._function_templates = {}
+        self._function_search_text = {}
+
+        for func_name, spec in self._function_defs.items():
+            template = self._build_function_template(func_name, spec)
+            syntax = template["syntax"]
+            desc = spec.get("desc", "")
+
+            visible_arg_labels = [
+                p["name"] for p in template["params"]
+                if p.get("visible", True)
+            ]
+
+            detail_parts = []
+            if desc:
+                detail_parts.append(desc)
+            if visible_arg_labels:
+                detail_parts.append("參數：" + "、".join(visible_arg_labels))
+
+            display = (
+                f"{syntax}{self.COMPLETION_DESC_SEP}{'｜'.join(detail_parts)}"
+                if detail_parts else syntax
+            )
+
+            self._function_items.append(display)
+            self._function_insert_map[display] = func_name
+            self._function_templates[func_name] = template
+            self._function_search_text[display] = self._normalize_search_text(
+                " ".join([
+                    func_name,
+                    syntax,
+                    desc or "",
+                    " ".join(visible_arg_labels),
+                ])
+            )
+
+        self._function_items.sort(key=str.lower)
+
+    def _is_hidden_arg(self, arg: dict) -> bool:
+        return arg.get("name") in ("無意義", "目標")
+
+    def _hidden_arg_value(self, arg: dict) -> str:
+        """與 on_function_changed / on_generate 的固定參數規則保持一致。"""
+        map_name = str(arg.get("map", ""))
+        if map_name == "unit_map":
+            return "1"
+        if map_name.isdigit():
+            return map_name
+        return "0"
+
+    def _arg_placeholder(self, arg: dict) -> str:
+        # 數值型參數不要開下拉式選單；模板直接顯示 n，讓使用者自行改成數字/公式。
+        if arg.get("type") == "value":
+            return "n"
+        if arg.get("type") == "var_select":
+            return arg.get("name", "變數")
+        if "map" in arg:
+            return arg.get("name", arg.get("map", "參數"))
+        return arg.get("name", "參數")
+
+    def _build_function_template(self, func_name: str, spec: dict) -> dict:
+        args = spec.get("args", []) or []
+        tokens = []
+        param_meta = []
+
+        # 先建立 token，稍後再計算每個 token 在 syntax 中的相對位置。
+        for index, arg in enumerate(args):
+            visible = not self._is_hidden_arg(arg)
+            token = self._hidden_arg_value(arg) if not visible else self._arg_placeholder(arg)
+            tokens.append(token)
+            param_meta.append({
+                "index": index,
+                "name": arg.get("name", token),
+                "map": arg.get("map"),
+                "type": arg.get("type"),
+                "visible": visible,
+                "token": token,
+                "start": None,
+                "end": None,
+            })
+
+        syntax = f"{func_name}({', '.join(tokens)})"
+
+        # 計算 token 在整段 syntax 內的相對範圍，方便插入後直接選取第一個 map 參數。
+        offset = len(func_name) + 1
+        for i, meta in enumerate(param_meta):
+            token = tokens[i]
+            meta["start"] = offset
+            meta["end"] = offset + len(token)
+            offset += len(token)
+            if i < len(tokens) - 1:
+                offset += 2  # comma + space
+
+        return {"syntax": syntax, "params": param_meta}
+
+    # ---------- search helpers ----------
+    def _normalize_search_text(self, text: str) -> str:
+        """搜尋用正規化：讓英文、數字、中文、全形符號都可比對。"""
+        return (
+            str(text or "")
+            .casefold()
+            .replace("％", "%")
+            .replace("．", ".")
+            .replace("　", " ")
+            .strip()
+        )
+
+    def _filter_completion_items(self, items, prefix: str, search_text_map=None):
+        """手動過濾項目，避免 QCompleter 只對字首或英文數字表現正常。"""
+        keyword = self._normalize_search_text(prefix)
+        if not keyword:
+            return list(items)
+
+        filtered = []
+        for item in items:
+            haystack = (search_text_map or {}).get(item)
+            if haystack is None:
+                haystack = self._normalize_search_text(item)
+            if keyword in haystack:
+                filtered.append(item)
+        return filtered
+
+    # ---------- generic completer helpers ----------
+    def _new_completer(self, items):
+        completer = QCompleter(items, self)
+        completer.setCaseSensitivity(Qt.CaseInsensitive)
+        completer.setFilterMode(Qt.MatchContains)
+        completer.setCompletionMode(QCompleter.PopupCompletion)
+        completer.setWidget(self)
+        completer.activated[str].connect(self.insert_completion)
+        return completer
+
+    def _hide_and_dispose_completer(self):
+        """每次重建 completer 前先把舊 popup 關掉，避免多個下拉視窗殘留。"""
+        if not self._completer:
+            return
+
+        try:
+            popup = self._completer.popup()
+            if popup:
+                popup.hide()
+                popup.close()
+        except Exception:
+            pass
+
+        try:
+            self._completer.activated[str].disconnect(self.insert_completion)
+        except Exception:
+            pass
+
+        try:
+            self._completer.setWidget(None)
+            self._completer.deleteLater()
+        except Exception:
+            pass
+
+        self._completer = None
+
+    def _hide_completion_popup(self):
+        if not self._completer:
+            return
+        try:
+            popup = self._completer.popup()
+            if popup:
+                popup.hide()
+                popup.close()
+        except Exception:
+            pass
+
+    def _set_completer(self, items, kind: str, prefix: str):
+        # 之前每輸入一個字母都 new 一個 QCompleter，舊 popup 沒被關閉就會殘留。
+        # 所以這裡一定先關掉並釋放舊 completer，再建立新的。
+        self._hide_and_dispose_completer()
+
+        self._completion_kind = kind
+        self._completer = self._new_completer(items)
+        # 中文搜尋與「中文描述」搜尋已在呼叫端手動過濾；
+        # 這裡固定清空 prefix，只負責顯示已過濾後的清單。
+        self._completer.setCompletionPrefix("")
+
+        if self._completer.completionModel().rowCount() == 0:
+            self._hide_completion_popup()
+            return
+
+        self._completer.popup().setCurrentIndex(
+            self._completer.completionModel().index(0, 0)
+        )
+
+        rect = self.cursorRect()
+        rect.setWidth(
+            self._completer.popup().sizeHintForColumn(0)
+            + self._completer.popup().verticalScrollBar().sizeHint().width()
+        )
+        self._completer.complete(rect)
+
+    def text_under_cursor(self):
+        """取得游標前方正在輸入的關鍵字；支援中文，不只限英文 WordUnderCursor。"""
+        cursor = self.textCursor()
+        if cursor.hasSelection():
+            return cursor.selectedText().replace("\u2029", "").strip()
+
+        block_text = cursor.block().text()
+        left_text = block_text[:cursor.positionInBlock()]
+        # 抓取目前正在輸入的 token：排除空白與 Lua 參數分隔符即可。
+        # 這比只列英文/數字更穩，中文、日文、韓文、技能名稱中的特殊字元都能參與搜尋。
+        match = re.search(r"[^\s,()\[\]{};]+$", left_text)
+        return match.group(0) if match else ""
+
+    def _replace_current_token(self, insert_text: str):
+        cursor = self.textCursor()
+        if cursor.hasSelection():
+            cursor.insertText(insert_text)
+            self.setTextCursor(cursor)
+            return
+
+        prefix = self.text_under_cursor()
+        cursor.movePosition(QTextCursor.Left, QTextCursor.KeepAnchor, len(prefix))
+        cursor.insertText(insert_text)
+        self.setTextCursor(cursor)
+
+    # ---------- parameter context ----------
+    def _lookup_map(self, map_name: str):
+        """依名稱取得 map；優先使用主程式傳入的 registry，再退回 globals。"""
+        if not map_name or str(map_name).isdigit():
+            return {}
+
+        value_map = self._map_registry.get(map_name)
+        if value_map is None:
+            value_map = globals().get(map_name, {})
+
+        # 技能表有時候是在 dataloading() 之後才載入；若 skill_map 還是空，嘗試從 skill_df 補回。
+        if map_name == "skill_map" and not value_map:
+            df = globals().get("skill_df")
+            try:
+                if df is not None and not df.empty and "ID" in df.columns and "Name" in df.columns:
+                    value_map = dict(zip(df["ID"], df["Name"]))
+            except Exception:
+                pass
+
+        return value_map if isinstance(value_map, dict) else {}
+
+    def _skill_extra_text(self, skill_id):
+        """技能補完除了中文名稱，也把 Code 等欄位放進搜尋字串。"""
+        skill_all = self._lookup_map("skill_map_all")
+        row = None
+        for key in (skill_id, str(skill_id)):
+            try:
+                if key in skill_all:
+                    row = skill_all.get(key)
+                    break
+            except Exception:
+                pass
+        if row is None:
+            try:
+                int_key = int(skill_id)
+                row = skill_all.get(int_key)
+            except Exception:
+                row = None
+
+        if isinstance(row, dict):
+            parts = []
+            for field in ("Code", "SkillCode", "SkillNameCode", "Name"):
+                val = row.get(field)
+                if val:
+                    parts.append(str(val))
+            return " ".join(parts)
+        return ""
+
+    def _map_items_with_search(self, map_name: str):
+        """回傳 (顯示清單, 搜尋文字表)。顯示可讀，插入仍只插入等號前的數值。"""
+        value_map = self._lookup_map(map_name)
+        if not value_map:
+            return [], {}
+
+        items = list(value_map.items())
+        if map_name in ("effect_map", "skill_map"):
+            items = sorted(items, key=lambda item: str(item[1]))
+
+        display_items = []
+        search_text = {}
+        for k, v in items:
+            if map_name == "skill_map":
+                extra = self._skill_extra_text(k)
+                display = f"{k}{self.PARAM_DESC_SEP}{v}"
+                # 若有技能 Code，顯示在後方，也納入搜尋；插入時仍只會取等號前的 ID。
+                code = extra.split()[0] if extra else ""
+                if code and code != str(v):
+                    display = f"{display} ({code})"
+                search_text[display] = self._normalize_search_text(f"{k} {v} {extra}")
+            else:
+                display = f"{k}{self.PARAM_DESC_SEP}{v}"
+                search_text[display] = self._normalize_search_text(f"{k} {v}")
+            display_items.append(display)
+
+        return display_items, search_text
+
+    def _map_items(self, map_name: str):
+        # 保留舊呼叫介面：只需要知道是否有候選項時使用。
+        return self._map_items_with_search(map_name)[0]
+
+    def _current_function_context(self):
+        """回傳目前游標所在的 function 與參數 index。若不在函數參數內則回傳 None。"""
+        cursor = self.textCursor()
+        block_text = cursor.block().text()
+        pos = cursor.positionInBlock()
+        left_text = block_text[:pos]
+
+        candidates = list(re.finditer(r"([A-Za-z_][A-Za-z0-9_]*)\s*\(", left_text))
+        if not candidates:
+            return None
+
+        match = candidates[-1]
+        func_name = match.group(1)
+        open_pos = match.end() - 1
+        if func_name not in self._function_defs:
+            return None
+
+        # 如果左側最後一個右括號在這個左括號之後，代表已離開此函數。
+        if left_text.rfind(")") > open_pos:
+            return None
+
+        inside_left = block_text[open_pos + 1:pos]
+        arg_index = inside_left.count(",")
+        current_arg_text = inside_left.split(",")[-1].strip()
+
+        args = self._function_defs.get(func_name, {}).get("args", []) or []
+        if not args:
+            return None
+
+        target_index = arg_index
+        if target_index >= len(args):
+            return None
+
+        # 相容手動輸入舊格式：AddDamage_Size(體型, 數值%)
+        # 正式解析需要 AddDamage_Size(1, 體型, 數值%)，但若第一格不是固定值，就把它視為第一個可見參數。
+        arg = args[target_index]
+        if self._is_hidden_arg(arg) and target_index + 1 < len(args):
+            hidden_value = self._hidden_arg_value(arg)
+            if current_arg_text != hidden_value:
+                target_index += 1
+                arg = args[target_index]
+
+        return {
+            "func_name": func_name,
+            "arg_index": target_index,
+            "arg": arg,
+            "current_arg_text": current_arg_text,
+        }
+
+    def _show_param_completion_if_available(self):
+        context = self._current_function_context()
+        if not context:
+            return False
+
+        arg = context["arg"]
+
+        # 數值型參數只保留 n 佔位，不顯示任何下拉式選單，
+        # 也不要掉回函數名稱補完，避免在 n/數值位置彈出無關候選。
+        if arg.get("type") == "value":
+            self._hide_completion_popup()
+            return True
+
+        map_name = arg.get("map")
+        items, search_text_map = self._map_items_with_search(map_name)
+        if not items:
+            return False
+
+        prefix = self.text_under_cursor().strip()
+        placeholder = arg.get("name", "").strip()
+
+        # 剛插入模板時會選取「體型」「屬性」這類 placeholder；此時直接顯示完整清單。
+        if prefix == placeholder:
+            prefix = ""
+
+        filtered_items = self._filter_completion_items(items, prefix, search_text_map)
+        if not filtered_items:
+            self._hide_completion_popup()
+            return False
+
+        self._set_completer(filtered_items, "param", prefix)
+        return True
+
+    def _show_function_completion_if_available(self):
+        prefix = self.text_under_cursor().strip()
+        if len(prefix) < 1 or not self._function_items:
+            self._hide_completion_popup()
+            return False
+
+        filtered_items = self._filter_completion_items(
+            self._function_items,
+            prefix,
+            self._function_search_text,
+        )
+        if not filtered_items:
+            self._hide_completion_popup()
+            return False
+
+        self._set_completer(filtered_items, "function", prefix)
+        return True
+
+    def _select_first_map_parameter(self, func_name: str, inserted_start: int):
+        template = self._function_templates.get(func_name)
+        if not template:
+            return
+
+        for meta in template.get("params", []):
+            if not meta.get("visible", True):
+                continue
+            if self._map_items(meta.get("map")):
+                cursor = self.textCursor()
+                cursor.setPosition(inserted_start + meta["start"])
+                cursor.setPosition(inserted_start + meta["end"], QTextCursor.KeepAnchor)
+                self.setTextCursor(cursor)
+                QTimer.singleShot(0, self._show_param_completion_if_available)
+                return
+
+    # ---------- insertion ----------
+    def insert_completion(self, completion):
+        if not self._completer or self._completer.widget() is not self:
+            return
+
+        if self._completion_kind == "param":
+            # Popup 顯示「0 = 小型」，實際寫進語法只寫入 0。
+            insert_text = completion.split(self.PARAM_DESC_SEP, 1)[0].strip()
+            self._replace_current_token(insert_text)
+            self._hide_completion_popup()
+            return
+
+        # Popup 顯示「語法 — 中文說明/參數」，實際插入只插入語法模板。
+        display_text = completion
+        func_name = self._function_insert_map.get(display_text)
+        if not func_name:
+            syntax = completion.split(self.COMPLETION_DESC_SEP, 1)[0]
+            func_name = syntax.split("(", 1)[0]
+        else:
+            syntax = self._function_templates[func_name]["syntax"]
+
+        prefix = self.text_under_cursor()
+        cursor = self.textCursor()
+        cursor.movePosition(QTextCursor.Left, QTextCursor.KeepAnchor, len(prefix))
+        inserted_start = cursor.selectionStart()
+        cursor.insertText(syntax)
+        self.setTextCursor(cursor)
+        self._hide_completion_popup()
+
+        self._select_first_map_parameter(func_name, inserted_start)
+
+    # ---------- refresh / input handling ----------
+    def _schedule_completion_refresh(self):
+        """排程刷新補完清單。
+
+        英文/數字鍵盤輸入通常會進 keyPressEvent；中文輸入法則常在組字完成後
+        透過 inputMethodEvent / textChanged 才更新文字。因此統一走這個 timer，
+        可以避免中文候選清單必須重新 focus 才刷新。
+        """
+        if not self.hasFocus():
+            return
+        self._completion_refresh_timer.start()
+
+    def _refresh_completion_popup(self):
+        if not self.hasFocus():
+            self._hide_completion_popup()
+            return
+
+        # 先判斷是否正在函數參數內；若是 map 參數，顯示 map 值。
+        if self._show_param_completion_if_available():
+            return
+
+        # 否則才顯示函數名稱補完。
+        self._show_function_completion_if_available()
+
+    def inputMethodEvent(self, event):
+        # 中文/日文/韓文 IME 組字提交後，主動刷新補完清單。
+        super().inputMethodEvent(event)
+        self._schedule_completion_refresh()
+
+    def keyPressEvent(self, event):
+        if self._completer and self._completer.popup().isVisible():
+            if event.key() in (Qt.Key_Enter, Qt.Key_Return, Qt.Key_Escape, Qt.Key_Tab, Qt.Key_Backtab):
+                event.ignore()
+                return
+
+        super().keyPressEvent(event)
+        self._schedule_completion_refresh()
 
 enabled_skill_levels = {}  # 存放已啟用技能的等級
 Use_skill_levels = {}#已啟用的技能id
@@ -3245,12 +3773,12 @@ def parse_lua_effects_with_variables(
             continue
 
         # AddDamage_Property（對指定種族與屬性）
-        register_function("AddDamage_Property", "增加屬性敵人物理傷害", [
+        register_function("AddDamage_Property", "增加屬性對象物理傷害", [
             {"name": "目標", "map": "unit_map"},
             {"name": "屬性", "map": "element_map"},
             {"name": "數值%", "type": "value"}
         ])
-        register_function("SubDamage_Property", "減少屬性敵人物理傷害", [
+        register_function("SubDamage_Property", "減少屬性對象物理傷害", [
             {"name": "目標", "map": "unit_map"},
             {"name": "屬性", "map": "element_map"},
             {"name": "數值%", "type": "value"}
@@ -3579,12 +4107,12 @@ def parse_lua_effects_with_variables(
             continue
 
         # AddDamage_Property（對指定種族與屬性）
-        # register_function("AddDamage_Property", "增加屬性敵人物理傷害", [
+        # register_function("AddDamage_Property", "增加屬性對象物理傷害", [
         #     {"name": "目標", "map": "unit_map"},
         #     {"name": "屬性", "map": "element_map"},
         #     {"name": "數值%", "type": "value"}
         # ])
-        # register_function("SubDamage_Property", "減少屬性敵人物理傷害", [
+        # register_function("SubDamage_Property", "減少屬性對象物理傷害", [
         #     {"name": "目標", "map": "unit_map"},
         #     {"name": "屬性", "map": "element_map"},
         #     {"name": "數值%", "type": "value"}
@@ -5157,12 +5685,12 @@ class ItemSearchApp(QWidget):
         globals()["RaceMatkPercent"] = get_effect_multiplier('MD_Race', target_race) + get_effect_multiplier('MD_Race', 9999)#魔法種族
         globals()["SizeMatkPercent"] = get_effect_multiplier('MD_size', target_size)#魔法體型
         globals()["LevelMatkPercent"] = get_effect_multiplier('MD_class', target_class)#魔法階級
-        globals()["ElementalMatkPercent"] = get_effect_multiplier('MD_element', target_element) + get_effect_multiplier('MD_element', 10)#魔法屬性敵人
+        globals()["ElementalMatkPercent"] = get_effect_multiplier('MD_element', target_element) + get_effect_multiplier('MD_element', 10)#魔法屬性對象
         globals()["ElementalMagicPercent"] = get_effect_multiplier('MD_Damage', User_attack_element) + get_effect_multiplier('MD_Damage', 10)#屬性魔法
         globals()["RaceAtkPercent"] = get_effect_multiplier('D_Race', target_race) + get_effect_multiplier('D_Race', 9999)#物理種族
         globals()["SizeAtkPercent"] = get_effect_multiplier('D_size', target_size)#物理體型
         globals()["LevelAtkPercent"] = get_effect_multiplier('D_class', target_class)#物理階級
-        globals()["ElementalAtkPercent"] = get_effect_multiplier('D_element', target_element) + get_effect_multiplier('D_element', 10)#物理屬性敵人
+        globals()["ElementalAtkPercent"] = get_effect_multiplier('D_element', target_element) + get_effect_multiplier('D_element', 10)#物理屬性對象
         globals()["target_monsterDamage"] = sum(val for val, _ in effect_dict.get((f"特定魔物物理增傷", "%"), []))
         globals()["target_monsterMDamage"] = sum(val for val, _ in effect_dict.get((f"特定魔物魔法增傷", "%"), []))
 
@@ -7339,11 +7867,34 @@ class ItemSearchApp(QWidget):
         QTextEdit.mousePressEvent(text_widget, event)  # 保留原始點擊事件行為
 
 
+    def update_function_autocomplete_maps(self):
+        """同步下方語法輸入框的 map 補完資料，包含技能清單。"""
+        if not hasattr(self, "result_output") or not hasattr(self.result_output, "set_map_registry"):
+            return
+        self.result_output.set_map_registry({
+            "equip_sitetype": equip_sitetype,
+            "stat_fields": stat_fields,
+            "skill_map": skill_map,
+            "skill_map_all": skill_map_all,
+            "effect_map": effect_map,
+            "element_map": element_map,
+            "size_map": size_map,
+            "race_map": race_map,
+            "unit_map": unit_map,
+            "class_map": class_map,
+            "weapon_type_map": weapon_type_map,
+        })
+
     def update_function_selector(self):
         self.function_selector.clear()
         for func_name, spec in function_defs.items():
             label = spec.get("desc", func_name)  # 顯示用中文描述
             self.function_selector.addItem(label, func_name)
+
+        # 同步刷新下方語法輸入框的函數補完與 map 參數補完清單
+        if hasattr(self, "result_output") and hasattr(self.result_output, "set_function_defs"):
+            self.result_output.set_function_defs(function_defs)
+            self.update_function_autocomplete_maps()
 
         if self.function_selector.count() > 0:
             self.function_selector.setCurrentIndex(0)
@@ -9674,6 +10225,7 @@ class ItemSearchApp(QWidget):
         #self.load_equipment_incremental(kro_equipment_lua_path, overwrite=False) 
         print("📖 載入 技能清單...")
         load_skill_map("data/skillneme.csv") #讀取SKILL列表
+        self.update_function_autocomplete_maps()
         self.lua_text = load_skill_delay_lua("data/skilldelaylist.lua")#讀取技能延遲
         self.parsed_items = resolve_name_conflicts(self.parsed_items ,self.equipment_data)#重複物品名稱加上id
 
@@ -10868,7 +11420,9 @@ class ItemSearchApp(QWidget):
         self.gen_button = QPushButton(tr("button.generate"))
         function_layout.addWidget(self.gen_button)
         # 結果輸出
-        self.result_output = QTextEdit()
+        self.result_output = FunctionSyntaxTextEdit()
+        self.result_output.set_function_defs(function_defs)
+        self.update_function_autocomplete_maps()
         #self.result_output.setReadOnly(True)
         function_layout.addWidget(QLabel(tr("label.generated_syntax")))
         function_layout.addWidget(self.result_output)
@@ -12371,6 +12925,7 @@ class ItemSearchApp(QWidget):
             
 
 if __name__ == "__main__":
+
     app = QApplication(sys.argv)
 
 
