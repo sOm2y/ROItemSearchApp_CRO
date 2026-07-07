@@ -87,12 +87,12 @@ all_skill_entries = {#範例[    "": {"buff":"","type": "技能/料理","code":[
     "末日審判": {"buff":"1222","id": "RG","type": "技能","code":["UseSkill(5263)"]},
     "攻擊架式": {"buff":"1203","id": "RG","type": "技能","code":["temp = GetSkillLevel(5260)","AddExtParam(1, 242, temp * 3)","AddExtParam(1, 243, temp * 3)","SubExtParam(1, 45, temp * 40)"],"exclusive": "Frame"},
     "防禦架式": {"buff":"1202","id": "RG","type": "技能","code":["UseSkill(5255)","temp = GetSkillLevel(5255)","AddExtParam(1, 45, 50 + (temp * 50))","SubExtParam(1, 41, temp * 50)"],"exclusive": "Frame"},
-    #主教
+    #主教 加速天賜跟四轉慈悲百合id相同，改動加速天賜的id。
     "神威祈福": {"buff":"15","id": "AB","type": "技能","code":["AddExtParam(1, 200, 25)","Kamui_SpecialATK(25)"]},
     "慈悲術": {"buff":"10","id": "AB","type": "技能","code": ["temp = 70 / 10","AddExtParam(0,103,10 + math.floor(temp))","AddExtParam(0,106,10 + math.floor(temp)","AddExtParam(0,107,10 + math.floor(temp)","AddExtParam(0,49,20)"]},
-    "天使之賜福": {"buff":"","id": ["AB","SN","SU"],"type": "技能","code": ["AddExtParam(0,103,10)","AddExtParam(0,106,10)","AddExtParam(0,107,10)","AddExtParam(0,49,20)"]},
+    "天使之賜福": {"buff":"10010","id": ["AB","SN","SU"],"type": "技能","code": ["AddExtParam(0,103,10)","AddExtParam(0,106,10)","AddExtParam(0,107,10)","AddExtParam(0,49,20)"]},
     "純白百合花": {"buff":"12","id": "AB","type": "技能","code":["temp = 70 / 10","AddExtParam(0,104,12 + math.floor(temp))","AddExtParam(0,167,10 + math.floor(temp))"]},
-    "加速術": {"buff":"","id":  ["AB","SN","SU"],"type": "技能","code":["AddExtParam(0,104,12)","AddExtParam(0,167,10)"]},
+    "加速術": {"buff":"10012","id":  ["AB","SN","SU"],"type": "技能","code":["AddExtParam(0,104,12)","AddExtParam(0,167,10)"]},
     "天使之障壁": {"buff":"9","id":  ["AB","SN","SU"],"type": "技能","code":["AddExtParam(1, 109, 500)"]},
     "神聖權能": {"buff":"1201","id": "AB","type": "技能","code":["AddExtParam(1, 242, 50)","AddExtParam(1, 243, 50)"]},
     "全心奉獻": {"buff":"1227","id": "AB","type": "技能","code":["AddExtParam(1, 235, 10)","AddExtParam(1, 236, 10)","AddExtParam(1, 237, 10)"],"exclusive": "STA.WIS.SPL"},
@@ -125,7 +125,7 @@ all_skill_entries = {#範例[    "": {"buff":"","type": "技能/料理","code":[
     "法師符": {"buff":"1358","id": "SL","type": "技能","code":["AddExtParam(1, 243, 10)"]},
     "精靈靈魂": {"buff":"1057","id": "SL","type": "技能","code":["AddExtParam(1, 200, 50)"]},
     "天地神靈": {"buff":"1365","id": "SL","type": "技能","code":["AddMeleeAttackDamage(1, 25)","AddRangeAttackDamage(1, 25)","AddSkillMDamage(10, 25)"]},
-    "四方五行的保佑": {"buff":"1364","id": "SL","type": "技能","code":["AddExtParam(1, 243, 20)"]},
+    "四方五行的保佑": {"buff":"1364","id": "SL","type": "技能","code":["AddExtParam(1, 243, 25)"]},
     #風鷹
     "心神凝聚": {"buff":"3","id": ["RA","SN"],"type": "技能","code":["temp = 2 + GetSkillLevel(45)","tempAGI = skill_focus_AGI","tempDEX = skill_focus_DEX","AddExtParam(1, 104, tempAGI * (temp/100))","AddExtParam(1, 107, tempDEX * (temp/100))"]},
     #agi跟dex只吃角色基本素質+job加成+裝備基礎(不含精煉給的)+被動技能常駐，

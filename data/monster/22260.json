@@ -1,0 +1,140 @@
+{
+  "id": 22260,
+  "dbname": "BIO_SALAMANDER",
+  "name": "심연의 살라만다",
+  "sprite": "bio_salamander",
+  "stats": {
+    "attackRange": 2,
+    "level": 265,
+    "health": 155742230,
+    "sp": 1,
+    "str": 487,
+    "int": 312,
+    "vit": 387,
+    "dex": 429,
+    "agi": 321,
+    "luk": 414,
+    "rechargeTime": 100,
+    "atk1": 62628,
+    "atk2": 18127,
+    "attack": {
+      "minimum": 50854,
+      "maximum": 75905
+    },
+    "magicAttack": {
+      "minimum": 13265,
+      "maximum": 24142
+    },
+    "defense": 480,
+    "baseExperience": 6575261,
+    "jobExperience": 4579669,
+    "aggroRange": 10,
+    "escapeRange": 12,
+    "movementSpeed": 130.0,
+    "attackSpeed": 300.0,
+    "attackedSpeed": -1.0,
+    "element": 43,
+    "scale": 2,
+    "race": 0,
+    "magicDefense": 185,
+    "hit": 786,
+    "flee": 864,
+    "ai": "",
+    "mvp": 0,
+    "class": 1,
+    "attr": 520,
+    "res": 1987,
+    "mres": 2311
+  },
+  "spawnSet": [],
+  "slaves": [],
+  "metamorphosis": [],
+  "sounds": [
+    "salamander_attack.wav",
+    "salamander_damage.wav",
+    "salamander_stand.wav"
+  ],
+  "questObjective": [
+    16797
+  ],
+  "drops": [
+    {
+      "itemId": 7097,
+      "chance": 1500,
+      "stealProtected": false,
+      "serverTypeName": null,
+      "optionGroup": "G0"
+    },
+    {
+      "itemId": 1000322,
+      "chance": 200,
+      "stealProtected": false,
+      "serverTypeName": null,
+      "optionGroup": "G0"
+    },
+    {
+      "itemId": 1001550,
+      "chance": 350,
+      "stealProtected": false,
+      "serverTypeName": null,
+      "optionGroup": "G0"
+    },
+    {
+      "itemId": 1001551,
+      "chance": 350,
+      "stealProtected": false,
+      "serverTypeName": null,
+      "optionGroup": "G0"
+    },
+    {
+      "itemId": 1001552,
+      "chance": 75,
+      "stealProtected": false,
+      "serverTypeName": null,
+      "optionGroup": "G0"
+    },
+    {
+      "itemId": 1001553,
+      "chance": 75,
+      "stealProtected": false,
+      "serverTypeName": null,
+      "optionGroup": "G0"
+    },
+    {
+      "itemId": 1001554,
+      "chance": 25,
+      "stealProtected": false,
+      "serverTypeName": null,
+      "optionGroup": "G0"
+    },
+    {
+      "itemId": 512,
+      "chance": 0,
+      "stealProtected": true,
+      "serverTypeName": null,
+      "optionGroup": "G0"
+    }
+  ],
+  "mapDrops": [],
+  "mvpdrops": [],
+  "spawn": [
+    {
+      "mapname": "bl_depth2",
+      "amount": 30,
+      "respawnTime": 5000
+    }
+  ],
+  "skill": [],
+  "propertyTable": {
+    "0": 100,
+    "1": 175,
+    "2": 90,
+    "3": 0,
+    "4": 100,
+    "5": 125,
+    "6": 100,
+    "7": 100,
+    "8": 75,
+    "9": 75
+  }
+}
