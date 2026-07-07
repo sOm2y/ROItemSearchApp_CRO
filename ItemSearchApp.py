@@ -1,5 +1,5 @@
 #部分資料取自ROCalculator,搜尋 ROCalculator 可以知道哪些有使用
-Version = "v0.3.13-260707"
+Version = "v0.3.14-260707"
 
 import sys, builtins, time
 import os
@@ -12098,6 +12098,9 @@ class ItemSearchApp(QWidget):
         
         # ComboBox 的綁定 修改觸發計算；同時同步到「減傷計算」分頁
         self.size_box.currentIndexChanged.connect(self._on_damage_target_fields_changed)
+        self.element_box.currentIndexChanged.connect(self._on_damage_target_fields_changed)
+        self.race_box.currentIndexChanged.connect(self._on_damage_target_fields_changed)
+        self.class_box.currentIndexChanged.connect(self._on_damage_target_fields_changed)
         self.attack_element_box.currentIndexChanged.connect(self.replace_custom_calc_content)
 
         # LineEdit 的綁定（使用 editingFinished 避免每次打字都觸發）
