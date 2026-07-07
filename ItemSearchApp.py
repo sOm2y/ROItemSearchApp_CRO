@@ -1,5 +1,5 @@
 #部分資料取自ROCalculator,搜尋 ROCalculator 可以知道哪些有使用
-Version = "v0.3.12-260704"
+Version = "v0.3.13-260707"
 
 import sys, builtins, time
 import os
@@ -9509,6 +9509,7 @@ class ItemSearchApp(QWidget):
         for widget in self.findChildren(QWidget):
             widget.blockSignals(False)
 
+        self.clear_global_state()
         # ===== 依 JSON buff 自動勾選技能/料理 =====
         if "buff" in saved_data:
             self.apply_buff_to_skill_checkboxes(saved_data.get("buff"))
@@ -12723,8 +12724,8 @@ class ItemSearchApp(QWidget):
 
         try:
 
-            self.skill_filter_input.clear()
-            self.clear_global_state()
+            #self.skill_filter_input.clear()
+            #self.clear_global_state()
             self.load_saved_inputs(file_path)
             self.current_file = file_path
             self.update_window_title()
