@@ -125,7 +125,7 @@ all_skill_entries = {#範例[    "": {"buff":"","type": "技能/料理","code":[
     "法師符": {"buff":"1358","id": "SL","type": "技能","code":["AddExtParam(1, 243, 10)"]},
     "精靈靈魂": {"buff":"1057","id": "SL","type": "技能","code":["AddExtParam(1, 200, 50)"]},
     "天地神靈": {"buff":"1365","id": "SL","type": "技能","code":["AddMeleeAttackDamage(1, 25)","AddRangeAttackDamage(1, 25)","AddSkillMDamage(10, 25)"]},
-    "四方五行的保佑": {"buff":"1364","id": "SL","type": "技能","code":["AddExtParam(1, 243, 25)"]},
+    "四方五行的保佑": {"buff":"1364","id": "SL","type": "技能","code":["UseSkill(5431)","AddExtParam(1, 243, 25)"]},
     #風鷹
     "心神凝聚": {"buff":"3","id": ["RA","SN"],"type": "技能","code":["temp = 2 + GetSkillLevel(45)","tempAGI = skill_focus_AGI","tempDEX = skill_focus_DEX","AddExtParam(1, 104, tempAGI * (temp/100))","AddExtParam(1, 107, tempDEX * (temp/100))"]},
     #agi跟dex只吃角色基本素質+job加成+裝備基礎(不含精煉給的)+被動技能常駐，
