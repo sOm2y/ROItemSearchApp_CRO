@@ -2,9 +2,10 @@
 import sys
 import os
 import re
+import html
 from PySide6.QtWidgets import (
     QApplication, QWidget, QListWidget, QTableWidget, QVBoxLayout, QHBoxLayout,
-    QComboBox, QTableWidgetItem, QLabel, QTabWidget , QMessageBox
+    QComboBox, QTableWidgetItem, QLabel, QTabWidget, QMessageBox, QPushButton
 )
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QHeaderView
@@ -405,16 +406,101 @@ from PySide6.QtWidgets import (
     QWidget, QListWidget, QTableWidget, QVBoxLayout, QHBoxLayout,
     QLineEdit, QLabel, QTabWidget, QTableWidgetItem, QHeaderView
 )
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal, QTimer
+
+
+def _item_description_to_html(description):
+    """將 iteminfo 的說明文字轉成可安全顯示的 HTML，並支援 ^RRGGBB 色碼。"""
+    if isinstance(description, str):
+        lines = description.splitlines()
+    elif isinstance(description, (list, tuple)):
+        lines = [str(line) for line in description]
+    else:
+        lines = []
+
+    if not lines:
+        return "<i>（無物品說明）</i>"
+
+    html_lines = []
+    color_pattern = re.compile(r"\^([0-9a-fA-F]{6})")
+
+    for line in lines:
+        parts = []
+        cursor = 0
+        span_open = False
+
+        for match in color_pattern.finditer(line):
+            parts.append(html.escape(line[cursor:match.start()]))
+            if span_open:
+                parts.append("</span>")
+                span_open = False
+
+            color_code = match.group(1)
+            # iteminfo 常用 ^000000 表示恢復預設色；不要強制顯示黑色，避免深色主題看不到。
+            if color_code.lower() != "000000":
+                parts.append(f'<span style="color:#{color_code}">')
+                span_open = True
+            cursor = match.end()
+
+        parts.append(html.escape(line[cursor:]))
+        if span_open:
+            parts.append("</span>")
+        html_lines.append("".join(parts))
+
+    return "<br>".join(html_lines)
+
+
+
+class EnchantTableWidget(QTableWidget):
+    """將左右鍵事件分流，並讓右鍵 Tooltip 在放開按鍵後仍保持顯示。"""
+    rightCellClicked = Signal(QPoint)
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.RightButton:
+            pos = event.position().toPoint()
+            index = self.indexAt(pos)
+            if index.isValid():
+                # 按下時只更新目前儲存格；Tooltip 統一在放開後顯示，避免觸發兩次。
+                self.setCurrentCell(index.row(), index.column())
+            event.accept()
+            return
+        super().mousePressEvent(event)
+
+    def mouseReleaseEvent(self, event):
+        if event.button() == Qt.RightButton:
+            pos = event.position().toPoint()
+            index = self.indexAt(pos)
+            if index.isValid():
+                # Qt 可能在 MouseButtonRelease 時自動收起 QToolTip；
+                # 等事件處理完後再顯示一次，放開右鍵便不會消失。
+                QTimer.singleShot(
+                    0,
+                    lambda pos=QPoint(pos): self.rightCellClicked.emit(pos)
+                )
+            event.accept()
+            return
+        super().mouseReleaseEvent(event)
 
 
 class EnchantUI(QWidget):
-    def __init__(self, enchant_data, item_data, itemdb):
+    # 裝備名稱、洞位 ID（0~3）、附魔物品名稱
+    enchantApplyRequested = Signal(str, int, str)
+
+    def __init__(
+        self,
+        enchant_data,
+        item_data,
+        itemdb,
+        initial_equipment_name="",
+        target_part_name="",
+    ):
         super().__init__()
 
         self.parsed = enchant_data        # EnchantList 解析結果
         self.items = item_data           # iteminfo_new
         self.itemdb = itemdb             # ItemDBNameTbl
+        self.target_part_name = target_part_name or ""
+        self.initial_equipment_name = initial_equipment_name or ""
 
         self.setWindowTitle("Enchant Viewer")
         layout = QHBoxLayout(self)
@@ -435,10 +521,21 @@ class EnchantUI(QWidget):
         left_box.addWidget(self.list_items)
 
         # ==============================
-        # 右：附魔資訊（Tab）
+        # 右：套用目標 + 附魔資訊（Tab）
         # ==============================
+        right_box = QVBoxLayout()
+        layout.addLayout(right_box, 1)
+
+        self.apply_hint_label = QLabel()
+        self.apply_hint_label.setWordWrap(True)
+        right_box.addWidget(self.apply_hint_label)
+
+        self.apply_status_label = QLabel("")
+        self.apply_status_label.setWordWrap(True)
+        right_box.addWidget(self.apply_status_label)
+
         self.tabs = QTabWidget()
-        layout.addWidget(self.tabs)
+        right_box.addWidget(self.tabs, 1)
 
         # -----------------------------------------------------------
         # 建立：裝備名稱 → 所屬 Enchant Table 映射
@@ -465,12 +562,174 @@ class EnchantUI(QWidget):
         # 點選裝備
         self.list_items.currentTextChanged.connect(self.select_equipment)
 
+        self.set_target_context(self.target_part_name, self.initial_equipment_name)
+        if self.initial_equipment_name:
+            self.select_item_by_name(self.initial_equipment_name)
 
-    def show_materials(self, row, col):
-        tab_index = self.tabs.currentIndex()
-        tab_widget = self.tabs.widget(tab_index)
+    def set_target_context(self, part_name="", equipment_name=""):
+        """更新主畫面目前的紅底裝備欄資訊。"""
+        self.target_part_name = part_name or ""
+        self.initial_equipment_name = equipment_name or ""
 
-        table = tab_widget.findChild(QTableWidget)
+        if self.target_part_name:
+            equip_text = f"；目前裝備：{self.initial_equipment_name}" if self.initial_equipment_name else ""
+            self.apply_hint_label.setText(
+                f"套用目標：主畫面「{self.target_part_name}」裝備欄（紅底）{equip_text}。"
+                "點選附魔列可查看材料；按該列的「套用」後，才會寫入對應洞位。"
+            )
+        else:
+            self.apply_hint_label.setText(
+                "主畫面尚未選擇紅底裝備欄。請先點主畫面的裝備名稱欄，再按附魔列的「套用」。"
+            )
+
+    def set_apply_status(self, message, success=False):
+        """由主程式回報附魔是否成功寫入。"""
+        prefix = "✅ " if success else "⚠️ "
+        self.apply_status_label.setText(prefix + str(message))
+
+    def select_item_by_name(self, equipment_name):
+        """由主畫面的裝備名稱自動定位附魔清單。"""
+        equipment_name = str(equipment_name or "").strip()
+        if not equipment_name:
+            return False
+
+        matches = self.list_items.findItems(equipment_name, Qt.MatchExactly)
+        if not matches:
+            self.search_box.setText(equipment_name)
+            matches = self.list_items.findItems(equipment_name, Qt.MatchExactly)
+
+        if not matches:
+            self.set_apply_status(f"附魔清單找不到裝備：{equipment_name}")
+            return False
+
+        self.list_items.setCurrentItem(matches[0])
+        self.list_items.scrollToItem(matches[0])
+        return True
+
+    def _get_output_enchant_name(self, data):
+        """一般附魔回傳自身；升階類型回傳升階後的附魔。"""
+        if not data:
+            return ""
+        raw_name = data.get("to") if data.get("type") in (
+            "upgrade", "perfect_upgrade", "random_upgrade"
+        ) else data.get("name")
+        return self.resolve_item_name(raw_name) if raw_name else ""
+
+    def handle_enchant_click(self, table, sid, row, col):
+        """單擊附魔列只顯示材料，不會寫入主畫面裝備欄。"""
+        self.show_materials(table, sid, row, col)
+
+    def apply_enchant(self, table, sid, row):
+        """按下該列的「套用」按鈕後，才要求主程式寫入對應洞位。"""
+        item = table.item(row, 1)
+        if not item:
+            return
+
+        data = item.data(Qt.UserRole)
+        enchant_name = self._get_output_enchant_name(data)
+        current_item = self.list_items.currentItem()
+        equipment_name = current_item.text() if current_item else ""
+
+        if not equipment_name or not enchant_name:
+            self.set_apply_status("無法取得裝備或附魔名稱。")
+            return
+
+        self.apply_status_label.setText(
+            f"正在套用：{equipment_name}／第{int(sid) + 1}洞／{enchant_name}"
+        )
+        self.enchantApplyRequested.emit(equipment_name, int(sid), enchant_name)
+
+    def add_apply_button(self, table, sid, row):
+        """在指定列建立套用按鈕，並固定綁定該列與洞位。"""
+        button = QPushButton("套用")
+        button.setToolTip("將此附魔套用到主畫面目前選取的裝備欄")
+        button.clicked.connect(
+            lambda checked=False, table=table, sid=sid, row=row:
+                self.apply_enchant(table, sid, row)
+        )
+        table.setCellWidget(row, 3, button)
+
+    def _resolve_item_id(self, key):
+        """將 DBName、韓文內部名稱或顯示名稱解析成物品 ID。"""
+        if not key:
+            return None
+
+        item_id = self.itemdb.get(key)
+        if item_id is not None and item_id in self.items:
+            return int(item_id)
+
+        key_text = str(key).strip()
+        for candidate_id, info in self.items.items():
+            if not isinstance(info, dict):
+                continue
+            if key_text in (
+                str(info.get("name", "")).strip(),
+                str(info.get("kr_name", "")).strip(),
+            ):
+                try:
+                    return int(candidate_id)
+                except (TypeError, ValueError):
+                    return None
+        return None
+
+    def handle_enchant_right_click(self, table, pos):
+        """右鍵附魔列：直接在附魔工具內顯示該物品內容。"""
+        index = table.indexAt(pos)
+        if not index.isValid():
+            return
+
+        item = table.item(index.row(), 1)
+        if not item:
+            return
+
+        data = item.data(Qt.UserRole) or {}
+        raw_name = (
+            data.get("to")
+            if data.get("type") in ("upgrade", "perfect_upgrade", "random_upgrade")
+            else data.get("name")
+        )
+        item_id = self._resolve_item_id(raw_name)
+        if item_id is None:
+            self.set_apply_status(f"找不到物品內容：{self.resolve_item_name(raw_name)}")
+            return
+
+
+        item_info = self.items.get(item_id)
+        if not isinstance(item_info, dict):
+            self.set_apply_status(f"物品資料不存在：{self.resolve_item_name(raw_name)}")
+            return
+
+        display_name = str(item_info.get("name") or self.resolve_item_name(raw_name))
+        resource_name = str(item_info.get("kr_name") or "（無資料）")
+        slot_count = item_info.get("slot", 0)
+        description_html = _item_description_to_html(item_info.get("description", []))
+
+        # 與左鍵材料顯示相同：直接在滑鼠旁以 Tooltip 顯示，不開新視窗。
+        tooltip_html = (
+            '<table width="520" cellspacing="0" cellpadding="2">'
+            f'<tr><td colspan="2"><b>{html.escape(display_name)}</b></td></tr>'
+            #f'<tr><td width="85">物品 ID：</td><td>{html.escape(str(item_id))}</td></tr>'
+            #f'<tr><td>內部名稱：</td><td>{html.escape(resource_name)}</td></tr>'
+            #f'<tr><td>洞數：</td><td>{html.escape(str(slot_count))}</td></tr>'
+            '<tr><td colspan="2"><hr></td></tr>'
+            f'<tr><td colspan="2">{description_html}</td></tr>'
+            '</table>'
+        )
+
+        self.apply_status_label.setText(f"正在顯示物品內容：{display_name}")
+        pos = QCursor.pos() + QPoint(10, -10)
+        cell_rect = table.visualRect(index)
+        QToolTip.hideText()
+        QToolTip.showText(
+            pos,
+            tooltip_html,
+            table.viewport(),
+            cell_rect,
+            60000,
+        )
+
+    def show_materials(self, table, sid, row, col):
+        """顯示所點附魔的材料；sid 直接由分頁建立時傳入，避免隱藏空分頁後洞位錯置。"""
         if not table:
             return
 
@@ -485,7 +744,10 @@ class EnchantUI(QWidget):
         # ---------------------------------------------------------
         # 裝備名稱
         # ---------------------------------------------------------
-        equip_name = self.list_items.currentItem().text()
+        current_item = self.list_items.currentItem()
+        if not current_item:
+            return
+        equip_name = current_item.text()
 
         # ---------------------------------------------------------
         # 附魔類型
@@ -527,8 +789,6 @@ class EnchantUI(QWidget):
 
         tid = self.all_target_items[equip_name]
         info = self.parsed[tid]
-        slot_order = list(reversed(info["slot_order"]))
-        sid = slot_order[tab_index]
         slot_info = info["slots"].get(sid)
 
         # 只有機率附魔才加 SetRequire
@@ -571,6 +831,7 @@ class EnchantUI(QWidget):
         # 顯示 Tooltip
         # ---------------------------------------------------------
         pos = QCursor.pos() + QPoint(10, -10)
+        QToolTip.hideText()
         QToolTip.showText(pos, msg, table)
 
 
@@ -656,28 +917,6 @@ class EnchantUI(QWidget):
         }
 
         for sid in reversed(info["slot_order"]):
-            tab = QWidget()
-            v = QVBoxLayout(tab)
-
-            table = QTableWidget()
-            table.setColumnCount(3)
-            table.setHorizontalHeaderLabels(["Grade", "Enchant", "機率 (%)"])
-            table.verticalHeader().setVisible(False)
-            table.cellClicked.connect(self.show_materials)
-
-
-            header = table.horizontalHeader()
-            header.setSectionResizeMode(0, QHeaderView.Fixed)
-            header.setSectionResizeMode(2, QHeaderView.Fixed)
-            header.resizeSection(0, 80)
-            header.resizeSection(2, 80)
-            header.setSectionResizeMode(1, QHeaderView.Stretch)
-
-            v.addWidget(table)
-
-            title = slot_name_map.get(sid, f"第{sid}洞")
-            self.tabs.addTab(tab, title)
-
             slot_info = info.get("slots", {}).get(sid)
             if not slot_info:
                 continue
@@ -695,7 +934,41 @@ class EnchantUI(QWidget):
                 len(perfect_upgrades) +
                 len(random_upgrades)
             )
+
+            # 該洞沒有任何附魔／升階資料時，不建立分頁。
+            if total_rows == 0:
+                continue
+
+            tab = QWidget()
+            v = QVBoxLayout(tab)
+
+            table = EnchantTableWidget()
+            table.setColumnCount(4)
+            table.setHorizontalHeaderLabels(["Grade", "Enchant", "機率 (%)", "操作"])
+            table.verticalHeader().setVisible(False)
+            table.cellClicked.connect(
+                lambda row, col, table=table, sid=sid: self.handle_enchant_click(
+                    table, sid, row, col
+                )
+            )
+            table.rightCellClicked.connect(
+                lambda pos, table=table: self.handle_enchant_right_click(table, pos)
+            )
+
+            header = table.horizontalHeader()
+            header.setSectionResizeMode(0, QHeaderView.Fixed)
+            header.setSectionResizeMode(2, QHeaderView.Fixed)
+            header.setSectionResizeMode(3, QHeaderView.Fixed)
+            header.resizeSection(0, 80)
+            header.resizeSection(2, 80)
+            header.resizeSection(3, 72)
+            header.setSectionResizeMode(1, QHeaderView.Stretch)
+
             table.setRowCount(total_rows)
+            v.addWidget(table)
+
+            title = slot_name_map.get(sid, f"第{sid}洞")
+            self.tabs.addTab(tab, title)
 
             row = 0
 
@@ -722,6 +995,7 @@ class EnchantUI(QWidget):
                 value = rate / 1000
                 text = f"{value:.3f}".rstrip('0').rstrip('.')
                 table.setItem(row, 2, QTableWidgetItem(f"{text}%"))
+                self.add_apply_button(table, sid, row)
                 row += 1
 
 
@@ -738,6 +1012,7 @@ class EnchantUI(QWidget):
                 table.setItem(row, 1, item)
 
                 table.setItem(row, 2, QTableWidgetItem("100%"))
+                self.add_apply_button(table, sid, row)
                 row += 1
 
             # 升階 目前沒有物品會附魔失敗，都先寫100%
@@ -757,6 +1032,7 @@ class EnchantUI(QWidget):
 
                 table.setItem(row, 2, QTableWidgetItem("100%"))#(f"{up['rate']/1000:.3f}"))
 
+                self.add_apply_button(table, sid, row)
                 row += 1
 
             # 完美升階
@@ -774,6 +1050,7 @@ class EnchantUI(QWidget):
                 })
                 table.setItem(row, 1, item)
                 table.setItem(row, 2, QTableWidgetItem("100%"))
+                self.add_apply_button(table, sid, row)
                 row += 1
 
             # 機率升階
@@ -796,6 +1073,7 @@ class EnchantUI(QWidget):
                 value = up['rate'] / 1000
                 text = f"{value:.3f}".rstrip('0').rstrip('.')
                 table.setItem(row, 2, QTableWidgetItem(f"{text}%"))
+                self.add_apply_button(table, sid, row)
                 row += 1
 
 

@@ -1,5 +1,5 @@
 #部分資料取自ROCalculator,搜尋 ROCalculator 可以知道哪些有使用
-Version = "v0.3.14-260707"
+Version = "v0.3.15-260707"
 
 import sys, builtins, time
 import os
@@ -5405,6 +5405,90 @@ class ItemSearchApp(QWidget):
             checkbox.setChecked(name in matched_set)
             checkbox.blockSignals(False)
 
+# 附魔選擇後自動轉移至主視窗的相關欄位。 內容參考 https://github.com/z2911902/ROItemSearchApp/pull/3 
+
+    def _set_enchant_tool_target(self, part_name="", field_type="", equipment_name=""):
+        """把主畫面目前紅底欄位同步到已開啟的附魔工具。"""
+        window = getattr(self, "enchant_window", None)
+        if window is None:
+            return
+
+        try:
+            if field_type == "裝備" and part_name:
+                window.set_target_context(part_name, equipment_name)
+                if equipment_name:
+                    window.select_item_by_name(equipment_name)
+            else:
+                window.set_target_context("", "")
+        except RuntimeError:
+            # Qt 物件已被關閉／刪除時不影響主程式。
+            self.enchant_window = None
+
+    def apply_enchant_from_tool(self, equipment_name, slot_id, enchant_name):
+        """將附魔工具選到的附魔寫入紅底裝備之對應洞位。"""
+        window = getattr(self, "enchant_window", None)
+
+        def report(message, success=False):
+            if window is not None:
+                try:
+                    window.set_apply_status(message, success)
+                except RuntimeError:
+                    pass
+
+        current_edit = getattr(self, "current_edit_part", None)
+        if not current_edit:
+            report("請先在主畫面點選要套用的裝備名稱欄，使其顯示紅底。")
+            return
+
+        try:
+            part_name, field_type = current_edit.rsplit(" - ", 1)
+        except ValueError:
+            report(f"無法解析目前編輯欄位：{current_edit}")
+            return
+
+        if field_type != "裝備":
+            report("目前紅底欄位不是裝備名稱欄；請改點該部位的裝備欄。")
+            return
+
+        ui = self.refine_inputs_ui.get(part_name)
+        if not ui:
+            report(f"找不到主畫面部位：{part_name}")
+            return
+
+        try:
+            slot_id = int(slot_id)
+        except (TypeError, ValueError):
+            report(f"無法辨識附魔洞位：{slot_id}")
+            return
+
+        cards = ui.get("cards", [])
+        if not 0 <= slot_id < len(cards):
+            report(f"{part_name} 沒有可寫入的第{slot_id + 1}洞。")
+            return
+
+        equipment_name = str(equipment_name or "").strip()
+        enchant_name = str(enchant_name or "").strip()
+        if not equipment_name or not enchant_name:
+            report("裝備名稱或附魔名稱為空，無法套用。")
+            return
+
+        self.clear_global_state()
+        self._last_calc_state = None
+
+        # 選附魔清單中的裝備時，也同步更新主畫面的裝備名稱。
+        ui["equip"].setText(equipment_name)
+        cards[slot_id].setText(enchant_name)
+
+        # 保留紅底目標，讓使用者可連續設定其他洞位。
+        ui["equip"].setStyleSheet("background-color: #ff0000;")
+        self.current_edit_label.setText(
+            tr("label.current_part_detail", part=part_name, label="裝備")
+        )
+
+        self.replace_custom_calc_content()
+        self.trigger_total_effect_update()
+        self._set_enchant_tool_target(part_name, "裝備", equipment_name)
+        report(f"已加入「{part_name}」第{slot_id + 1}洞：{enchant_name}", True)
 
     def open_enchant_tool(self):#附魔工具
         # 載入所需資料
@@ -5412,8 +5496,27 @@ class ItemSearchApp(QWidget):
         itemdb = enchant.parse_itemdb_name_tbl("data/ItemDBNameTbl.lua")
         enchant_data = enchant.parse_enchant_list("data/EnchantList.lua")
 
+        target_part = ""
+        initial_equipment = ""
+        current_edit = getattr(self, "current_edit_part", None)
+        if current_edit:
+            try:
+                part_name, field_type = current_edit.rsplit(" - ", 1)
+                if field_type == "裝備" and part_name in self.refine_inputs_ui:
+                    target_part = part_name
+                    initial_equipment = self.refine_inputs_ui[part_name]["equip"].text().strip()
+            except ValueError:
+                pass
+
         # 建立 UI
-        self.enchant_window = enchant.EnchantUI(enchant_data, item_data, itemdb)
+        self.enchant_window = enchant.EnchantUI(
+            enchant_data,
+            item_data,
+            itemdb,
+            initial_equipment_name=initial_equipment,
+            target_part_name=target_part,
+        )
+        self.enchant_window.enchantApplyRequested.connect(self.apply_enchant_from_tool)
         self.enchant_window.setWindowTitle(tr("window.enchant_tool"))
         self.enchant_window.resize(900, 600)
         self.enchant_window.show()
@@ -10952,6 +11055,9 @@ class ItemSearchApp(QWidget):
                     
                 self.set_edit_lock(part_label, label_name)
                 input_field.setStyleSheet("background-color: #ff0000;")  # 紅
+                self._set_enchant_tool_target(
+                    part_label, label_name, input_field.text().strip()
+                )
                 self.search_input.setFocus()  # ✅ 把焦點移到搜尋欄
                 # ✅ 若不是詞條，就切回裝備查詢分頁
                 if label_name != "note":
@@ -12774,6 +12880,7 @@ class ItemSearchApp(QWidget):
 
         self.global_refine_input.setVisible(True)
         self.global_grade_combo.setVisible(True)
+        self._set_enchant_tool_target()
 
 
 
