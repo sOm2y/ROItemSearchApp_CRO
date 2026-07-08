@@ -1,5 +1,5 @@
 #部分資料取自ROCalculator,搜尋 ROCalculator 可以知道哪些有使用
-Version = "v0.3.15-260707"
+Version = "v0.3.16-260709"
 
 import sys, builtins, time
 import os
@@ -5518,6 +5518,34 @@ class ItemSearchApp(QWidget):
             initial_slot_id=slot_id,
         )
 
+    def _get_part_enchant_values(self, part_name):
+        """取得主畫面指定部位四個附魔／卡片欄位目前文字。"""
+        ui = getattr(self, "refine_inputs_ui", {}).get(part_name)
+        if not ui:
+            return ["", "", "", ""]
+        values = [str(card.text() or "").strip() for card in ui.get("cards", [])[:4]]
+        return values + [""] * (4 - len(values))
+
+    def _sync_open_enchant_tool_context(self, part_name):
+        """主畫面裝備或附魔欄變更時，同步已開啟附魔工具的隨機升階來源。"""
+        window = getattr(self, "enchant_window", None)
+        if window is None:
+            return
+
+        try:
+            if getattr(window, "target_part_name", "") != part_name:
+                return
+            ui = getattr(self, "refine_inputs_ui", {}).get(part_name)
+            if not ui:
+                return
+            window.set_target_context(
+                part_name,
+                ui["equip"].text().strip(),
+                self._get_part_enchant_values(part_name),
+            )
+        except RuntimeError:
+            self.enchant_window = None
+
     def _set_enchant_tool_target(self, part_name="", field_type="", equipment_name=""):
         """把主畫面目前紅底欄位同步到已開啟的附魔工具。"""
         window = getattr(self, "enchant_window", None)
@@ -5526,11 +5554,15 @@ class ItemSearchApp(QWidget):
 
         try:
             if field_type == "裝備" and part_name:
-                window.set_target_context(part_name, equipment_name)
+                window.set_target_context(
+                    part_name,
+                    equipment_name,
+                    self._get_part_enchant_values(part_name),
+                )
                 if equipment_name:
                     window.select_item_by_name(equipment_name)
             else:
-                window.set_target_context("", "")
+                window.set_target_context("", "", ["", "", "", ""])
         except RuntimeError:
             # Qt 物件已被關閉／刪除時不影響主程式。
             self.enchant_window = None
@@ -5623,7 +5655,11 @@ class ItemSearchApp(QWidget):
         window = getattr(self, "enchant_window", None)
         if window is not None:
             try:
-                window.set_target_context(target_part, initial_equipment)
+                window.set_target_context(
+                    target_part,
+                    initial_equipment,
+                    self._get_part_enchant_values(target_part) if target_part else ["", "", "", ""],
+                )
                 if initial_equipment:
                     window.select_item_by_name(initial_equipment)
                 if initial_slot_id is not None:
@@ -5644,10 +5680,15 @@ class ItemSearchApp(QWidget):
             initial_equipment_name=initial_equipment,
             target_part_name=target_part,
             initial_slot_id=initial_slot_id,
+            initial_slot_enchants=(
+                self._get_part_enchant_values(target_part)
+                if target_part else ["", "", "", ""]
+            ),
         )
         self.enchant_window.enchantApplyRequested.connect(self.apply_enchant_from_tool)
         self.enchant_window.setWindowTitle(tr("window.enchant_tool"))
-        self.enchant_window.resize(900, 600)
+        self.enchant_window.resize(1300, 600)
+        #self.enchant_window.move(300, 200)出現視窗可能會超出畫面外，預留移動。
         self.enchant_window.show()
 
     def open_reform_tool(self):#改造工具
@@ -11510,6 +11551,13 @@ class ItemSearchApp(QWidget):
             equip_input.textChanged.connect(
                 lambda text, p=part_name: self._update_enchant_button_for_part(p, text)
             )
+            equip_input.textChanged.connect(
+                lambda _text, p=part_name: self._sync_open_enchant_tool_context(p)
+            )
+            for card_input in card_inputs:
+                card_input.textChanged.connect(
+                    lambda _text, p=part_name: self._sync_open_enchant_tool_context(p)
+                )
             self._update_enchant_button_for_part(part_name, equip_input.text())
             self.refresh_presets(part_name)
 

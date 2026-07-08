@@ -3,9 +3,11 @@ import sys
 import os
 import re
 import html
+import random
 from PySide6.QtWidgets import (
     QApplication, QWidget, QListWidget, QTableWidget, QVBoxLayout, QHBoxLayout,
-    QComboBox, QTableWidgetItem, QLabel, QTabWidget, QMessageBox, QPushButton
+    QComboBox, QTableWidgetItem, QLabel, QTabWidget, QMessageBox, QPushButton,
+    QGroupBox, QPlainTextEdit
 )
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QHeaderView
@@ -486,7 +488,8 @@ def build_enchant_target_map(enchant_data, item_data, itemdb, require_content=Tr
 # ============================================================
 from PySide6.QtWidgets import (
     QWidget, QListWidget, QTableWidget, QVBoxLayout, QHBoxLayout,
-    QLineEdit, QLabel, QTabWidget, QTableWidgetItem, QHeaderView
+    QLineEdit, QLabel, QTabWidget, QTableWidgetItem, QHeaderView,
+    QGroupBox, QPlainTextEdit
 )
 from PySide6.QtCore import Qt, Signal, QTimer
 
@@ -576,6 +579,7 @@ class EnchantUI(QWidget):
         initial_equipment_name="",
         target_part_name="",
         initial_slot_id=None,
+        initial_slot_enchants=None,
     ):
         super().__init__()
 
@@ -585,6 +589,12 @@ class EnchantUI(QWidget):
         self.target_part_name = target_part_name or ""
         self.initial_equipment_name = initial_equipment_name or ""
         self.initial_slot_id = initial_slot_id
+        self.target_slot_enchants = self._normalize_slot_enchants(initial_slot_enchants)
+
+        # 隨機附魔 LOG 只存在於本次工具視窗生命週期，開啟工具時立即顯示。
+        # 統計僅保留「使用次數」，不區分成功／失敗。
+        self.random_attempt_count = 0
+        self._pending_random_attempt = None
 
         self.setWindowTitle("Enchant Viewer")
         layout = QHBoxLayout(self)
@@ -610,16 +620,58 @@ class EnchantUI(QWidget):
         right_box = QVBoxLayout()
         layout.addLayout(right_box, 1)
 
+
         self.apply_hint_label = QLabel()
         self.apply_hint_label.setWordWrap(True)
         right_box.addWidget(self.apply_hint_label)
 
+        random_row = QHBoxLayout()
+        self.random_enchant_button = QPushButton("隨機/機率升階 附魔")
+        self.random_enchant_button.setToolTip(
+            "依照目前洞位的附魔機率抽選；若目前附魔可機率升階，會自動只配對相同來源的升階結果。"
+        )
+        self.random_enchant_button.clicked.connect(self.roll_random_enchant)
+        random_row.addWidget(self.random_enchant_button)
+        #random_row.addStretch(1)
+        right_box.addLayout(random_row)
         self.apply_status_label = QLabel("")
         self.apply_status_label.setWordWrap(True)
         right_box.addWidget(self.apply_status_label)
 
         self.tabs = QTabWidget()
+        self.tabs.currentChanged.connect(self._update_random_enchant_button_state)
         right_box.addWidget(self.tabs, 1)
+
+        # ==============================
+        # 最右側：隨機附魔 LOG
+        # 開啟附魔工具時立即顯示。
+        # ==============================
+        self.random_log_panel = QGroupBox("隨機附魔 LOG")
+        self.random_log_panel.setMinimumWidth(400)
+        self.random_log_panel.setMaximumWidth(400)
+        log_layout = QVBoxLayout(self.random_log_panel)
+
+        log_header_row = QHBoxLayout()
+        self.random_log_summary = QLabel()
+        self.random_log_summary.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        self.random_log_summary.setStyleSheet("font-weight: bold;")
+        log_header_row.addWidget(self.random_log_summary)
+        log_header_row.addStretch(1)
+
+        self.clear_random_log_button = QPushButton("清空 LOG")
+        self.clear_random_log_button.setToolTip("清除隨機附魔紀錄與使用次數")
+        self.clear_random_log_button.clicked.connect(self.clear_random_log)
+        log_header_row.addWidget(self.clear_random_log_button)
+        log_layout.addLayout(log_header_row)
+
+        self.random_log_view = QPlainTextEdit()
+        self.random_log_view.setReadOnly(True)
+        self.random_log_view.setPlaceholderText("隨機附魔紀錄會顯示在這裡。")
+        log_layout.addWidget(self.random_log_view, 1)
+
+        layout.addWidget(self.random_log_panel)
+        self.random_log_panel.show()
+        self._update_random_log_summary()
 
         # -----------------------------------------------------------
         # 建立：裝備名稱 → 所屬 Enchant Table 映射
@@ -646,16 +698,44 @@ class EnchantUI(QWidget):
         # 點選裝備
         self.list_items.currentTextChanged.connect(self.select_equipment)
 
-        self.set_target_context(self.target_part_name, self.initial_equipment_name)
+        self.set_target_context(
+            self.target_part_name,
+            self.initial_equipment_name,
+            self.target_slot_enchants,
+        )
         if self.initial_equipment_name:
             self.select_item_by_name(self.initial_equipment_name)
         if self.initial_slot_id is not None:
             self.select_slot_by_id(self.initial_slot_id)
 
-    def set_target_context(self, part_name="", equipment_name=""):
-        """更新主畫面目前的紅底裝備欄資訊。"""
+    @staticmethod
+    def _normalize_slot_enchants(slot_enchants):
+        """將主畫面四個附魔欄位正規化成固定長度清單。"""
+        values = ["", "", "", ""]
+        if isinstance(slot_enchants, dict):
+            iterator = slot_enchants.items()
+        elif isinstance(slot_enchants, (list, tuple)):
+            iterator = enumerate(slot_enchants)
+        else:
+            iterator = []
+
+        for slot_id, value in iterator:
+            try:
+                slot_id = int(slot_id)
+            except (TypeError, ValueError):
+                continue
+            if 0 <= slot_id < len(values):
+                values[slot_id] = str(value or "").strip()
+        return values
+
+    def set_target_context(self, part_name="", equipment_name="", slot_enchants=None):
+        """更新主畫面目前的紅底裝備欄與四個附魔欄位資訊。"""
         self.target_part_name = part_name or ""
         self.initial_equipment_name = equipment_name or ""
+        if slot_enchants is not None:
+            self.target_slot_enchants = self._normalize_slot_enchants(slot_enchants)
+        elif not self.target_part_name:
+            self.target_slot_enchants = ["", "", "", ""]
 
         if self.target_part_name:
             equip_text = f"；目前裝備：{self.initial_equipment_name}" if self.initial_equipment_name else ""
@@ -668,10 +748,76 @@ class EnchantUI(QWidget):
                 "主畫面尚未選擇紅底裝備欄。請先點主畫面的裝備名稱欄，再按附魔列的「套用」。"
             )
 
+        self._update_random_enchant_button_state()
+
+    def _update_random_log_summary(self):
+        """更新隨機附魔使用次數。"""
+        label = getattr(self, "random_log_summary", None)
+        if label is None:
+            return
+        label.setText(f"使用次數：{self.random_attempt_count}")
+
+    def clear_random_log(self, checked=False):
+        """清除隨機附魔紀錄與使用次數"""
+        self.random_attempt_count = 0
+        self._pending_random_attempt = None
+
+        log_view = getattr(self, "random_log_view", None)
+        if log_view is not None:
+            log_view.clear()
+
+        self._update_random_log_summary()
+
+
+    def _show_random_log_panel(self):
+        """確保最右側的隨機附魔 LOG 維持顯示。"""
+        panel = getattr(self, "random_log_panel", None)
+        if panel is not None and not panel.isVisible():
+            panel.show()
+
+    def _begin_random_attempt(self, context):
+        """建立一次隨機附魔嘗試；有效抽選才計入使用次數。"""
+        self.random_attempt_count += 1
+        self._show_random_log_panel()
+        self._pending_random_attempt = {
+            "attempt_no": self.random_attempt_count,
+            "equipment_name": str(context.get("equipment_name") or ""),
+            "slot_id": int(context.get("slot_id", 0)),
+            "mode": str(context.get("mode") or ""),
+            "current_enchant": str(context.get("current_enchant") or ""),
+            "result_text": "",
+        }
+        self._update_random_log_summary()
+        return self._pending_random_attempt
+
+    def _finish_random_attempt(self, success=None, detail=""):
+        """完成目前隨機嘗試並寫入右側 LOG；紀錄不標示成功或失敗。"""
+        attempt = self._pending_random_attempt
+        if not attempt:
+            return
+        self._pending_random_attempt = None
+
+        equipment_name = attempt.get("equipment_name") or "未知裝備"
+        slot_text = f"第{int(attempt.get('slot_id', 0)) + 1}洞"
+        result_text = attempt.get("result_text") or str(detail or "").strip()
+        if not result_text:
+            result_text = "未取得結果"
+
+        log_line = (
+            f"#{attempt.get('attempt_no')}｜{equipment_name}｜\n"
+            f"{slot_text}｜{result_text}"
+
+        )
+        self.random_log_view.appendPlainText(log_line)
+        scrollbar = self.random_log_view.verticalScrollBar()
+        scrollbar.setValue(scrollbar.maximum())
+
     def set_apply_status(self, message, success=False):
-        """由主程式回報附魔是否成功寫入。"""
+        """由主程式回報附魔是否寫入完成；若為隨機抽選，同步完成 LOG 紀錄。"""
         prefix = "✅ " if success else "⚠️ "
         self.apply_status_label.setText(prefix + str(message))
+        if self._pending_random_attempt is not None:
+            self._finish_random_attempt(bool(success), str(message))
 
     def select_item_by_name(self, equipment_name):
         """由主畫面的裝備名稱自動定位附魔清單。"""
@@ -703,8 +849,270 @@ class EnchantUI(QWidget):
             tab = self.tabs.widget(index)
             if tab is not None and tab.property("enchant_slot_id") == target_slot:
                 self.tabs.setCurrentIndex(index)
+                self._update_random_enchant_button_state()
                 return True
         return False
+
+    def _current_slot_context(self):
+        """取得目前裝備、Table、洞位與該洞附魔資料。"""
+        current_item = self.list_items.currentItem()
+        tab = self.tabs.currentWidget()
+        if current_item is None or tab is None:
+            return None
+
+        equipment_name = current_item.text().strip()
+        table_id = self.all_target_items.get(equipment_name)
+        if table_id is None:
+            return None
+
+        try:
+            slot_id = int(tab.property("enchant_slot_id"))
+        except (TypeError, ValueError):
+            return None
+
+        table_info = self.parsed.get(table_id, {})
+        slot_info = table_info.get("slots", {}).get(slot_id, {})
+        if not isinstance(slot_info, dict):
+            return None
+
+        return equipment_name, table_id, slot_id, slot_info
+
+    def _current_target_enchant(self, slot_id):
+        try:
+            slot_id = int(slot_id)
+        except (TypeError, ValueError):
+            return ""
+        if 0 <= slot_id < len(self.target_slot_enchants):
+            return str(self.target_slot_enchants[slot_id] or "").strip()
+        return ""
+
+    @staticmethod
+    def _normalize_enchant_name(value):
+        return str(value or "").strip().casefold()
+
+    def _enchant_name_matches(self, current_name, raw_name):
+        """同時比對顯示名稱與 EnchantList 內部名稱。"""
+        current = self._normalize_enchant_name(current_name)
+        if not current:
+            return False
+        return current in {
+            self._normalize_enchant_name(raw_name),
+            self._normalize_enchant_name(self.resolve_item_name(raw_name)),
+        }
+
+    def _random_candidates_for_current_slot(self):
+        """優先建立相同來源的機率升階候選，否則建立一般機率附魔候選。"""
+        context = self._current_slot_context()
+        if context is None:
+            return None, []
+
+        equipment_name, table_id, slot_id, slot_info = context
+        current_enchant = self._current_target_enchant(slot_id)
+        random_upgrades = slot_info.get("random_upgrade", []) or []
+
+        matched_upgrades = []
+        if current_enchant:
+            for up in random_upgrades:
+                if not isinstance(up, dict):
+                    continue
+                if not self._enchant_name_matches(current_enchant, up.get("from")):
+                    continue
+                try:
+                    rate = max(0, int(up.get("rate", 0)))
+                except (TypeError, ValueError):
+                    rate = 0
+                if rate <= 0 or not up.get("to"):
+                    continue
+                matched_upgrades.append({
+                    "type": "random_upgrade",
+                    "from": up.get("from"),
+                    "to": up.get("to"),
+                    "output_raw": up.get("to"),
+                    "output_name": self.resolve_item_name(up.get("to")),
+                    "rate": rate,
+                })
+
+        if matched_upgrades:
+            return {
+                "mode": "random_upgrade",
+                "equipment_name": equipment_name,
+                "table_id": table_id,
+                "slot_id": slot_id,
+                "current_enchant": current_enchant,
+            }, matched_upgrades
+
+        # 同一附魔可能因 Grade 重複出現；輸出相同時合併其機率。
+        merged = {}
+        for entry in slot_info.get("enchants", []) or []:
+            try:
+                _grade, raw_name, rate = entry
+                rate = max(0, int(rate))
+            except (TypeError, ValueError):
+                continue
+            if not raw_name or rate <= 0:
+                continue
+            key = str(raw_name)
+            if key not in merged:
+                merged[key] = {
+                    "type": "enchant",
+                    "name": raw_name,
+                    "output_raw": raw_name,
+                    "output_name": self.resolve_item_name(raw_name),
+                    "rate": 0,
+                }
+            merged[key]["rate"] += rate
+
+        return {
+            "mode": "enchant",
+            "equipment_name": equipment_name,
+            "table_id": table_id,
+            "slot_id": slot_id,
+            "current_enchant": current_enchant,
+        }, list(merged.values())
+
+    @staticmethod
+    def _effective_candidate_rate_percent(candidate, candidates):
+        """回傳與實際抽選一致的顯示機率，範圍固定為 0%～100%。
+
+        EnchantList 通常以 100000 代表 100%。候選總權重未滿 100000 時，
+        剩餘權重代表抽選失敗；候選總權重超過 100000 時，抽選會依所有
+        候選的相對權重正規化，因此 LOG 也必須顯示正規化後的實際抽中率。
+        """
+        try:
+            selected_weight = max(0, int(candidate.get("rate", 0)))
+        except (TypeError, ValueError, AttributeError):
+            selected_weight = 0
+
+        total_weight = 0
+        for item in candidates or []:
+            try:
+                total_weight += max(0, int(item.get("rate", 0)))
+            except (TypeError, ValueError, AttributeError):
+                continue
+
+        if selected_weight <= 0 or total_weight <= 0:
+            return 0.0
+
+        denominator = max(100000, total_weight)
+        return min(100.0, selected_weight * 100.0 / denominator)
+
+    @staticmethod
+    def _format_probability_percent(value):
+        """將 0%～100% 機率輸出成精簡且易讀的文字。"""
+        try:
+            value = max(0.0, min(100.0, float(value)))
+        except (TypeError, ValueError):
+            value = 0.0
+        return f"{value:.3f}".rstrip("0").rstrip(".")
+
+    @staticmethod
+    def _pick_weighted_candidate(candidates):
+        """依 EnchantList 的十萬分率抽選；總率不足 100% 時保留失敗機率。"""
+        weighted = []
+        total = 0
+        for candidate in candidates:
+            try:
+                weight = max(0, int(candidate.get("rate", 0)))
+            except (TypeError, ValueError):
+                weight = 0
+            if weight <= 0:
+                continue
+            weighted.append((candidate, weight))
+            total += weight
+
+        if not weighted or total <= 0:
+            return None
+
+        # 正常資料以 100000 表示 100%；若資料總和超過 100000，改按相對權重抽選。
+        roll_range = max(100000, total)
+        roll = random.randrange(roll_range)
+        if roll >= total:
+            return None
+
+        cumulative = 0
+        for candidate, weight in weighted:
+            cumulative += weight
+            if roll < cumulative:
+                return candidate
+        return weighted[-1][0]
+
+    def _update_random_enchant_button_state(self, *_):
+        button = getattr(self, "random_enchant_button", None)
+        if button is None:
+            return
+
+        context, candidates = self._random_candidates_for_current_slot()
+        enabled = bool(self.target_part_name and context and candidates)
+        button.setEnabled(enabled)
+
+        if not self.target_part_name:
+            button.setToolTip("請先從主畫面的附魔按鈕開啟工具，指定要寫入的裝備欄。")
+        elif not context:
+            button.setToolTip("目前沒有可抽選的附魔洞位。")
+        elif context["mode"] == "random_upgrade":
+            button.setToolTip(
+                f"目前附魔「{context['current_enchant']}」已配對到 "
+                f"{len(candidates)} 個機率升階結果，按下後依機率抽選。"
+            )
+        elif candidates:
+            button.setToolTip("依照目前洞位的一般附魔機率隨機抽選並套用。")
+        else:
+            current = context.get("current_enchant") or "空白"
+            button.setToolTip(
+                f"目前洞位內容為「{current}」，沒有相符的機率升階或一般機率附魔。"
+            )
+
+    def roll_random_enchant(self, checked=False):
+        """依目前洞位資料抽選附魔；機率升階會先按目前附魔自動配對來源。"""
+        if not self.target_part_name:
+            self.set_apply_status("請先從主畫面的附魔按鈕開啟工具，指定套用部位。")
+            return
+
+        context, candidates = self._random_candidates_for_current_slot()
+        if not context or not candidates:
+            self.set_apply_status("目前洞位沒有可供隨機抽選的附魔資料。")
+            self._update_random_enchant_button_state()
+            return
+
+        # 只有真正具備候選、開始抽選時，才顯示 LOG 並計入使用次數。
+        attempt = self._begin_random_attempt(context)
+        selected = self._pick_weighted_candidate(candidates)
+        slot_id = int(context["slot_id"])
+        if selected is None:
+            failure_text = "未抽中任何結果"
+            attempt["result_text"] = failure_text
+            self.apply_status_label.setText(
+                f"⚠️ 第{slot_id + 1}洞本次隨機附魔失敗，{failure_text}。"
+            )
+            self._finish_random_attempt(False, failure_text)
+            return
+
+        output_name = str(selected.get("output_name") or "").strip()
+        if not output_name:
+            failure_text = "隨機結果缺少附魔名稱，無法套用"
+            attempt["result_text"] = failure_text
+            self.apply_status_label.setText("⚠️ " + failure_text + "。")
+            self._finish_random_attempt(False, failure_text)
+            return
+
+        effective_rate = self._effective_candidate_rate_percent(selected, candidates)
+        rate_text = self._format_probability_percent(effective_rate)
+        if context["mode"] == "random_upgrade":
+            result_text = (
+                f"{context['current_enchant']} → {output_name}（{rate_text}%）"
+            )
+        else:
+            result_text = f"{output_name}（{rate_text}%）"
+
+        attempt["result_text"] = result_text
+        self.apply_status_label.setText(
+            f"🎲 隨機結果：第{slot_id + 1}洞／{result_text}，正在套用……"
+        )
+        self.enchantApplyRequested.emit(
+            context["equipment_name"],
+            slot_id,
+            output_name,
+        )
 
     def _get_output_enchant_name(self, data):
         """一般附魔回傳自身；升階類型回傳升階後的附魔。"""
@@ -998,6 +1406,7 @@ class EnchantUI(QWidget):
             return
 
         self.load_all_slots_tabs(tid)
+        self._update_random_enchant_button_state()
 
     # ==============================
     # 顯示該 table 所有 Slots 附魔
@@ -1177,6 +1586,7 @@ class EnchantUI(QWidget):
                 self.add_apply_button(table, sid, row)
                 row += 1
 
+        self._update_random_enchant_button_state()
 
 
 # ---------------------------------------------------------------
