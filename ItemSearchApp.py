@@ -6180,7 +6180,7 @@ class ItemSearchApp(QWidget):
             denominator = 4000 + adj * 10
 
             resistance = numerator / denominator
-            return max(resistance, -0.99)  # 範圍限制在-0.99~1 來源:https://forum.gamer.com.tw/C.php?bsn=4212&snA=440067&tnum=5&bPage=2
+            return min(max(resistance, -0.99),1)  # 範圍限制在-0.99~1 來源:https://forum.gamer.com.tw/C.php?bsn=4212&snA=440067&tnum=5&bPage=2
         #====================MRES,MDEF計算===================
         #====================MDEF計算==================
         def calc_final_mdef_damage(mdef: float, reduction_percent: float) -> float:
@@ -6200,7 +6200,7 @@ class ItemSearchApp(QWidget):
             numerator = 1000 + adj
             denominator = 1000 + adj * 10
             resistance = numerator / denominator
-            return max(resistance, -0.99)  # 範圍限制在-0.99~1 來源:https://forum.gamer.com.tw/C.php?bsn=4212&snA=440067&tnum=5&bPage=2
+            return min(max(resistance, -0.99),1)  # 範圍限制在-0.99~1 來源:https://forum.gamer.com.tw/C.php?bsn=4212&snA=440067&tnum=5&bPage=2
         #====================RES/MRES計算==================
         def calc_final_res_damage(mres: float, reduction_percent: float) -> float:
 
@@ -6429,7 +6429,10 @@ class ItemSearchApp(QWidget):
         #print(f"EDP:{EDP},MAGNUM:{MAGNUM}")
         # specialATK_min = int(refineammoATK_min * EDP * MAGNUM) 
         # specialATK = int(refineammoATK * EDP * MAGNUM)
-        if int(GUSklv(378)) == 1:
+        if int(GUSklv(378)) == 2 and int(GUSklv(7)) == 2:#測試用 應該是不會有
+            specialATK_min = int(refineammoATK_min * EDP * MAGNUM) 
+            specialATK = int(refineammoATK * EDP * MAGNUM) 
+        elif int(GUSklv(378)) == 1:
             specialATK_min = int(refineammoATK_min * EDP) 
             specialATK = int(refineammoATK * EDP) 
         elif int(GUSklv(7)) == 1:

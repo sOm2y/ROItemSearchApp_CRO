@@ -1007,7 +1007,7 @@
 5284,CD_FRAMEN,聖靈鎮魂,magic,0,,,,5,((950+5*GSklv(5276))*Sklv+total_SPL*3)*BaseLv/100,6,1,,,,,"1,6",,((1050+5*GSklv(5276))*Sklv+total_SPL*5)*BaseLv/100,,,,,,,,
 5285,SHC_SHADOW_EXCEED,魅影強化,,,,,,,,0,0,,,,,,,,,,,,,,,
 5286,SHC_DANCING_KNIFE,舞動血刃,,,,,,,,0,0,,,,,,,,,,,,,,,
-5287,SHC_SAVAGE_IMPACT,野蠻衝擊,physical,,,,,10,(Sklv*105+total_POW*5)*BaseLv/100,0,3,0.5,,,,,5285,(Sklv*125+total_POW*7)*BaseLv/100,,,,,,,,
+5287,SHC_SAVAGE_IMPACT,野蠻衝擊,physical,0,0,0,,10,(Sklv*105+total_POW*5)*BaseLv/100,0,3+(GUSklv(2033)*2),0.5,,,,,5285,(Sklv*125+total_POW*7)*BaseLv/100,,,,0,0,,,
 5288,SHC_SHADOW_SENSE,影刃旋舞,,,,,,,,0,0,,,,,,,,,,,,,,,
 5289,SHC_ETERNAL_SLASH,永恆斬擊,physical,0,,,,5,(Sklv*300+total_POW*2)*BaseLv/100,0,1,0.5,,,,,5285,(Sklv*740+total_POW*3)*BaseLv/100,,,,,,,,
 5290,SHC_POTENT_VENOM,強效毒液,,,,,,,,0,0,,,,,,,,,,,,,,,
