@@ -400,6 +400,88 @@ def parse_enchant_list(filename):
 
 
 # ============================================================
+# 附魔目標共用判定
+# ============================================================
+ENCHANT_CONTENT_KEYS = (
+    "enchants",
+    "perfect",
+    "upgrade",
+    "perfect_upgrade",
+    "random_upgrade",
+)
+
+
+def enchant_slot_has_content(slot_data):
+    """判斷單一洞位是否至少有一筆可顯示／套用的附魔內容。"""
+    return (
+        isinstance(slot_data, dict)
+        and any(slot_data.get(key) for key in ENCHANT_CONTENT_KEYS)
+    )
+
+
+def get_enchant_slot_ids(table_data):
+    """回傳 Table 中實際有附魔內容的洞位 ID。"""
+    if not isinstance(table_data, dict):
+        return set()
+
+    slots = table_data.get("slots", {})
+    if not isinstance(slots, dict):
+        return set()
+
+    result = set()
+    for slot_id, slot_data in slots.items():
+        if not enchant_slot_has_content(slot_data):
+            continue
+        try:
+            result.add(int(slot_id))
+        except (TypeError, ValueError):
+            continue
+    return result
+
+
+def enchant_table_has_content(table_data):
+    """判斷附魔 Table 是否至少有一筆可顯示／套用的附魔內容。"""
+    return bool(get_enchant_slot_ids(table_data))
+
+
+def resolve_enchant_target_name(key, item_data, itemdb):
+    """將 EnchantList 的 DBName／內部名稱解析為主程式顯示名稱。"""
+    item_data = item_data or {}
+    itemdb = itemdb or {}
+
+    item_id = itemdb.get(key)
+    if item_id is not None:
+        item_info = item_data.get(item_id) or item_data.get(str(item_id))
+        if isinstance(item_info, dict) and item_info.get("name"):
+            return str(item_info["name"])
+
+    key_text = str(key or "").strip()
+    for item_info in item_data.values():
+        if not isinstance(item_info, dict):
+            continue
+        if key_text == str(item_info.get("kr_name", "")).strip():
+            return str(item_info.get("name") or key_text)
+
+    return key_text
+
+
+def build_enchant_target_map(enchant_data, item_data, itemdb, require_content=True):
+    """建立「顯示裝備名稱 → Enchant Table ID」映射。"""
+    target_map = {}
+
+    for table_id, table_data in (enchant_data or {}).items():
+        if require_content and not enchant_table_has_content(table_data):
+            continue
+
+        for raw_name in table_data.get("target_items", []):
+            display_name = resolve_enchant_target_name(raw_name, item_data, itemdb)
+            if display_name:
+                target_map[display_name] = table_id
+
+    return target_map
+
+
+# ============================================================
 # PySide6 UI
 # ============================================================
 from PySide6.QtWidgets import (
@@ -493,6 +575,7 @@ class EnchantUI(QWidget):
         itemdb,
         initial_equipment_name="",
         target_part_name="",
+        initial_slot_id=None,
     ):
         super().__init__()
 
@@ -501,6 +584,7 @@ class EnchantUI(QWidget):
         self.itemdb = itemdb             # ItemDBNameTbl
         self.target_part_name = target_part_name or ""
         self.initial_equipment_name = initial_equipment_name or ""
+        self.initial_slot_id = initial_slot_id
 
         self.setWindowTitle("Enchant Viewer")
         layout = QHBoxLayout(self)
@@ -540,12 +624,12 @@ class EnchantUI(QWidget):
         # -----------------------------------------------------------
         # 建立：裝備名稱 → 所屬 Enchant Table 映射
         # -----------------------------------------------------------
-        self.all_target_items = {}  # key: 顯示名, value: table_id
-
-        for tid, data in self.parsed.items():
-            for raw_name in data["target_items"]:
-                disp = self.resolve_item_name(raw_name)
-                self.all_target_items[disp] = tid
+        self.all_target_items = build_enchant_target_map(
+            self.parsed,
+            self.items,
+            self.itemdb,
+            require_content=True,
+        )
 
         # 顯示所有裝備
         #self.full_item_list = sorted(self.all_target_items.keys())
@@ -565,6 +649,8 @@ class EnchantUI(QWidget):
         self.set_target_context(self.target_part_name, self.initial_equipment_name)
         if self.initial_equipment_name:
             self.select_item_by_name(self.initial_equipment_name)
+        if self.initial_slot_id is not None:
+            self.select_slot_by_id(self.initial_slot_id)
 
     def set_target_context(self, part_name="", equipment_name=""):
         """更新主畫面目前的紅底裝備欄資訊。"""
@@ -605,6 +691,20 @@ class EnchantUI(QWidget):
         self.list_items.setCurrentItem(matches[0])
         self.list_items.scrollToItem(matches[0])
         return True
+
+    def select_slot_by_id(self, slot_id):
+        """切換到指定洞位分頁；找不到時維持目前分頁。"""
+        try:
+            target_slot = int(slot_id)
+        except (TypeError, ValueError):
+            return False
+
+        for index in range(self.tabs.count()):
+            tab = self.tabs.widget(index)
+            if tab is not None and tab.property("enchant_slot_id") == target_slot:
+                self.tabs.setCurrentIndex(index)
+                return True
+        return False
 
     def _get_output_enchant_name(self, data):
         """一般附魔回傳自身；升階類型回傳升階後的附魔。"""
@@ -968,6 +1068,7 @@ class EnchantUI(QWidget):
             v.addWidget(table)
 
             title = slot_name_map.get(sid, f"第{sid}洞")
+            tab.setProperty("enchant_slot_id", int(sid))
             self.tabs.addTab(tab, title)
 
             row = 0

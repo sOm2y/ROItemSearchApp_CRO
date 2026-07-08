@@ -5407,6 +5407,117 @@ class ItemSearchApp(QWidget):
 
 # 附魔選擇後自動轉移至主視窗的相關欄位。 內容參考 https://github.com/z2911902/ROItemSearchApp/pull/3 
 
+    def _load_enchant_tool_data(self):
+        """載入並快取附魔工具資料，供按鈕顯示與工具視窗共用。"""
+        if (
+            self._enchant_data_cache is not None
+            and self._enchant_itemdb_cache is not None
+            and self._enchant_target_map_cache is not None
+        ):
+            return (
+                self._enchant_data_cache,
+                self._enchant_itemdb_cache,
+                self._enchant_target_map_cache,
+            )
+
+        data_dir = os.path.join(get_app_base_dir(), "data")
+        itemdb_path = os.path.join(data_dir, "ItemDBNameTbl.lua")
+        enchant_path = os.path.join(data_dir, "EnchantList.lua")
+
+        itemdb = enchant.parse_itemdb_name_tbl(itemdb_path)
+        enchant_data = enchant.parse_enchant_list(enchant_path)
+        target_map = enchant.build_enchant_target_map(
+            enchant_data,
+            self.parsed_items,
+            itemdb,
+            require_content=True,
+        )
+
+        self._enchant_itemdb_cache = itemdb
+        self._enchant_data_cache = enchant_data
+        self._enchant_target_map_cache = target_map
+        return enchant_data, itemdb, target_map
+
+    def _get_equipment_enchant_slots(self, equipment_name):
+        """取得指定裝備實際可附魔的洞位 ID。"""
+        equipment_name = str(equipment_name or "").strip()
+        if not equipment_name:
+            return set()
+
+        try:
+            enchant_data, _, target_map = self._load_enchant_tool_data()
+        except Exception as exc:
+            print(f"⚠️ 載入附魔資料失敗：{exc}")
+            return set()
+
+        table_id = target_map.get(equipment_name)
+        if table_id is None:
+            return set()
+
+        return enchant.get_enchant_slot_ids(enchant_data.get(table_id, {}))
+
+    def _equipment_has_enchant_content(self, equipment_name):
+        return bool(self._get_equipment_enchant_slots(equipment_name))
+
+    def _update_enchant_button_for_part(self, part_name, equipment_name=None):
+        """只在該裝備實際可附魔的洞位旁顯示附魔按鈕。"""
+        ui = getattr(self, "refine_inputs_ui", {}).get(part_name)
+        if not ui:
+            return
+
+        equip_input = ui.get("equip")
+        buttons = ui.get("enchant_buttons", [])
+        if equip_input is None:
+            return
+
+        if equipment_name is None:
+            equipment_name = equip_input.text()
+
+        enchant_slots = self._get_equipment_enchant_slots(equipment_name)
+        for slot_id, button in enumerate(buttons):
+            visible = slot_id in enchant_slots
+            button.setVisible(visible)
+            button.setEnabled(visible)
+
+    def _activate_equipment_edit_for_enchant(self, part_name):
+        """由裝備列的附魔按鈕鎖定套用目標，效果等同點選該裝備欄。"""
+        ui = getattr(self, "refine_inputs_ui", {}).get(part_name)
+        if not ui:
+            return False
+
+        equipment_name = ui["equip"].text().strip()
+        if not self._equipment_has_enchant_content(equipment_name):
+            self._update_enchant_button_for_part(part_name, equipment_name)
+            return False
+
+        self.clear_current_edit()
+        self.current_edit_part = f"{part_name} - 裝備"
+        self.current_edit_label.setText(
+            tr("label.current_part_detail", part=part_name, label="裝備")
+        )
+        self.unsync_button.setVisible(True)
+        self.unsync_button2.setVisible(True)
+        self.apply_to_note_button.setVisible(True)
+        self.clear_field_button2.setVisible(True)
+        self.apply_equip_button.setVisible(True)
+        self.clear_field_button.setVisible(True)
+        self.set_edit_lock(part_name, "裝備")
+        ui["equip"].setStyleSheet("background-color: #ff0000;")
+        self._set_enchant_tool_target(part_name, "裝備", equipment_name)
+        return True
+
+    def open_part_enchant_tool(self, part_name, slot_id=None):
+        """從指定裝備洞位開啟附魔工具，並切到對應洞位分頁。"""
+        if not self._activate_equipment_edit_for_enchant(part_name):
+            return
+
+        equipment_name = self.refine_inputs_ui[part_name]["equip"].text().strip()
+        self.open_enchant_tool(
+            target_part=part_name,
+            initial_equipment=equipment_name,
+            initial_slot_id=slot_id,
+        )
+
     def _set_enchant_tool_target(self, part_name="", field_type="", equipment_name=""):
         """把主畫面目前紅底欄位同步到已開啟的附魔工具。"""
         window = getattr(self, "enchant_window", None)
@@ -5490,31 +5601,49 @@ class ItemSearchApp(QWidget):
         self._set_enchant_tool_target(part_name, "裝備", equipment_name)
         report(f"已加入「{part_name}」第{slot_id + 1}洞：{enchant_name}", True)
 
-    def open_enchant_tool(self):#附魔工具
-        # 載入所需資料
-        item_data = self.parsed_items
-        itemdb = enchant.parse_itemdb_name_tbl("data/ItemDBNameTbl.lua")
-        enchant_data = enchant.parse_enchant_list("data/EnchantList.lua")
+    def open_enchant_tool(self, checked=False, target_part=None, initial_equipment=None, initial_slot_id=None):#附魔工具
+        # QAction.triggered 會傳入 checked；只有明確字串才視為指定部位。
+        if target_part is None:
+            target_part = ""
+        if initial_equipment is None:
+            initial_equipment = ""
 
-        target_part = ""
-        initial_equipment = ""
-        current_edit = getattr(self, "current_edit_part", None)
-        if current_edit:
+        if not target_part:
+            current_edit = getattr(self, "current_edit_part", None)
+            if current_edit:
+                try:
+                    part_name, field_type = current_edit.rsplit(" - ", 1)
+                    if field_type == "裝備" and part_name in self.refine_inputs_ui:
+                        target_part = part_name
+                        initial_equipment = self.refine_inputs_ui[part_name]["equip"].text().strip()
+                except ValueError:
+                    pass
+
+        # 已開啟時直接切換套用目標，不重複建立視窗。
+        window = getattr(self, "enchant_window", None)
+        if window is not None:
             try:
-                part_name, field_type = current_edit.rsplit(" - ", 1)
-                if field_type == "裝備" and part_name in self.refine_inputs_ui:
-                    target_part = part_name
-                    initial_equipment = self.refine_inputs_ui[part_name]["equip"].text().strip()
-            except ValueError:
-                pass
+                window.set_target_context(target_part, initial_equipment)
+                if initial_equipment:
+                    window.select_item_by_name(initial_equipment)
+                if initial_slot_id is not None:
+                    window.select_slot_by_id(initial_slot_id)
+                window.show()
+                window.raise_()
+                window.activateWindow()
+                return
+            except RuntimeError:
+                self.enchant_window = None
 
-        # 建立 UI
+        enchant_data, itemdb, _ = self._load_enchant_tool_data()
+
         self.enchant_window = enchant.EnchantUI(
             enchant_data,
-            item_data,
+            self.parsed_items,
             itemdb,
             initial_equipment_name=initial_equipment,
             target_part_name=target_part,
+            initial_slot_id=initial_slot_id,
         )
         self.enchant_window.enchantApplyRequested.connect(self.apply_enchant_from_tool)
         self.enchant_window.setWindowTitle(tr("window.enchant_tool"))
@@ -9615,6 +9744,10 @@ class ItemSearchApp(QWidget):
         for widget in self.findChildren(QWidget):
             widget.blockSignals(False)
 
+        # 批次載入時 textChanged 被暫停，這裡補做各洞位附魔按鈕刷新。
+        for part_name, info in self.refine_inputs_ui.items():
+            self._update_enchant_button_for_part(part_name, info["equip"].text())
+
         self.clear_global_state()
         # ===== 依 JSON buff 自動勾選技能/料理 =====
         if "buff" in saved_data:
@@ -10641,6 +10774,10 @@ class ItemSearchApp(QWidget):
         self._skip_close_confirm = False
         self.setWindowTitle(tr("window.main"))
         self.current_edit_part = None  # 用來記錄目前正在編輯的部位名稱
+        self.enchant_window = None
+        self._enchant_data_cache = None
+        self._enchant_itemdb_cache = None
+        self._enchant_target_map_cache = None
         # 把子視窗存成成員變數，避免被 Python 回收導致閃退/秒關
         self._damage_win = None
         self.preset_folder = "equip_presets"
@@ -11278,6 +11415,7 @@ class ItemSearchApp(QWidget):
             # ▶️ 卡片欄位們 + 清空按鈕
             card_inputs = []
             card_containers = []
+            enchant_buttons = []
 
             for i in range(4):
                 card_row_layout = QHBoxLayout()
@@ -11289,12 +11427,27 @@ class ItemSearchApp(QWidget):
                 card_input.setPlaceholderText(tr("placeholder.card", index=i+1))
                 card_input.mousePressEvent = make_focus_func_focus(part_name, card_input, f"卡片{i+1}")
 
+                enchant_slot_btn = QPushButton(tr("button.enchant", "附魔"))
+                enchant_slot_btn.setFixedWidth(40)
+                enchant_slot_btn.setToolTip(
+                    tr(
+                        "tooltip.open_equipment_enchant_slot",
+                        "開啟此裝備第{slot}洞的附魔工具",
+                        slot=i + 1,
+                    )
+                )
+                enchant_slot_btn.setVisible(False)
+                enchant_slot_btn.clicked.connect(
+                    lambda _, p=part_name, sid=i: self.open_part_enchant_tool(p, sid)
+                )
+
                 clear_card_btn = QPushButton(tr("button.clear"))
                 clear_card_btn.setFixedWidth(40)
                 clear_card_btn.clicked.connect(self.clear_global_state)
                 clear_card_btn.clicked.connect(lambda _, field=card_input: [field.clear(), self.trigger_total_effect_update()])
 
                 card_row_layout.addWidget(card_input)
+                card_row_layout.addWidget(enchant_slot_btn)
                 card_row_layout.addWidget(clear_card_btn)
 
                 card_container = QWidget()
@@ -11303,6 +11456,7 @@ class ItemSearchApp(QWidget):
 
                 card_inputs.append(card_input)
                 card_containers.append(card_container)
+                enchant_buttons.append(enchant_slot_btn)
 
             # ▶️ 詞條欄位（多行文字）+ 清空
             note_text = QTextEdit()
@@ -11347,11 +11501,16 @@ class ItemSearchApp(QWidget):
             part_ui["note_container"] = note_container
             part_ui["cards"] = card_inputs
             part_ui["card_containers"] = card_containers
+            part_ui["enchant_buttons"] = enchant_buttons
 
             # 最後再把整個部位丟進主 layout
             equip_layout.addWidget(part_container)
 
             self.refine_inputs_ui[part_name] = part_ui
+            equip_input.textChanged.connect(
+                lambda text, p=part_name: self._update_enchant_button_for_part(p, text)
+            )
+            self._update_enchant_button_for_part(part_name, equip_input.text())
             self.refresh_presets(part_name)
 
             # 🟢 特例：符文石碑 / 寵物蛋 / 投擲物品 → 隱藏卡片與詞條欄位
