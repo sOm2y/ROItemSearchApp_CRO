@@ -1219,7 +1219,7 @@
 6005,BO_EXPLOSIVE_POWDER,爆炸炸藥,physical,0,,,,5,(500+650*Sklv+total_POW*7)*BaseLv/100,0,3+(GUSklv(5347)*2),,,,,,5347,(500+750*Sklv+total_POW*10)*BaseLv/100,,,,,,,,
 6006,BO_MAYHEMIC_THORNS,混亂的荊棘,physical,1,,0,,10,(200+300*Sklv+total_POW*7)*BaseLv/100,0,3+(GUSklv(5347)*1),0.5,,,,,5347,(350+300*Sklv+total_POW*10)*BaseLv/100,,,,0,0,,,
 6502,DK_DRAGONIC_PIERCE,神龍貫刺,physical,1,,0,,5,(850+600*Sklv+total_POW*7)*BaseLv/100,0,5,0.5,,,,,5210,(950+650*Sklv+total_POW*10)*BaseLv/100,,,,0,0,,,
-6503,IG_RADIANT_SPEAR,光輝刺擊,physical,0,,,,10,((3500+1150*Sklv)+(GSklv(5259)*50)+total_POW*5)*BaseLv/100,0,(-2+(GUSklv(5263)*-1)),0.5,,,,,5263,((3500+1400*Sklv)+(GSklv(5259)*50)+total_POW*7)*BaseLv/100,,,,,,,,
+6503,IG_RADIANT_SPEAR,光輝刺擊,physical,1,0,0,,10,((3500+1150*Sklv)+(GSklv(5259)*50)+total_POW*5)*BaseLv/100,0,(-2+(GUSklv(5263)*-1)),0.5,,,,,5263,((3500+1400*Sklv)+(GSklv(5259)*50)+total_POW*7)*BaseLv/100,,,,0,0,,,
 6504,IG_IMPERIAL_CROSS,帝國十字斬,physical,0,,,,5,((1650+1350*Sklv)+(GSklv(5259)*25)+total_POW*5)*BaseLv/100,0,3,0,,,,,5263,((1750+1650*Sklv)+(GSklv(5259)*25)+total_POW*8)*BaseLv/100,,,,,,,,
 6505,IG_IMPERIAL_PRESSURE,霸權震域,magic,0,,0,,5,(5600+1850*Sklv+GSklv(5259)*50+total_SPL*7)*BaseLv/100,0,-7,,,,,,,,,,,0,0,,,
 6506,MT_RUSH_STRIKE,衝鋒斬擊,physical,0,,,,5,(3500*Sklv+total_POW*5)*BaseLv/100,0,-7,0,,,,,,,,,,,,,,

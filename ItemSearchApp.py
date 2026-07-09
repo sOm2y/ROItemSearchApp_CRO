@@ -1,5 +1,5 @@
 #部分資料取自ROCalculator,搜尋 ROCalculator 可以知道哪些有使用
-Version = "v0.3.16-260709"
+Version = "v0.3.17-260710"
 
 import sys, builtins, time
 import os
@@ -3827,7 +3827,7 @@ def parse_lua_effects_with_variables(
             {"name": "種族", "map": "race_map"},
             {"name": "數值%", "type": "value"}
         ])
-        race_dmg = re.match(r"Race(Add|Sub)Damage\((\d+),\s*(.+?)\)", line)
+        race_dmg = re.match(r"Race(Add|Sub)Damage\(\s*(\d+)\s*,\s*(.+)\s*\)\s*$", line)
         if race_dmg and condition_met:
             op, race_id, value_expr = race_dmg.groups()
             race_name = race_map.get(int(race_id), f"種族{race_id}")
@@ -9634,6 +9634,7 @@ class ItemSearchApp(QWidget):
         if weapon_class in [3,5,7,16,23,11,17,18,19,20,21,22]:                        
             self.set_part_visible("左手(盾牌)", False)
             self.clear_global_state()
+            self.display_all_effects()
             self.display_all_effects()
         else:
             self.set_part_visible("左手(盾牌)", True)
