@@ -1,5 +1,5 @@
 #部分資料取自ROCalculator,搜尋 ROCalculator 可以知道哪些有使用
-Version = "v0.3.17-260710"
+Version = "v0.3.18-260710"
 
 import sys, builtins, time
 import os
@@ -12423,6 +12423,9 @@ class ItemSearchApp(QWidget):
         # LineEdit 的綁定（使用 editingFinished 避免每次打字都觸發）
         #self.monsterDamage_input.editingFinished.connect(self.replace_custom_calc_content)#指定魔物增傷UI
         self.element_lv_input.editingFinished.connect(self._on_damage_target_fields_changed)
+        self.def_input.editingFinished.connect(self.replace_custom_calc_content)
+        self.defc_input.editingFinished.connect(self.replace_custom_calc_content)
+        self.res_input.editingFinished.connect(self.replace_custom_calc_content)
         self.mdef_input.editingFinished.connect(self.replace_custom_calc_content)
         self.mdefc_input.editingFinished.connect(self.replace_custom_calc_content)
         self.mres_input.editingFinished.connect(self.replace_custom_calc_content)
