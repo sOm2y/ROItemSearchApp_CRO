@@ -5044,7 +5044,16 @@ ItemDBNameTbl = {
   S_DK_SS_Pendant = 24919,
   S_DK_HS_Armor = 24920,
   S_DK_HS_Shoes = 24921,
-  Time_Gap_WH_Bow = 700108
+  Time_Gap_WH_Bow = 700108,
+  S_SOA_TS_Earring = 1270043,
+  S_SOA_TS_Pendant = 1270044,
+  S_SOA_MS_Armor = 1270045,
+  S_SOA_MS_Shoes = 1270046,
+  Time_Gap_SOA_Rod = 550155,
+  Energy_Xtal_UC_TW = 1003101,
+  Ultio_Cape_UPD = 480893,
+  Time_Gap_SS_Dagger1 = 28789,
+  Time_Gap_SS_Dagger2 = 510172
 }
 
 function ItemDB_To_ItemID(in_ItemDB)
