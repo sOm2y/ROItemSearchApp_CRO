@@ -2123,6 +2123,7 @@ class MainUI(QWidget):
     def __init__(self):
         from collections import defaultdict
         self.is_did_popup_open = False
+        self.is_sid_popup_open = False
         self.worker_thread = None
         self.worker = None
         self.is_processing = False
@@ -2154,6 +2155,7 @@ class MainUI(QWidget):
         self.parsed_data = []
         self.drop_data = []
         self.current_drop_data = []
+        self.current_drop_filtered_raw = []
         self.vanish_points = []
         self.sid_name_map = {}
         self.did_name_map = {}
@@ -2216,20 +2218,28 @@ class MainUI(QWidget):
         # 自動使用資料夾內最新 RRF 勾選
         self.auto_latest_checkbox = QCheckBox("最新 RRF")
         interval_layout.addWidget(self.auto_latest_checkbox)
-        # DID 標籤
+        # 攻方 SID 篩選
+        interval_layout.addWidget(QLabel("篩選攻方："))
+        self.sid_filter = QComboBox()
+        self._orig_sid_showPopup = self.sid_filter.showPopup
+        self._orig_sid_hidePopup = self.sid_filter.hidePopup
+        self.sid_filter.showPopup = self.on_sid_popup_open
+        self.sid_filter.hidePopup = self.on_sid_popup_close
+        self.sid_filter.addItem(FILTER_ALL, None)
+        self.sid_filter.setFixedWidth(210)
+        self.sid_filter.currentIndexChanged.connect(self.apply_did_filter)
+        interval_layout.addWidget(self.sid_filter)
+
+        # 受方 DID 篩選
         interval_layout.addWidget(QLabel("篩選魔物："))
-
-        # DID 下拉
         self.did_filter = QComboBox()
-        # 先備份原本的功能
-        self._orig_showPopup = self.did_filter.showPopup
-        self._orig_hidePopup = self.did_filter.hidePopup
-
-        # 替換成加上暫停 UI 更新的版本
+        self._orig_did_showPopup = self.did_filter.showPopup
+        self._orig_did_hidePopup = self.did_filter.hidePopup
         self.did_filter.showPopup = self.on_did_popup_open
         self.did_filter.hidePopup = self.on_did_popup_close
-        self.did_filter.addItem("選擇魔物")
-        self.did_filter.setFixedWidth(250)  # 可加可不加，讓 UI 乾淨對齊
+        self.did_filter.addItem(FILTER_ALL, None)
+        self.did_filter.addItem(FILTER_ALL_WITH_STAT, None)
+        self.did_filter.setFixedWidth(210)
         self.did_filter.currentIndexChanged.connect(self.apply_did_filter)
         interval_layout.addWidget(self.did_filter)
 
@@ -2497,6 +2507,7 @@ class MainUI(QWidget):
             self.parsed_data = []
             self.drop_data = []
             self.current_drop_data = []
+            self.current_drop_filtered_raw = []
             self.sid_name_map = {}
             self.did_name_map = {}
             self.self_sid = 0
@@ -2772,22 +2783,52 @@ class MainUI(QWidget):
     def on_did_popup_open(self):
         self.is_did_popup_open = True
         self.auto_timer.stop()
-
-        # *** 一定要呼叫原本 showPopup()，不然下拉打不開 ***
-        self._orig_showPopup()
-
+        self._orig_did_showPopup()
 
 
     def on_did_popup_close(self):
         self.is_did_popup_open = False
+        self._orig_did_hidePopup()
+        self.resume_auto_update_after_filter_popup()
+
+
+    def on_sid_popup_open(self):
+        self.is_sid_popup_open = True
+        self.auto_timer.stop()
+        self._orig_sid_showPopup()
+
+
+    def on_sid_popup_close(self):
+        self.is_sid_popup_open = False
+        self._orig_sid_hidePopup()
+        self.resume_auto_update_after_filter_popup()
+
+
+    def resume_auto_update_after_filter_popup(self):
+        """兩個篩選選單都關閉後，才恢復自動更新。"""
+        if self.is_did_popup_open or self.is_sid_popup_open:
+            return
 
         interval = self.refresh_input.value()
-        if interval > 0:
+        if interval > 0 and not self.is_processing:
             self.auto_timer.start(interval * 1000)
             self.update_load_button_text()
 
-        # *** 一定要呼叫原本 hidePopup()，不然下拉關不起來 ***
-        self._orig_hidePopup()
+
+    def reset_filter_combos(self):
+        """重設攻方 SID 與受方 DID 篩選選單。"""
+        self.sid_filter.blockSignals(True)
+        self.sid_filter.clear()
+        self.sid_filter.addItem(FILTER_ALL, None)
+        self.sid_filter.setCurrentIndex(0)
+        self.sid_filter.blockSignals(False)
+
+        self.did_filter.blockSignals(True)
+        self.did_filter.clear()
+        self.did_filter.addItem(FILTER_ALL, None)
+        self.did_filter.addItem(FILTER_ALL_WITH_STAT, None)
+        self.did_filter.setCurrentIndex(0)
+        self.did_filter.blockSignals(False)
 
 
 
@@ -3400,21 +3441,23 @@ class MainUI(QWidget):
         self.progress_bar.setValue(90)
         self.status.setText("正在更新圖表與統計...")
         QApplication.processEvents()
-        # ★ 先記錄使用者目前選的魔物
-        previous_selection = self.did_filter.currentText()
+        # 記錄使用者目前的攻方 / 受方選擇，更新資料後盡量保留。
+        previous_did_selection = self.did_filter.currentText()
+        previous_did_value = self.did_filter.currentData()
+        previous_sid_selection = self.sid_filter.currentText()
+        previous_sid_value = self.sid_filter.currentData()
 
-        did_set = sorted(set(d["did"] for d in self.parsed_data))
+        did_set = sorted({d.get("did") for d in self.parsed_data if d.get("did") is not None})
+        sid_set = sorted({d.get("sid") for d in self.parsed_data if d.get("sid") is not None})
 
-        # ★ popup 展開時不更新下拉式選單，但不 return
+        # popup 展開時不重建該下拉選單，避免使用者選到一半被刷新。
         if not self.is_did_popup_open:
-
             self.did_filter.blockSignals(True)
             self.did_filter.clear()
-            self.did_filter.addItem(FILTER_ALL)
-            self.did_filter.addItem(FILTER_ALL_WITH_STAT)
+            self.did_filter.addItem(FILTER_ALL, None)
+            self.did_filter.addItem(FILTER_ALL_WITH_STAT, None)
 
             for did in did_set:
-
                 if did in self.sid_name_map:
                     name = self.sid_name_map[did]
                 elif did in self.did_name_map:
@@ -3422,16 +3465,36 @@ class MainUI(QWidget):
                 else:
                     name = "未知目標"
 
-                self.did_filter.addItem(f"{name} ({did})")
+                self.did_filter.addItem(f"{name} ({did})", did)
 
-            # 恢復上一個選擇
-            index = self.did_filter.findText(previous_selection)
-            if index != -1:
-                self.did_filter.setCurrentIndex(index)
+            if previous_did_value is not None:
+                index = self.did_filter.findData(previous_did_value)
             else:
-                self.did_filter.setCurrentIndex(0)
-
+                index = self.did_filter.findText(previous_did_selection)
+            self.did_filter.setCurrentIndex(index if index != -1 else 0)
             self.did_filter.blockSignals(False)
+
+        if not self.is_sid_popup_open:
+            self.sid_filter.blockSignals(True)
+            self.sid_filter.clear()
+            self.sid_filter.addItem(FILTER_ALL, None)
+
+            for sid in sid_set:
+                if sid in self.sid_name_map:
+                    name = self.sid_name_map[sid]
+                elif sid in self.did_name_map:
+                    name = self.did_name_map[sid]
+                else:
+                    name = "未知攻方"
+
+                self.sid_filter.addItem(f"{name} ({sid})", sid)
+
+            if previous_sid_value is not None:
+                index = self.sid_filter.findData(previous_sid_value)
+            else:
+                index = self.sid_filter.findText(previous_sid_selection)
+            self.sid_filter.setCurrentIndex(index if index != -1 else 0)
+            self.sid_filter.blockSignals(False)
 
 
 
@@ -3652,6 +3715,7 @@ class MainUI(QWidget):
                 self.current_filtered_data = []
                 self.current_filtered_raw = []
                 self.current_drop_data = []
+                self.current_drop_filtered_raw = []
                 self.vanish_points = []
 
                 self.hud.clear_hud()
@@ -3662,12 +3726,7 @@ class MainUI(QWidget):
                 self.table_drop.setRowCount(0)
                 self.tabs.setCurrentIndex(0)
 
-                self.did_filter.blockSignals(True)
-                self.did_filter.clear()
-                self.did_filter.addItem(FILTER_ALL)
-                self.did_filter.addItem(FILTER_ALL_WITH_STAT)
-                self.did_filter.setCurrentIndex(0)
-                self.did_filter.blockSignals(False)
+                self.reset_filter_combos()
 
                 self.tree_group.viewport().update()
                 QApplication.processEvents()
@@ -3695,12 +3754,7 @@ class MainUI(QWidget):
                     self.table_drop.setRowCount(0)
                     self.tabs.setCurrentIndex(0)
 
-                    self.did_filter.blockSignals(True)
-                    self.did_filter.clear()
-                    self.did_filter.addItem(FILTER_ALL)
-                    self.did_filter.addItem(FILTER_ALL_WITH_STAT)
-                    self.did_filter.setCurrentIndex(0)
-                    self.did_filter.blockSignals(False)
+                    self.reset_filter_combos()
 
                     self.reset_incremental_txt_state(clear_data=True)
                     self.last_txt_signature = None
@@ -4299,7 +4353,7 @@ class MainUI(QWidget):
         # 刻度
         ax.set_yticks(range(len(names)))
         ax.set_yticklabels(names, fontproperties=font, color="#FFFFFF")
-        title_name = self.did_filter.currentText()
+        title_name = self.get_active_filter_title()
         #ax.set_title("總傷害", fontproperties=font, color="#FFFFFF")
         ax.set_title(
             f"{title_name} 的個別總傷害",
@@ -4418,7 +4472,7 @@ class MainUI(QWidget):
             frameon=True,
         )
         leg.set_draggable(True)
-        title_name = self.did_filter.currentText()
+        title_name = self.get_active_filter_title()
 
         ax.set_title(
             f"{title_name} 的每秒傷害趨勢",
@@ -4562,7 +4616,11 @@ class MainUI(QWidget):
     def build_monster_drop_stats(self):
         from collections import defaultdict
 
-        raw_base = getattr(self, "current_filtered_raw", [])
+        raw_base = getattr(
+            self,
+            "current_drop_filtered_raw",
+            getattr(self, "current_filtered_raw", [])
+        )
         drop_base = getattr(self, "current_drop_data", [])
 
         # key = 怪物名稱（同名怪合併）
@@ -4745,39 +4803,61 @@ class MainUI(QWidget):
             parent.setExpanded(True)
 
 
-    def apply_did_filter(self):
-        selected = self.did_filter.currentText()
+    def apply_did_filter(self, *_args):
+        """同時套用攻方 SID 與受方 DID 篩選。"""
+        selected_did_text = self.did_filter.currentText()
+
+        did_value = self.did_filter.currentData()
+        sid_value = self.sid_filter.currentData()
+
+        # 「全部(包含能力變動)」只控制傷害歷程是否納入能力變動事件。
+        include_stat = selected_did_text == FILTER_ALL_WITH_STAT
 
         raw_base = getattr(self, "raw_data", self.parsed_data)
         drop_base = getattr(self, "drop_data", [])
+        raw_source = raw_base if include_stat else [
+            d for d in raw_base
+            if d.get("skill_name") not in STAT_SKILL_NAMES
+        ]
 
-        raw_no_stat = [d for d in raw_base if d.get("skill_name") not in STAT_SKILL_NAMES]
+        filtered_damage = self.parsed_data
+        filtered_raw = raw_source
 
-        if selected == FILTER_ALL_WITH_STAT:
-            self.current_filtered_data = self.parsed_data.copy()
-            self.current_filtered_raw = raw_base
-            self.current_drop_data = drop_base.copy()
+        # 掉落頁沒有攻方 SID，因此只跟隨受方 DID 篩選。
+        drop_raw_source = raw_base
 
-        elif (not selected) or (selected == FILTER_ALL):
-            self.current_filtered_data = self.parsed_data.copy()
-            self.current_filtered_raw = raw_no_stat
-            self.current_drop_data = drop_base.copy()
-
-        else:
-            did_str = selected.split("(")[-1].replace(")", "")
-            if not did_str.isdigit():
-                return
-            did_value = int(did_str)
-
-            self.current_filtered_data = [d for d in self.parsed_data if d.get("did") == did_value]
-            self.current_filtered_raw = [
-                d for d in raw_no_stat
+        # 受方 DID 條件
+        if did_value is not None:
+            filtered_damage = [d for d in filtered_damage if d.get("did") == did_value]
+            filtered_raw = [d for d in filtered_raw if d.get("did") == did_value]
+            self.current_drop_filtered_raw = [
+                d for d in drop_raw_source
                 if d.get("did") == did_value
             ]
             self.current_drop_data = [
                 d for d in drop_base
                 if d.get("source_did") == did_value
             ]
+        else:
+            self.current_drop_filtered_raw = list(drop_raw_source)
+            self.current_drop_data = drop_base.copy()
+
+        # 攻方 SID 條件只篩選「實際傷害事件」。
+        # 狀態開始/結束、能力變動、死亡消失等 damage=0 的歷程事件
+        # 必須保留，不能因為沒有攻方 SID 而被排除。
+        if sid_value is not None:
+            filtered_damage = [
+                d for d in filtered_damage
+                if d.get("sid") == sid_value
+            ]
+            filtered_raw = [
+                d for d in filtered_raw
+                if int(d.get("damage", 0) or 0) <= 0
+                or d.get("sid") == sid_value
+            ]
+
+        self.current_filtered_data = list(filtered_damage)
+        self.current_filtered_raw = list(filtered_raw)
 
         self.update_raw_table()
         self.update_drop_table()
@@ -4785,6 +4865,23 @@ class MainUI(QWidget):
         self.update_group_tree()
         self.refresh_chart()
         self.update_hud_top5()
+
+
+    def get_active_filter_title(self):
+        """圖表標題使用目前的攻方 / 受方篩選條件。"""
+        did_text = self.did_filter.currentText() or FILTER_ALL
+        sid_text = self.sid_filter.currentText() or FILTER_ALL
+
+        did_is_all = did_text in (FILTER_ALL, FILTER_ALL_WITH_STAT)
+        sid_is_all = sid_text == FILTER_ALL
+
+        if not sid_is_all and not did_is_all:
+            return f"攻方 {sid_text} → 受方 {did_text}"
+        if not sid_is_all:
+            return f"攻方 {sid_text}"
+        if not did_is_all:
+            return f"受方 {did_text}"
+        return did_text
 
 
 
