@@ -58,6 +58,11 @@ DROP_ITEM_HIGHLIGHT_MAP = {
     2371: "#33CCFF",#原石類
     2372: "#33CCFF",#原石類
 }
+#要隱藏的狀態ID不顯示在歷程上
+buffid = {46,49,89,112,131,665,993,1061}
+#49 每次都會跟霸鞋一起消失，傷害比相同傷害之前少很多，可能是耐久度龜0或是最後一下?
+#131 應該是怒爆或是致毒給的隱藏效果。
+#993 好像是信件狀態?
 
 
 COUPLESTATUS_STAT_MAP = {
@@ -538,6 +543,293 @@ def le_int(bs):
         return 0
     return int("".join(reversed(bs)), 16)
 
+
+# ============================================================
+# EFST 狀態名稱解析
+# 共用 extract_efstinfo_values 的資料結構：
+#   id          = 數字狀態 ID
+#   name        = stateiconinfo.lua 中 COLOR_TITLE_BUFF 的顯示名稱
+#   efst_name   = EFSTIDs.lua 中的 EFST_* 常數名
+#   descript    = stateiconinfo.lua 的描述文字
+# ============================================================
+_EFST_METADATA_CACHE = {}
+
+
+def _read_text_auto(path):
+    """依常見編碼讀取 Lua / replay 文字檔。"""
+    for enc in ("utf-8-sig", "utf-8", "cp950", "big5"):
+        try:
+            with open(path, "r", encoding=enc) as f:
+                return f.read()
+        except UnicodeDecodeError:
+            continue
+        except FileNotFoundError:
+            return ""
+
+    try:
+        with open(path, "r", encoding="big5", errors="replace") as f:
+            return f.read()
+    except OSError:
+        return ""
+
+
+def _extract_lua_brace_block(text, start_brace_idx):
+    """從指定的 { 開始，取出完整 Lua table，會略過字串內的大括號。"""
+    depth = 0
+    in_string = False
+    escape = False
+
+    for i in range(start_brace_idx, len(text)):
+        ch = text[i]
+
+        if in_string:
+            if escape:
+                escape = False
+            elif ch == "\\":
+                escape = True
+            elif ch == '"':
+                in_string = False
+            continue
+
+        if ch == '"':
+            in_string = True
+        elif ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0:
+                return text[start_brace_idx:i + 1]
+
+    return None
+
+
+def _clean_lua_string(value):
+    """只處理 stateiconinfo 常見跳脫，不對中文做 unicode_escape。"""
+    return (
+        value
+        .replace(r'\"', '"')
+        .replace(r'\n', '\n')
+        .replace(r'\t', '\t')
+        .replace(r'\\', '\\')
+        .strip()
+    )
+
+
+def _extract_dump_hex_bytes(block):
+    """只抓 hexdump 地址欄後面的 byte，遇到 ASCII 欄立即停止。"""
+    hex_list = []
+    for line in block.splitlines():
+        maddr = re.match(r'^\s*[0-9A-Fa-f]{4,}\s+(.*)$', line)
+        if not maddr:
+            continue
+
+        for token in maddr.group(1).split():
+            if re.fullmatch(r'[0-9A-Fa-f]{2}', token):
+                hex_list.append(token)
+            else:
+                break
+    return hex_list
+
+
+def _load_efst_metadata(efst_ids_path="data/EFSTIDs.lua",
+                        stateiconinfo_path="data/stateiconinfo.lua"):
+    """建立狀態 ID -> COLOR_TITLE_BUFF 名稱/EFST 常數/描述的對照表。"""
+    abs_ids = os.path.abspath(efst_ids_path)
+    abs_icons = os.path.abspath(stateiconinfo_path)
+
+    try:
+        ids_mtime = os.path.getmtime(abs_ids)
+    except OSError:
+        ids_mtime = None
+    try:
+        icons_mtime = os.path.getmtime(abs_icons)
+    except OSError:
+        icons_mtime = None
+
+    cache_key = (abs_ids, ids_mtime, abs_icons, icons_mtime)
+    cached = _EFST_METADATA_CACHE.get(cache_key)
+    if cached is not None:
+        return cached
+
+    efst_ids_content = _read_text_auto(abs_ids)
+    stateicon_content = _read_text_auto(abs_icons)
+
+    id_to_efst_name = {}
+    efst_name_to_id = {}
+    for efst_name, num in re.findall(
+        r'\b(EFST_[A-Z0-9_]+)\s*=\s*(\d+)\s*,?',
+        efst_ids_content
+    ):
+        status_id = int(num)
+        id_to_efst_name[status_id] = efst_name
+        efst_name_to_id[efst_name] = status_id
+
+    metadata = {
+        status_id: {
+            "id": status_id,
+            # 只有 stateiconinfo.lua 的 COLOR_TITLE_BUFF 才算顯示名稱。
+            # 找不到標題時保持空字串，UI 僅顯示狀態 ID。
+            "name": "",
+            "efst_name": efst_name,
+            "descript": [],
+        }
+        for status_id, efst_name in id_to_efst_name.items()
+    }
+
+    entry_pattern = re.compile(
+        r'StateIconList\[EFST_IDs\.(EFST_[A-Z0-9_]+)\]\s*=\s*\{'
+    )
+    row_pattern = re.compile(
+        r'\{\s*"((?:\\.|[^"\\])*)"\s*(?:,\s*([A-Z0-9_]+))?'
+    )
+
+    for match in entry_pattern.finditer(stateicon_content):
+        efst_name = match.group(1)
+        status_id = efst_name_to_id.get(efst_name)
+        if status_id is None:
+            continue
+
+        table_block = _extract_lua_brace_block(stateicon_content, match.end() - 1)
+        if not table_block:
+            continue
+
+        desc_match = re.search(r'\bdescript\s*=\s*\{', table_block)
+        if not desc_match:
+            continue
+
+        desc_block = _extract_lua_brace_block(table_block, desc_match.end() - 1)
+        if not desc_block:
+            continue
+
+        title = None
+        descriptions = []
+        for raw_text, color_token in row_pattern.findall(desc_block):
+            line = _clean_lua_string(raw_text)
+            if not line or line == "%s":
+                continue
+
+            descriptions.append(line)
+            if color_token in ("COLOR_TITLE_BUFF","COLOR_TITLE_DEBUFF") and title is None:
+                title = line
+
+        info = metadata[status_id]
+        info["descript"] = descriptions
+        if title:
+            info["name"] = title
+
+    # 清掉同路徑的舊 mtime 快取，避免資料檔重載後累積。
+    for old_key in list(_EFST_METADATA_CACHE):
+        if old_key[0] == abs_ids and old_key[2] == abs_icons:
+            del _EFST_METADATA_CACHE[old_key]
+    _EFST_METADATA_CACHE[cache_key] = metadata
+    return metadata
+
+
+def extract_efstinfo_values(filepath=None,
+                            efst_ids_path="data/EFSTIDs.lua",
+                            stateiconinfo_path="data/stateiconinfo.lua",
+                            *,
+                            content=None,
+                            include_status_changes=False):
+    """
+    解析 replay 中出現的 EFST ID，並回傳 COLOR_TITLE_BUFF 顯示名稱。
+
+    content 可直接傳目前增量文字；未傳時才從 filepath 讀取。
+    include_status_changes=True 時，另外納入：
+      HEADER_ZC_MSG_STATE_CHANGE2（開始）
+      HEADER_ZC_MSG_STATE_CHANGE（結束）
+    這裡只建立 ID -> 名稱對照，不改變事件的開始/結束語意。
+    """
+    metadata = _load_efst_metadata(efst_ids_path, stateiconinfo_path)
+
+    if content is None:
+        if not filepath:
+            return []
+        content = _read_text_auto(filepath)
+
+    results = []
+    seen_ids = set()
+
+    def append_unique(status_id):
+        if status_id in seen_ids:
+            return
+        seen_ids.add(status_id)
+
+        info = metadata.get(status_id)
+        if info is None:
+            efst_name = f"UNKNOWN_EFST_{status_id}"
+            info = {
+                "id": status_id,
+                "name": "",
+                "efst_name": efst_name,
+                "descript": [],
+            }
+        results.append(dict(info))
+
+    # 角色自己的 AID，供既有 STATE_CHANGE3 篩選使用。
+    player_aid_hex = None
+    aid_match = re.search(
+        r"\[Chunk Session\] Unparsed opcode Aid, Length=4"
+        r"[\s\S]*?\{([^}]*)\}",
+        content,
+        re.DOTALL,
+    )
+    if aid_match:
+        aid_hex_list = _extract_dump_hex_bytes(aid_match.group(1))
+        if len(aid_hex_list) >= 4:
+            player_aid_hex = ''.join(x.lower() for x in aid_hex_list[:4])
+
+    # 原本的 EfstInfo：前 2 bytes 是狀態 ID（little-endian）。
+    efstinfo_matches = re.findall(
+        r"\[Chunk [^\]]+\] Unparsed opcode EfstInfo, Length=\d+"
+        r"[\s\S]*?\{([^}]*)\}",
+        content,
+        re.DOTALL,
+    )
+    for block in efstinfo_matches:
+        hex_list = _extract_dump_hex_bytes(block)
+        if len(hex_list) >= 2:
+            append_unique(le_int(hex_list[0:2]))
+
+    # 既有 STATE_CHANGE3：83 09 後 2 bytes 為狀態 ID，後 4 bytes 為 AID。
+    if player_aid_hex:
+        state3_matches = re.findall(
+            r"packet\s+HEADER_ZC_MSG_STATE_CHANGE3"
+            r"[\s\S]*?\{([^}]*)\}",
+            content,
+            re.DOTALL,
+        )
+        for block in state3_matches:
+            hex_list = _extract_dump_hex_bytes(block)
+            if len(hex_list) < 8:
+                continue
+
+            for i in range(len(hex_list) - 7):
+                if hex_list[i:i + 2] != ["83", "09"] and [x.lower() for x in hex_list[i:i + 2]] != ["83", "09"]:
+                    continue
+
+                status_id = le_int(hex_list[i + 2:i + 4])
+                caster_aid_hex = ''.join(x.lower() for x in hex_list[i + 4:i + 8])
+                if caster_aid_hex == player_aid_hex:
+                    append_unique(status_id)
+                    break
+
+    # 新的一般狀態封包：狀態 ID 固定在 [2:4]。
+    if include_status_changes:
+        status_pattern = re.compile(
+            r'^\[(?:\+\d{2}:\d{2}:\d{2}:\d{3})\]\s+packet\s+'
+            r'(?:HEADER_ZC_MSG_STATE_CHANGE2|HEADER_ZC_MSG_STATE_CHANGE)\s*$'
+            r'\s*^\[0x[0-9A-Fa-f]+\s+\(\d+\)\]\s*\{\s*$'
+            r'([\s\S]*?)^\}',
+            re.MULTILINE,
+        )
+        for block in status_pattern.findall(content):
+            hex_list = _extract_dump_hex_bytes(block)
+            if len(hex_list) >= 4:
+                append_unique(le_int(hex_list[2:4]))
+
+    return results
+
 # ============================================================
 # 解析 [Chunk ReplayData] Unparsed opcode Charactername
 # 取得：角色名稱（Big5 / cp950）
@@ -873,85 +1165,79 @@ def decode_groundskill(hex_bytes):
     }
 
 # ============================================================
-# 解析 HEADER_ZC_MSG_STATE_CHANGE3 + HEADER_ZC_MSG_STATE_CHANGE（整合版）
+# 解析變身封包：HEADER_ZC_MSG_STATE_CHANGE3 / HEADER_ZC_MSG_STATE_CHANGE
+# 注意：必須精確比對封包名稱，避免把 STATE_CHANGE2 誤判成 STATE_CHANGE。
 # ============================================================
 def parse_statechange3_blocks(text: str):
     t0 = time.perf_counter()
 
     lines = text.splitlines()
     results = []
+    packet_re = re.compile(
+        r'^\[(\+\d{2}:\d{2}:\d{2}:\d{3})\]\s+packet\s+'
+        r'(HEADER_ZC_MSG_STATE_CHANGE3|HEADER_ZC_MSG_STATE_CHANGE)\s*$'
+    )
 
     i = 0
     n = len(lines)
 
     while i < n:
         line = lines[i].strip()
+        packet_match = packet_re.match(line)
 
-        # --- ★ 抓兩種變身封包 ---
-        # 開始變身：HEADER_ZC_MSG_STATE_CHANGE3
-        # 結束變身：HEADER_ZC_MSG_STATE_CHANGE
-        if (
-            "packet HEADER_ZC_MSG_STATE_CHANGE3" in line
-            or "packet HEADER_ZC_MSG_STATE_CHANGE" in line
-        ):
-            if "STATE_CHANGE3" in line:
-                packet_kind = "STATE3"
-            else:
-                packet_kind = "STATE"
-
-            # 抓 timestamp [+00:00:06:673]
-            timestamp = line.split("]")[0][1:]
-
-            # 下一行是 size 行，例如：
-            # [0x00000009 (9)] {
+        if not packet_match:
             i += 1
-            if i >= n:
-                break
+            continue
 
-            size_line = lines[i].strip()
-            m = SIZE_RE.search(size_line)
-            if not m:
-                i += 1
-                continue
+        timestamp, packet_name = packet_match.groups()
+        packet_kind = "STATE3" if packet_name.endswith("STATE_CHANGE3") else "STATE"
 
-            size = int(m.group(1))
+        # 下一行是 size 行，例如：[0x00000009 (9)] {
+        i += 1
+        if i >= n:
+            break
 
-            # hex 區塊
-            hex_bytes = []
+        size_match = SIZE_RE.search(lines[i])
+        if not size_match:
             i += 1
+            continue
 
-            while i < n:
-                line2 = lines[i].strip()
-
-                if line2.startswith("}"):
-                    break  # 結束
-
-                # 例：
-                # 0000  96 01 99 02 47 09 7C 01 00
-                if len(line2) > 4 and line2[:4].isalnum():
-                    chunks = line2[4:].split()
-                    hex_bytes.extend(chunks)
-                    if len(hex_bytes) >= size:
-                        break
-
-                i += 1
-
-            # ★ 全統一輸出給 decode_statechange3()
-            results.append({
-                "timestamp": timestamp,
-                "packet_kind": packet_kind,  # STATE3 或 STATE
-                "hex": hex_bytes[:size],
-            })
-
+        size = int(size_match.group(1))
+        hex_bytes = []
         i += 1
 
-    t1 = time.perf_counter()
-    print(f"[STATE_CHANGE3/STATE] 解析耗時: {(t1 - t0) * 1000:.3f} ms")
+        while i < n:
+            line2 = lines[i].strip()
+            if line2.startswith("}"):
+                break
 
+            maddr = re.match(r'^\s*[0-9A-Fa-f]{4}\s+(.*)$', line2)
+            if maddr:
+                for token in maddr.group(1).split():
+                    if re.fullmatch(r'[0-9A-Fa-f]{2}', token):
+                        hex_bytes.append(token)
+                        if len(hex_bytes) >= size:
+                            break
+                    else:
+                        break
+
+            if len(hex_bytes) >= size:
+                break
+            i += 1
+
+        results.append({
+            "timestamp": timestamp,
+            "packet_kind": packet_kind,  # STATE3 或 STATE
+            "hex": hex_bytes[:size],
+        })
+        i += 1
+
+    print(f"[STATE_CHANGE3/STATE] 解析到 {len(results)} 筆，耗時: {(time.perf_counter() - t0) * 1000:.3f} ms")
     return results
 
+
 # ============================================================
-# 解碼 STATE_CHANGE3 / STATE_CHANGE（整合）
+# 解碼變身 STATE_CHANGE3 / STATE_CHANGE（既有功能）
 # ============================================================
 def decode_statechange3(hex_bytes):
     parsed = {}
@@ -965,7 +1251,7 @@ def decode_statechange3(hex_bytes):
     # monsterskin（STATE_CHANGE 沒有 → 為 0）
     parsed["monsterskin"] = le_int(hex_bytes[17:19]) if len(hex_bytes) >= 19 else 0
 
-    # 開始 / 結束變身判斷 （你需要的）
+    # 既有變身封包仍依 type / monsterskin 判斷
     if parsed["type"] == 665:
         if parsed["monsterskin"] > 0:
             parsed["transform_event"] = "start"
@@ -974,7 +1260,6 @@ def decode_statechange3(hex_bytes):
     else:
         parsed["transform_event"] = None
 
-    # 原本保留的欄位
     parsed["skill_id"]      = 0
     parsed["skill_name"]    = "外觀變更"
     parsed["did"]           = 0
@@ -986,6 +1271,102 @@ def decode_statechange3(hex_bytes):
 
     return parsed
 
+
+# ============================================================
+# 解析一般狀態封包
+#   HEADER_ZC_MSG_STATE_CHANGE2 = 狀態開始
+#   HEADER_ZC_MSG_STATE_CHANGE  = 狀態結束
+#
+# 封包欄位（兩者共通）：
+#   [0:2] packet id
+#   [2:4] status id，2 bytes little-endian
+#   [4:7] did，3 bytes little-endian
+# ============================================================
+def parse_status_change_blocks(text: str):
+    t0 = time.perf_counter()
+
+    lines = text.splitlines()
+    results = []
+    packet_re = re.compile(
+        r'^\[(\+\d{2}:\d{2}:\d{2}:\d{3})\]\s+packet\s+'
+        r'(HEADER_ZC_MSG_STATE_CHANGE2|HEADER_ZC_MSG_STATE_CHANGE)\s*$'
+    )
+
+    i = 0
+    n = len(lines)
+
+    while i < n:
+        line = lines[i].strip()
+        packet_match = packet_re.match(line)
+
+        if not packet_match:
+            i += 1
+            continue
+
+        timestamp, packet_name = packet_match.groups()
+        packet_kind = "START" if packet_name.endswith("STATE_CHANGE2") else "END"
+
+        i += 1
+        if i >= n:
+            break
+
+        size_match = SIZE_RE.search(lines[i])
+        if not size_match:
+            i += 1
+            continue
+
+        size = int(size_match.group(1))
+        hex_bytes = []
+        i += 1
+
+        while i < n:
+            line2 = lines[i].strip()
+            if line2.startswith("}"):
+                break
+
+            maddr = re.match(r'^\s*[0-9A-Fa-f]{4}\s+(.*)$', line2)
+            if maddr:
+                for token in maddr.group(1).split():
+                    if re.fullmatch(r'[0-9A-Fa-f]{2}', token):
+                        hex_bytes.append(token)
+                        if len(hex_bytes) >= size:
+                            break
+                    else:
+                        break
+
+            if len(hex_bytes) >= size:
+                break
+            i += 1
+
+        packet = hex_bytes[:size]
+        if len(packet) >= 7:
+            results.append({
+                "timestamp": timestamp,
+                "packet_kind": packet_kind,  # START / END
+                "size": size,
+                "hex": packet,
+            })
+
+        i += 1
+
+    print(f"[STATUS_CHANGE2/STATE_CHANGE] 解析到 {len(results)} 筆，耗時: {(time.perf_counter() - t0) * 1000:.3f} ms")
+    return results
+
+
+
+def decode_status_change(hex_bytes, packet_kind):
+    """解碼一般狀態開始/結束封包。事件方向只依封包名稱判定。"""
+    status_id = le_int(hex_bytes[2:4]) if len(hex_bytes) >= 4 else 0
+    did = le_int(hex_bytes[4:8]) if len(hex_bytes) >= 7 else 0
+    is_start = packet_kind == "START"
+
+
+    return {
+        "status_id": status_id,
+        "did": did,
+        "status_event": "start" if is_start else "end",
+        "status_event_name": "狀態開始" if is_start else "狀態結束",
+    }
 
 
 def parse_vanish_blocks(text: str):
@@ -2572,7 +2953,7 @@ class MainUI(QWidget):
 
         checked = check_button_state(self)
         
-        with ThreadPoolExecutor(max_workers=11) as exe:
+        with ThreadPoolExecutor(max_workers=12) as exe:
             futures = {
                 "ground": exe.submit(parse_groundskill_blocks, text),
                 "skill2": exe.submit(parse_skill2_blocks, text),
@@ -2581,6 +2962,12 @@ class MainUI(QWidget):
                 "stand":  exe.submit(parse_standentry11_blocks, text),
                 "new":    exe.submit(parse_newentry11_blocks, text),
                 "state3": exe.submit(parse_statechange3_blocks, text),
+                "status": exe.submit(parse_status_change_blocks, text),
+                "efst":   exe.submit(
+                    extract_efstinfo_values,
+                    content=text,
+                    include_status_changes=True,
+                ),
                 "couple": exe.submit(parse_couplestatus_blocks, text, checked),
                 "par":    exe.submit(parse_par_change_blocks, text, checked),
                 "vanish": exe.submit(parse_vanish_blocks, text),
@@ -2594,8 +2981,12 @@ class MainUI(QWidget):
         if mode == "full":
             self.sid_name_map = {}
             self.did_name_map = {}
+            self.efst_info_map = {}
+        elif not hasattr(self, "efst_info_map"):
+            self.efst_info_map = {}
         drops = []
         state3 = []
+        status_changes = []
         couple_status = []
         par_change = []
         vanish = []
@@ -2651,6 +3042,12 @@ class MainUI(QWidget):
                 
             elif name == "state3":
                 state3 = result
+
+            elif name == "status":
+                status_changes = result
+
+            elif name == "efst":
+                self.efst_info_map.update({info["id"]: info for info in result})
                 
             elif name == "couple":
                 couple_status = result
@@ -2815,6 +3212,40 @@ class MainUI(QWidget):
                 "global_delay": "",
             })
             
+        # 一般狀態事件：STATE_CHANGE2 固定為開始，STATE_CHANGE 固定為結束。
+        # 狀態名稱統一取 extract_efstinfo_values() 解析出的 COLOR_TITLE_BUFF 標題。
+        status_events = []
+        for blk in status_changes:
+            dec = decode_status_change(blk["hex"], blk["packet_kind"])
+            if dec["status_id"] in buffid:
+                continue
+            status_id = dec["status_id"]
+            status_info = self.efst_info_map.get(status_id, {})
+            # 僅使用 COLOR_TITLE_BUFF；沒有名稱時只顯示狀態 ID。
+            status_name = status_info.get("name", "").strip()
+            if status_name:
+                status_display = f'{dec["status_event_name"]}：{status_name} (ID {status_id})'
+            else:
+                status_display = f'{dec["status_event_name"]} (ID {status_id})'
+
+            status_events.append({
+                "timestamp": blk["timestamp"],
+                "skill_id": status_id,
+                "skill_name": status_display,
+                "sid": "",
+                "did": dec["did"],
+                "damage": 0,
+                "damage_display": "",
+                "level": "",
+                "hit_count": "",
+                "skill_delay": "",
+                "global_delay": "",
+                "status_id": status_id,
+                "status_name": status_name,
+                "efst_name": status_info.get("efst_name", ""),
+                "status_event": dec["status_event"],
+            })
+
         vanish_events = []
         #print(f"{vanish}")
         for ev in vanish:
@@ -2897,7 +3328,7 @@ class MainUI(QWidget):
             d["timestamp"] = p["timestamp"]
             new_parsed_data.append(d)
 
-        new_raw_data = new_parsed_data + stat_events + vanish_events
+        new_raw_data = new_parsed_data + stat_events + status_events + vanish_events
         
         new_vanish_points = [
             {
@@ -3914,24 +4345,29 @@ class MainUI(QWidget):
 
         # timeline[sid][second] = damage
         timeline = defaultdict(lambda: defaultdict(int))
-        t0 = None
 
-        # ---- 計算每秒傷害（正確版本） ----
+        # 先解析全部有效時間，並以最早一筆作為折線圖起點。
+        # 不再把 600 秒（10 分鐘）之後的資料直接丟棄。
+        timed_rows = []
         for d in data:
-            ts = d["timestamp"]   # 例如 "+00:04:36:783"
-            parts = ts[1:].split(":")
-            h = int(parts[0])
-            m = int(parts[1])
-            s = int(parts[2])
-            ms = int(parts[3])
-            t = h*3600 + m*60 + s + ms/1000.0
+            try:
+                ts = d["timestamp"]   # 例如 "+00:04:36:783"
+                h, m, s, ms = map(int, ts[1:].split(":"))
+                t = h * 3600 + m * 60 + s + ms / 1000.0
+            except (KeyError, TypeError, ValueError):
+                continue
 
-            if t0 is None:
-                t0 = t
+            timed_rows.append((t, d))
+
+        if not timed_rows:
+            return
+
+        t0 = min(t for t, _ in timed_rows)
+
+        # ---- 計算完整紀錄的每秒傷害 ----
+        for t, d in timed_rows:
             sec = int(t - t0)
-
-            # replay 可能跳秒，錯誤資料排除
-            if sec < 0 or sec > 600:
+            if sec < 0:
                 continue
 
             timeline[d["sid"]][sec] += d["damage"]
@@ -3948,17 +4384,11 @@ class MainUI(QWidget):
             allowed_sid = set()
 
 
-        # ---- 補零（避免曲線斷掉）----
+        # ---- 找出完整時間範圍 ----
         max_sec = 0
         for sid in timeline:
             if timeline[sid]:
                 max_sec = max(max_sec, max(timeline[sid].keys()))
-
-        for sid in timeline:
-            for sec in range(max_sec + 1):
-                if sec not in timeline[sid]:
-                    timeline[sid][sec] = 0
-
 
         # ---- 畫線（含 1% 過濾）----
         for sid, sec_data in timeline.items():
@@ -3967,7 +4397,8 @@ class MainUI(QWidget):
                 continue
 
             seconds = list(range(max_sec + 1))
-            values = [sec_data[sec] for sec in seconds]
+            # 缺少傷害的秒數直接顯示為 0，不必先把大量 0 寫回 timeline。
+            values = [sec_data.get(sec, 0) for sec in seconds]
 
             # SID 名稱
             if sid in self.sid_name_map:
