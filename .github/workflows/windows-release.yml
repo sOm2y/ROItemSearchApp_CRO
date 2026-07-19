@@ -1,0 +1,98 @@
+name: Build Windows Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m pip install pyinstaller
+
+      - name: Validate localization and Python syntax
+        shell: pwsh
+        run: |
+          python tools/check_i18n.py
+          python -c "from pathlib import Path; files=[p for p in Path('.').rglob('*.py') if '.venv' not in p.parts and '__pycache__' not in p.parts]; [compile(p.read_bytes(), str(p), 'exec') for p in files]; print(f'Syntax OK: {len(files)} Python files')"
+
+      - name: Generate Qt UI module
+        shell: pwsh
+        run: |
+          pyside6-uic UI/ui_savemanager.ui -o UI/ui_savemanager.py
+
+      - name: Build main application
+        shell: pwsh
+        run: |
+          pyinstaller `
+            --noconfirm `
+            --clean `
+            --onedir `
+            --windowed `
+            --name ItemSearchApp `
+            --contents-directory . `
+            --add-data "APP;APP" `
+            --add-data "data;data" `
+            --add-data "lang;lang" `
+            --add-data "UI;UI" `
+            ItemSearchApp.py
+
+      - name: Build updater
+        shell: pwsh
+        run: |
+          pyinstaller `
+            --noconfirm `
+            --clean `
+            --onefile `
+            --windowed `
+            --name update `
+            update.py
+
+      - name: Assemble release archive
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force release/ROItemSearchApp | Out-Null
+          Copy-Item -Recurse -Force dist/ItemSearchApp/* release/ROItemSearchApp/
+          Copy-Item -Force dist/update.exe release/ROItemSearchApp/update.exe
+          Copy-Item -Force README.md, LICENSE release/ROItemSearchApp/
+          Compress-Archive `
+            -Path release/ROItemSearchApp `
+            -DestinationPath release/ROItemSearchApp.zip `
+            -CompressionLevel Optimal
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ROItemSearchApp-Windows-${{ github.ref_name }}
+          path: release/ROItemSearchApp.zip
+          if-no-files-found: error
+
+      - name: Create GitHub Release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ github.ref_name }}" `
+            "release/ROItemSearchApp.zip#ROItemSearchApp Windows ZIP" `
+            --title "${{ github.ref_name }}" `
+            --generate-notes `
+            --verify-tag

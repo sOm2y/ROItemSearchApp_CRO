@@ -7,6 +7,7 @@ from PySide6.QtWidgets import QMessageBox
 import os
 import json
 import importlib.util
+from i18n import tr
 # ======【設定區】======
 SHOW_OFFSET = False# 顯示 slot 在 group 內的 offset 位置 False True
 SHOW_RAW = False# 顯示 slot 的原始 bytes（每8顆一行）
@@ -102,14 +103,16 @@ def load_python_dict(path, var_name):
     var_name: 要讀取的 dict 變數名稱，例如 'all_skill_entries'
     """
     if not os.path.exists(path):
-        raise FileNotFoundError(f"外部資料檔不存在: {path}")
+        raise FileNotFoundError(tr("rrf_converter.error.external_file_missing", path=path))
 
     spec = importlib.util.spec_from_file_location("external_module", path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
 
     if not hasattr(module, var_name):
-        raise AttributeError(f"{path} 裡找不到變數: {var_name}")
+        raise AttributeError(
+            tr("rrf_converter.error.variable_missing", path=path, name=var_name)
+        )
 
     return getattr(module, var_name)
 
@@ -146,16 +149,22 @@ class DataRegistry:
         try:
             data = load_python_dict(path, var_name)
             cls.loaded_data[key] = data
-            print(f"[rrf to app]✓ 載入 {key} 成功")
+            print(tr("rrf_converter.log.source_loaded", source=key))
         except Exception as e:
-            print(f"[rrf to app]⚠️ 載入 {key} 失敗，使用預設值：{e}")
+            print(
+                tr(
+                    "rrf_converter.log.source_load_failed",
+                    source=key,
+                    error=e,
+                )
+            )
             cls.loaded_data[key] = info["default"]
 
         return cls.loaded_data[key]
 
     @classmethod
     def reload_all(cls):
-        print("[rrf to app]=== 重新載入所有資料來源 ===")
+        print(tr("rrf_converter.log.reloading_sources"))
 
         for key, info in cls.sources.items():
             cls.load(key)
@@ -269,7 +278,11 @@ def parse_lub_file(filename):
         with open(filename, "r", encoding="utf-8") as file:
             content = file.read()
     except FileNotFoundError:
-        QMessageBox.critical(None, "錯誤", f"找不到檔案：{filename}")
+        QMessageBox.critical(
+            None,
+            tr("common.error"),
+            tr("common.file_not_found", filename=filename),
+        )
         return {}
 
     item_entries = re.findall(
@@ -378,11 +391,11 @@ def load_skill_map(filepath=None):
 
     # 若 filepath 沒指定 → 不做任何事
     if filepath is None:
-        print("未指定路徑，使用預設空白技能列表。")
+        print(tr("rrf_converter.log.skill_path_missing"))
         return
 
     if not os.path.exists(filepath):
-        print(f"{filepath} 找不到，保留空白技能列表。")
+        print(tr("rrf_converter.log.skill_file_missing", filepath=filepath))
         return
 
     skill_df = pd.read_csv(filepath)
@@ -397,7 +410,7 @@ def load_skill_map(filepath=None):
     skill_tree.skill_code_to_name = dict(zip(skill_df["Code"], skill_df["Name"]))
 
 
-    print("技能列表載入成功")
+    print(tr("rrf_converter.log.skill_list_loaded"))
 
 
 
@@ -408,11 +421,11 @@ def run_replay_and_dump():
     root.withdraw()
 
     rrf_path = filedialog.askopenfilename(
-        title="選擇 RRF 檔案",
+        title=tr("rrf_converter.dialog.select_rrf"),
         filetypes=[("Ragnarok Replay Files", "*.rrf"), ("All Files", "*.*")]
     )
     if not rrf_path:
-        print("使用者取消選擇。")
+        print(tr("rrf_converter.log.selection_cancelled"))
         return None, None
 
     # 2. 指定 temp.txt 輸出位置
@@ -423,15 +436,15 @@ def run_replay_and_dump():
 
     cmd = f'"{exe_path}" "{rrf_path}" "{output_txt}"'
 
-    print("執行中：", cmd)
+    print(tr("rrf_converter.log.command_running", command=cmd))
     subprocess.run(cmd, shell=True)
 
     # 4. 回傳 temp.txt 路徑
     if os.path.exists(output_txt):
-        print("解析完成，已產生：", output_txt)
+        print(tr("rrf_converter.log.replay_created", path=output_txt))
         return rrf_path, output_txt
 
-    print("錯誤：找不到 temp.txt")
+    print(tr("rrf_converter.error.temp_missing"))
     return rrf_path, None
 
 #截取技能等級
@@ -959,7 +972,7 @@ def extract_equip_chunk(filepath, json_data, get_itemname,
 
     match = re.search(pattern, content, re.MULTILINE)
     if not match:
-        print(f"找不到指定chunk！({chunk_name})")
+        print(tr("rrf_converter.error.chunk_missing", chunk=chunk_name))
         return
 
     # === 轉成 hex list ===
@@ -1197,7 +1210,13 @@ def extract_equip_chunk(filepath, json_data, get_itemname,
         for eid, places in duplicates.items():
             place_text = "、".join([f"{cn} G{gn}（{gname} - {ename}）" for cn, gn, gname, ename in places])
 
-            print(f"[警告] 偵測到裝備 ID 重複 (ID: {eid})：{place_text}")
+            print(
+                tr(
+                    "rrf_converter.warning.duplicate_equipment",
+                    item_id=eid,
+                    places=place_text,
+                )
+            )
 
         # 跳視窗（把全部重複整理成文字）
         try:
@@ -1208,14 +1227,15 @@ def extract_equip_chunk(filepath, json_data, get_itemname,
                 #place_text = "\n".join([f" - {cn} G{gn}（{gname} - {ename}）" for cn, gn, gname, ename in places])
                 place_text = "\n".join([f" - {gname}：{ename}" for cn, gn, gname, ename in places])
                 lines.append(f"ID: {eid}\n{place_text}")
-            msg = (
-                "偵測到以下裝備 ID 在多個部位重複：\n\n"
-                + "\n\n".join(lines)
-                + "\n\n為避免重複運算裝備能力，需手動將重複裝備清空到剩餘一個部位。"
-                + "\n若為可雙持武器職業，需自行判斷是否為雙刀/雙手武器。"
+            msg = tr(
+                "rrf_converter.warning.duplicate_equipment_detail",
+                details="\n\n".join(lines),
             )
 
-            messagebox.showwarning("裝備重複偵測", msg)
+            messagebox.showwarning(
+                tr("rrf_converter.warning.duplicate_equipment_title"),
+                msg,
+            )
         except Exception:
             pass
 
@@ -1265,7 +1285,7 @@ def run_rrf_main():
     load_skill_map("data/skillneme.csv") 
     from skill_tree import skill_code_to_name, skill_code_to_id
 
-    print("========== 技能清單 ==========")
+    print(tr("rrf_converter.output.skill_list"))
 
     skill_json_list = []   # ★ 用來輸出 JSON 的 note
 
@@ -1279,7 +1299,7 @@ def run_rrf_main():
         skill_id = skill_prefix_id_map.get(code[:23], 0)
 
         # 顯示用
-        print(f"{cname:<23} 等級 {lv}")
+        print(tr("rrf_converter.output.skill_level", name=f"{cname:<23}", level=lv))
 
         # ★ JSON 用 EnableSkill(技能ID, lv)
         if skill_id != 0:
@@ -1301,24 +1321,47 @@ def run_rrf_main():
         if k in session_data:
             json_data[k.upper()] = str(session_data[k])
     
-    print("========== 角色資訊 ==========")
+    print(tr("rrf_converter.output.character_info"))
     if "Charactername" in session_data:
-        print(f"角色名稱：{session_data['Charactername']}")
+        print(
+            tr(
+                "rrf_converter.output.character_name",
+                name=session_data["Charactername"],
+            )
+        )
     if "Job" in session_data:
         job_id = session_data["Job"]
         main_job_id, job_info = get_job_info(job_dict, job_id)   
 
         if main_job_id:
-            job_name = job_info.get("name", f"未知職業({job_id})")
-            print(f"職業：{job_name}")
+            job_name = job_info.get(
+                "name",
+                tr("rrf_converter.output.unknown_job", job_id=job_id),
+            )
+            print(tr("rrf_converter.output.job", job=job_name))
         else:
-            print(f"職業：未知職業 (ID: {job_id})")
+            print(
+                tr(
+                    "rrf_converter.output.job",
+                    job=tr("rrf_converter.output.unknown_job", job_id=job_id),
+                )
+            )
     if "Level" in session_data:
-        print(f"角色等級：{session_data['Level']}")
+        print(
+            tr(
+                "rrf_converter.output.character_level",
+                level=session_data["Level"],
+            )
+        )
     if "JobLevel" in session_data:
-        print(f"Job 等級：{session_data['JobLevel']}")
+        print(
+            tr(
+                "rrf_converter.output.job_level",
+                level=session_data["JobLevel"],
+            )
+        )
 
-    print("------ 基礎素質 ------")
+    print(tr("rrf_converter.output.base_stats"))
     for stat in ["Str", "Agi", "Vit", "Int", "Dex", "Luk", "POW", "STA", "WIS", "SPL", "CON", "CRT"]:
         if stat in session_data:
             print(f"{stat}: {session_data[stat]}")
@@ -1340,9 +1383,9 @@ def run_rrf_main():
                 for line in info["descript"]:
                     print(f"  {line}")
             else:
-                print("  找不到 descript")
+                print(tr("rrf_converter.output.description_missing"))
     else:
-        print("找不到 EfstInfo 封包")
+        print(tr("rrf_converter.output.efst_packet_missing"))
     print("")
 
     # 5. 用 temp.txt 開始解析
@@ -1356,9 +1399,9 @@ def run_rrf_main():
     try:
         if os.path.exists(txt_path):
             os.remove(txt_path)
-            print(f"已刪除暫存檔：{txt_path}")
+            print(tr("rrf_converter.log.temp_removed", path=txt_path))
     except Exception as e:
-        print(f"刪除 {txt_path} 時發生錯誤：{e}")
+        print(tr("rrf_converter.error.temp_remove_failed", path=txt_path, error=e))
 
     def replace_windows_invalid_chars(name):
         table = str.maketrans({
@@ -1395,7 +1438,7 @@ def run_rrf_main():
     with open("tmp/rrf_output_path.txt", "w", encoding="utf-8") as f:
         f.write(json_output_path)
 
-    print(f"JSON 已輸出為 {json_output_path}")
+    print(tr("rrf_converter.log.json_written", path=json_output_path))
     #input("按 Enter 結束...")
 
     return json_output_path

@@ -31,14 +31,27 @@ from PySide6.QtWidgets import QHeaderView
 from collections import defaultdict
 from matplotlib.ticker import FuncFormatter
 from PySide6.QtWidgets import QDialog, QVBoxLayout, QTextEdit, QPushButton
-font_path = r"C:\Windows\Fonts\msjh.ttc"  # 微軟正黑體
 from PySide6.QtGui import QKeySequence, QAction
 from PySide6.QtWidgets import QMenu
+from i18n import tr
 
-font = FontProperties(fname=font_path)
 import traceback
-plt.rcParams['font.family'] = font.get_name()
-plt.rcParams['font.sans-serif'] = [font.get_name()]
+
+FONT_CANDIDATES = (
+    r"C:\Windows\Fonts\msjh.ttc",  # Windows: 微軟正黑體
+    "/System/Library/Fonts/STHeiti Light.ttc",  # macOS
+    "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",  # Linux
+)
+font_path = next((path for path in FONT_CANDIDATES if os.path.isfile(path)), None)
+font = (
+    FontProperties(fname=font_path)
+    if font_path
+    else FontProperties(family="sans-serif")
+)
+if font_path:
+    font_name = font.get_name()
+    plt.rcParams["font.family"] = font_name
+    plt.rcParams["font.sans-serif"] = [font_name]
 plt.rcParams['axes.unicode_minus'] = False
 
 import csv
@@ -101,8 +114,8 @@ PAR_CHANGE_STAT_MAP = {
 
 STAT_SKILL_NAMES = {"面板能力變動", "素質能力變動"}
 
-FILTER_ALL = "全部"
-FILTER_ALL_WITH_STAT = "全部(包含能力變動)"
+FILTER_ALL = tr("rrf.filter.all")
+FILTER_ALL_WITH_STAT = tr("rrf.filter.all_with_stat")
 
 skill_name_map = {}
 item_name_map = {}
@@ -262,7 +275,11 @@ class DamageHUD(QWidget):
 
         # ------- 表格 -------
         self.table = QTableWidget(2, 3)
-        self.table.setHorizontalHeaderLabels(["角色", "總傷害", "DPS(5秒平均)"])
+        self.table.setHorizontalHeaderLabels([
+            tr("rrf.column.character"),
+            tr("rrf.column.total_damage"),
+            tr("rrf.column.dps_5s"),
+        ])
         # 隱藏卷軸
         self.table.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.table.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
@@ -411,13 +428,13 @@ class RRFWorker(QObject):
         real_t0 = time.time()
         self.start_time.emit(real_t0)   # ★ 把開始時間送給 UI
         self.status_msg.emit({
-            "status": "編譯開始 ...",
+            "status": tr("rrf.status.compile_start"),
             "progressbar": 0
         })
 
         try:
             self.status_msg.emit({
-                "status": "正在複製 rrf ...",
+                "status": tr("rrf.status.copying_rrf"),
                 "progressbar": 5
             })
 
@@ -434,7 +451,7 @@ class RRFWorker(QObject):
             # ====== 執行（不抓 stdout）=====
             t0 = time.time()
             self.status_msg.emit({
-                "status": ".RRF 轉換封包中....",
+                "status": tr("rrf.status.converting_packets"),
                 "progressbar": 10
             })
             proc = subprocess.run(
@@ -455,7 +472,7 @@ class RRFWorker(QObject):
                 "elapsed": elapsed
             })
             self.status_msg.emit({
-                "status": "解析完成！",
+                "status": tr("rrf.status.worker_complete"),
                 "progressbar": 20
             })
             
@@ -2132,11 +2149,11 @@ class MainUI(QWidget):
         self.rrf_worker = None
         self.mouse_paused = False
         self.current_chart_mode = "bar"   # bar / line
-        self.chart_status_text = "尚未載入資料"
+        self.chart_status_text = tr("rrf.status.no_data_loaded")
         self.hud = DamageHUD()
         self.hud.hide()
         super().__init__()
-        self.setWindowTitle("RRF傷害解析器")
+        self.setWindowTitle(tr("rrf.window.main"))
         self.resize(1100, 900)
         self.transform_end_time = {}#結束變身時間
         self.transform_start_time = {}#變身時間    
@@ -2173,7 +2190,7 @@ class MainUI(QWidget):
         btn_layout = QHBoxLayout()  # 使用 HBoxLayout 將按鈕放在同一行
 
         # 載入按鈕
-        self.load_btn = QPushButton("載入傷害表")
+        self.load_btn = QPushButton(tr("rrf.button.load_damage_table"))
         self.load_btn.clicked.connect(self.load_file)
         btn_layout.addWidget(self.load_btn)
         # 暫停按鈕（不重設秒數）
@@ -2182,11 +2199,13 @@ class MainUI(QWidget):
         #btn_layout.addWidget(self.pause_btn)
 
         # 停止按鈕
-        self.stop_btn = QPushButton("停止更新並將秒數設為0")
+        self.stop_btn = QPushButton(tr("rrf.button.stop_and_reset_interval"))
         self.stop_btn.setFixedWidth(200)
         self.stop_btn.clicked.connect(self.stop_update)
         btn_layout.addWidget(self.stop_btn)
-        self.Character_ability_changes_checkbox = QCheckBox("解析角色能力變動")
+        self.Character_ability_changes_checkbox = QCheckBox(
+            tr("rrf.checkbox.parse_character_changes")
+        )
         self.Character_ability_changes_checkbox.setFixedWidth(150)
         btn_layout.addWidget(self.Character_ability_changes_checkbox)
 
@@ -2206,7 +2225,7 @@ class MainUI(QWidget):
         # ★靠右關鍵：先塞一個彈性空間
         interval_layout.addStretch()
         # 更新秒數標籤
-        interval_layout.addWidget(QLabel("｜更新秒數："))
+        interval_layout.addWidget(QLabel(tr("rrf.label.refresh_interval")))
 
         # 數字框改右對齊 + 固定寬度
         self.refresh_input = QSpinBox()
@@ -2216,10 +2235,10 @@ class MainUI(QWidget):
         self.refresh_input.setAlignment(Qt.AlignRight)   # ★讓數字靠右
         interval_layout.addWidget(self.refresh_input)
         # 自動使用資料夾內最新 RRF 勾選
-        self.auto_latest_checkbox = QCheckBox("最新 RRF")
+        self.auto_latest_checkbox = QCheckBox(tr("rrf.checkbox.latest_rrf"))
         interval_layout.addWidget(self.auto_latest_checkbox)
         # 攻方 SID 篩選
-        interval_layout.addWidget(QLabel("篩選攻方："))
+        interval_layout.addWidget(QLabel(tr("rrf.label.filter_attacker")))
         self.sid_filter = QComboBox()
         self._orig_sid_showPopup = self.sid_filter.showPopup
         self._orig_sid_hidePopup = self.sid_filter.hidePopup
@@ -2231,7 +2250,7 @@ class MainUI(QWidget):
         interval_layout.addWidget(self.sid_filter)
 
         # 受方 DID 篩選
-        interval_layout.addWidget(QLabel("篩選魔物："))
+        interval_layout.addWidget(QLabel(tr("rrf.label.filter_monster")))
         self.did_filter = QComboBox()
         self._orig_did_showPopup = self.did_filter.showPopup
         self._orig_did_hidePopup = self.did_filter.hidePopup
@@ -2271,8 +2290,8 @@ class MainUI(QWidget):
         # ======= 圖表切換按鈕 =======
         btn_box = QHBoxLayout()
 
-        self.btn_bar = QPushButton("顯示總傷害長條圖")
-        self.btn_line = QPushButton("顯示每秒折線趨勢圖")
+        self.btn_bar = QPushButton(tr("rrf.button.show_total_damage_bar"))
+        self.btn_line = QPushButton(tr("rrf.button.show_dps_line"))
 
         self.btn_bar.clicked.connect(self.on_bar_clicked)       # 原本的畫面
         self.btn_line.clicked.connect(self.on_line_clicked)        # 新增的折線圖
@@ -2302,7 +2321,12 @@ class MainUI(QWidget):
         # ➋ 樹狀統計
         self.tree_group = QTreeWidget()
         self.tree_group.setColumnCount(4)
-        self.tree_group.setHeaderLabels(["名稱","平均傷害", "總傷害", "DPS"])
+        self.tree_group.setHeaderLabels([
+            tr("rrf.column.name"),
+            tr("rrf.column.average_damage"),
+            tr("rrf.column.total_damage"),
+            "DPS",
+        ])
         self.tree_group.header().setDefaultAlignment(Qt.AlignCenter)
         self.tree_group.header().setSectionResizeMode(0, QHeaderView.Stretch)
         self.tree_group.setColumnWidth(1, 150)
@@ -2319,7 +2343,7 @@ class MainUI(QWidget):
         self.progress_bartext = QLabel("")
         btn_row.addWidget(self.progress_bartext)
         # 更新秒數標籤
-        btn_row.addWidget(QLabel("處理進度(%)："))
+        btn_row.addWidget(QLabel(tr("rrf.label.progress_percent")))
         # ★★★★★ 進度條 ★★★★★
         self.progress_bar = QProgressBar()
         self.progress_bar.setRange(0, 100)
@@ -2331,33 +2355,46 @@ class MainUI(QWidget):
         btn_row.addWidget(self.progress_bar)
         btn_row.addStretch()  # 推到右邊
         # ★★★★★ 進度條結束 ★★★★★
-        self.toggle_hud_btn = QPushButton("顯示 HUD")
+        self.toggle_hud_btn = QPushButton(tr("rrf.button.show_hud"))
         self.toggle_hud_btn.clicked.connect(self.toggle_hud)
         btn_row.addWidget(self.toggle_hud_btn)
-        self.upload_btn = QPushButton("上傳到 Divine Pride")
+        self.upload_btn = QPushButton(tr("rrf.button.upload_divine_pride"))
         self.upload_btn.clicked.connect(self.upload_to_divine_pride)
         #btn_row.addWidget(self.upload_btn)
         
-        self.screenshot_btn = QPushButton("截圖此分頁")
+        self.screenshot_btn = QPushButton(tr("rrf.button.capture_tab"))
         self.screenshot_btn.clicked.connect(self.capture_to_clipboard)
         btn_row.addWidget(self.screenshot_btn)
 
         vbox.addLayout(btn_row)
 
-        self.tabs.addTab(tab_stats, "統計傷害")
+        self.tabs.addTab(tab_stats, tr("rrf.tab.damage_statistics"))
         # Tab2：原始資料
         self.table_raw = QTableWidget()
         self.table_raw.setColumnCount(9)
         self.table_raw.setHorizontalHeaderLabels([
-            "時間戳", "技能名稱", "攻方ID", "受方ID",
-            "傷害", "等級", "次數", "來源延遲", "目標延遲"
+            tr("rrf.column.timestamp"),
+            tr("rrf.column.skill_name"),
+            tr("rrf.column.attacker_id"),
+            tr("rrf.column.target_id"),
+            tr("rrf.column.damage"),
+            tr("rrf.column.level"),
+            tr("rrf.column.count"),
+            tr("rrf.column.source_delay"),
+            tr("rrf.column.target_delay"),
         ])
-        self.tabs.addTab(self.table_raw, "傷害歷程")
+        self.tabs.addTab(self.table_raw, tr("rrf.tab.damage_history"))
         
         self.table_drop = QTableWidget()
         self.table_drop.setColumnCount(7)
         self.table_drop.setHorizontalHeaderLabels([
-            "時間戳", "掉落來源", "物品名稱", "掉落數量", "座標X", "座標Y", "導航指令"
+            tr("rrf.column.timestamp"),
+            tr("rrf.column.drop_source"),
+            tr("rrf.column.item_name"),
+            tr("rrf.column.drop_count"),
+            tr("rrf.column.coordinate_x"),
+            tr("rrf.column.coordinate_y"),
+            tr("rrf.column.navigation_command"),
         ])
         self.table_drop.setEditTriggers(QTableWidget.NoEditTriggers)
         self.table_drop.setSelectionMode(QTableWidget.ExtendedSelection)
@@ -2372,12 +2409,14 @@ class MainUI(QWidget):
         self.table_drop.setContextMenuPolicy(Qt.CustomContextMenu)
         self.table_drop.customContextMenuRequested.connect(self.show_drop_context_menu)
 
-        self.tabs.addTab(self.table_drop, "物品掉落歷程")
+        self.tabs.addTab(self.table_drop, tr("rrf.tab.item_drop_history"))
         # Tab4：死亡 / 掉落統計
         self.tree_monster_drop = QTreeWidget()
         self.tree_monster_drop.setColumnCount(3)
         self.tree_monster_drop.setHeaderLabels([
-            "怪物 / 物品", "數量", "比例"
+            tr("rrf.column.monster_or_item"),
+            tr("rrf.column.quantity"),
+            tr("rrf.column.ratio"),
         ])
         self.tree_monster_drop.header().setDefaultAlignment(Qt.AlignCenter)
         self.tree_monster_drop.header().setSectionResizeMode(0, QHeaderView.Stretch)
@@ -2385,7 +2424,10 @@ class MainUI(QWidget):
         self.tree_monster_drop.setColumnWidth(2, 120)
         self.tree_monster_drop.setAlternatingRowColors(True)
 
-        self.tabs.addTab(self.tree_monster_drop, "死亡/掉落統計")
+        self.tabs.addTab(
+            self.tree_monster_drop,
+            tr("rrf.tab.death_drop_statistics"),
+        )
         
         
         self.tabs.currentChanged.connect(self.on_tab_changed)
@@ -2608,7 +2650,10 @@ class MainUI(QWidget):
 
     def show_table_context_menu(self, table, pos):
         menu = QMenu(table)
-        menu.addAction("複製 (Ctrl+C)", lambda: self.copy_table_selection_to_clipboard(table))
+        menu.addAction(
+            tr("rrf.menu.copy"),
+            lambda: self.copy_table_selection_to_clipboard(table),
+        )
         menu.exec(table.viewport().mapToGlobal(pos))
 
 
@@ -2627,7 +2672,9 @@ class MainUI(QWidget):
             return
 
         QApplication.clipboard().setText(text)
-        self.status.setText(f"已複製導航指令：{text}")
+        self.status.setText(
+            tr("rrf.status.navigation_copied", command=text)
+        )
 
     def show_drop_context_menu(self, pos):
         self.show_table_context_menu(self.table_drop, pos)
@@ -2643,10 +2690,10 @@ class MainUI(QWidget):
     def toggle_hud(self):
         if self.hud.isVisible():
             self.hud.hide()
-            self.toggle_hud_btn.setText("顯示 HUD")
+            self.toggle_hud_btn.setText(tr("rrf.button.show_hud"))
         else:
             self.hud.show()
-            self.toggle_hud_btn.setText("隱藏 HUD")
+            self.toggle_hud_btn.setText(tr("rrf.button.hide_hud"))
 
     def on_tab_changed(self, idx):
         if idx == 1:
@@ -2708,7 +2755,11 @@ class MainUI(QWidget):
             return
 
         if sid not in self.transform_history:
-            QMessageBox.information(self, "變身紀錄", "沒有變身紀錄。")
+            QMessageBox.information(
+                self,
+                tr("rrf.message.title.transform_history"),
+                tr("rrf.message.no_transform_history"),
+            )
             return
 
         self.show_transform_detail_dialog(sid)
@@ -2723,7 +2774,7 @@ class MainUI(QWidget):
 
     def show_transform_detail_dialog(self, sid):
         dialog = QDialog(self)
-        dialog.setWindowTitle(f"變身詳細資訊")
+        dialog.setWindowTitle(tr("rrf.window.transform_details"))
         dialog.resize(550, 300)
 
         layout = QVBoxLayout(dialog)
@@ -2740,7 +2791,12 @@ class MainUI(QWidget):
         # ★★★ 倒序，但序號依照原本順序從 total → 1 ★★★
         for display_no, data in zip(range(total, 0, -1), reversed(history)):
             logs.append(
-                f"[變身序號{display_no}] 啟動時間: {self.ms_to_timestamp(data['start'])} 持續: ({data['duration_sec']:.3f} 秒)\n"
+                tr(
+                    "rrf.transform_history_entry",
+                    number=display_no,
+                    start=self.ms_to_timestamp(data["start"]),
+                    duration=f"{data['duration_sec']:.3f}",
+                )
             )
             #logs.append(
             #    f"[變身紀錄 {idx}]\n"
@@ -2753,7 +2809,7 @@ class MainUI(QWidget):
         # ★★★ 關鍵：先清除舊內容 ★★★
         text_box.setPlainText("".join(logs))
 
-        close_btn = QPushButton("關閉")
+        close_btn = QPushButton(tr("button.close"))
         close_btn.clicked.connect(dialog.close)
         layout.addWidget(close_btn)
 
@@ -2837,7 +2893,7 @@ class MainUI(QWidget):
         # 停止背景 RRF → TXT
         #self.stop_background_rrf_worker()
         self.refresh_input.setValue(0)
-        self.status.setText("自動更新已停止 - 秒數為 0 按下載入按鈕可選擇檔案")
+        self.status.setText(tr("rrf.status.auto_update_stopped"))
         # ★ 按鈕同步顯示
         self.update_load_button_text()
         self.is_processing = False
@@ -2846,7 +2902,7 @@ class MainUI(QWidget):
     def pause_update(self):
         """暫停自動更新，但保留秒數，不把秒數歸 0"""
         self.auto_timer.stop()     # 只停止自動更新，但不動秒數
-        self.status.setText("已暫停自動更新（秒數保留，可再次繼續）")
+        self.status.setText(tr("rrf.status.auto_update_paused"))
         self.update_load_button_text()
         self.stop_background_rrf_worker()
         self.is_processing = False
@@ -2856,26 +2912,52 @@ class MainUI(QWidget):
         interval = self.refresh_input.value()
 
         if not self.last_rrf_path:
-            self.load_btn.setText("載入傷害表（未選擇檔案）")
+            self.load_btn.setText(tr("rrf.button.load_no_file"))
             return
 
         base = os.path.basename(self.last_rrf_path)
 
         if interval == 0:
-            self.load_btn.setText(f"載入傷害表：{base}（狀態:停止更新）")
+            self.load_btn.setText(
+                tr("rrf.button.load_stopped", filename=base)
+            )
 
         elif self.is_processing:
-            self.load_btn.setText(f"讀取中：{base}（狀態:更新中, 每 {interval} 秒）")
+            self.load_btn.setText(
+                tr(
+                    "rrf.button.load_updating",
+                    filename=base,
+                    interval=interval,
+                )
+            )
 
         elif self.mouse_paused:
-            self.load_btn.setText(f"載入傷害表：{base}（狀態:暫停中(滑鼠在視窗內), 每 {interval} 秒）")
+            self.load_btn.setText(
+                tr(
+                    "rrf.button.load_mouse_paused",
+                    filename=base,
+                    interval=interval,
+                )
+            )
 
         elif self.auto_timer.isActive():
-            self.load_btn.setText(f"載入傷害表：{base}（狀態:自動更新, 每 {interval} 秒）")
+            self.load_btn.setText(
+                tr(
+                    "rrf.button.load_auto_updating",
+                    filename=base,
+                    interval=interval,
+                )
+            )
 
         else:
             # singleShot 重新排程前的短暫空窗、或剛完成一次更新
-            self.load_btn.setText(f"載入傷害表：{base}（狀態:等待下次更新, 每 {interval} 秒）")
+            self.load_btn.setText(
+                tr(
+                    "rrf.button.load_waiting",
+                    filename=base,
+                    interval=interval,
+                )
+            )
 
     def on_worker_start_time(self, t0):
         self.process_start_time = t0   # ★ 儲存開始時間
@@ -2923,7 +3005,7 @@ class MainUI(QWidget):
         self.progress_bar.show()
         #self.progress_bar.setValue(0)
         QApplication.processEvents()
-        self.status.setText("正在讀取文字檔...")
+        self.status.setText(tr("rrf.status.reading_text"))
         #
         txt_path = result["txt_path"]
         elapsed = result["elapsed"]
@@ -2939,7 +3021,12 @@ class MainUI(QWidget):
         sig = self.calc_txt_signature(txt_path)
 
         if self.last_txt_path == txt_path and self.last_txt_signature == sig:
-            self.status.setText(f"共解析到 {len(self.parsed_data)} 筆 (TXT 內容未變動，略過解析)")
+            self.status.setText(
+                tr(
+                    "rrf.status.text_unchanged",
+                    count=len(self.parsed_data),
+                )
+            )
             self.progress_bar.setValue(100)
             QApplication.processEvents()
 
@@ -2966,7 +3053,7 @@ class MainUI(QWidget):
             self.current_map_name = map_name
 
         if not text.strip():
-            self.status.setText("沒有新的完整封包")
+            self.status.setText(tr("rrf.status.no_complete_packets"))
             self.progress_bar.setValue(100)
             self.is_processing = False
             self._load_lock = False
@@ -2983,7 +3070,7 @@ class MainUI(QWidget):
         print(f"[optxtraw] 解析耗時: {(t1_opentxt - t0_opentxt) * 1000:.3f} ms")
         print(f"====多執行緒區段====")
         self.progress_bar.setValue(30)
-        self.status.setText("讀取完成，開始解析封包...")
+        self.status.setText(tr("rrf.status.parsing_packets"))
         QApplication.processEvents()
 
         # -------------------------------------------------------
@@ -3311,7 +3398,7 @@ class MainUI(QWidget):
         print(f"[all Thread] 解析耗時: {(t1_allThread - t0_allThread) * 1000:.3f} ms")
 
         self.progress_bar.setValue(50)
-        self.status.setText("封包解析完成，正在整併資料...")
+        self.status.setText(tr("rrf.status.merging_packets"))
         QApplication.processEvents()
 
 
@@ -3347,7 +3434,7 @@ class MainUI(QWidget):
             all_packets = self.merge_new_packets_with_true_sid(all_packets)
 
         self.progress_bar.setValue(70)
-        self.status.setText("正在整理傷害資料...")
+        self.status.setText(tr("rrf.status.organizing_damage"))
         QApplication.processEvents()
 
         INT_MAX = 2147483647  # 32-bit signed int 上限
@@ -3439,7 +3526,7 @@ class MainUI(QWidget):
 
         # ★ 這裡資料已經完成
         self.progress_bar.setValue(90)
-        self.status.setText("正在更新圖表與統計...")
+        self.status.setText(tr("rrf.status.updating_charts"))
         QApplication.processEvents()
         # 記錄使用者目前的攻方 / 受方選擇，更新資料後盡量保留。
         previous_did_selection = self.did_filter.currentText()
@@ -3463,7 +3550,7 @@ class MainUI(QWidget):
                 elif did in self.did_name_map:
                     name = self.did_name_map[did]
                 else:
-                    name = "未知目標"
+                    name = tr("rrf.label.unknown_target")
 
                 self.did_filter.addItem(f"{name} ({did})", did)
 
@@ -3485,7 +3572,7 @@ class MainUI(QWidget):
                 elif sid in self.did_name_map:
                     name = self.did_name_map[sid]
                 else:
-                    name = "未知攻方"
+                    name = tr("rrf.label.unknown_attacker")
 
                 self.sid_filter.addItem(f"{name} ({sid})", sid)
 
@@ -3515,7 +3602,13 @@ class MainUI(QWidget):
         #self.status.setText(f"共解析到 {len(self.parsed_data)} 筆 更新耗時：{elapsed:.2f} 秒")
         real_elapsed = time.time() - self.process_start_time
 
-        self.status.setText(f"共解析 {len(self.parsed_data)} 筆 更新耗時：{real_elapsed:.2f} 秒")
+        self.status.setText(
+            tr(
+                "rrf.status.parse_complete",
+                count=len(self.parsed_data),
+                elapsed=f"{real_elapsed:.2f}",
+            )
+        )
         self.progress_bar.setValue(100)
         QApplication.processEvents()
         
@@ -3650,7 +3743,7 @@ class MainUI(QWidget):
 
         
     def on_worker_failed(self, msg):
-        self.status.setText(f"解析錯誤#")#：{msg}")
+        self.status.setText(tr("rrf.status.parse_error"))
         print(f"解析錯誤：{msg}")
         self.progress_bar.hide()
         self.progress_bar.setValue(0)
@@ -3700,11 +3793,14 @@ class MainUI(QWidget):
                 self.auto_timer.stop()
 
                 rrf_path, _ = QFileDialog.getOpenFileName(
-                    self, "選擇 RRF", "", "RRF File (*.rrf)"
+                    self,
+                    tr("rrf.dialog.select_file"),
+                    "",
+                    tr("rrf.dialog.file_filter"),
                 )
 
                 if not rrf_path:
-                    self.status.setText("沒有選擇檔案")
+                    self.status.setText(tr("rrf.status.no_file_selected"))
                     return
 
                 self.last_rrf_path = rrf_path
@@ -3720,7 +3816,7 @@ class MainUI(QWidget):
 
                 self.hud.clear_hud()
                 self.tree_group.clear()
-                self.chart_status_text = "圖表處理中…"
+                self.chart_status_text = tr("rrf.status.chart_processing")
                 self.draw_empty_chart()
                 self.table_raw.setRowCount(0)
                 self.table_drop.setRowCount(0)
@@ -3744,11 +3840,16 @@ class MainUI(QWidget):
                 print("path_changed =", old_rrf_path != self.last_rrf_path if old_rrf_path and self.last_rrf_path else None)
 
                 if old_rrf_path and self.last_rrf_path and old_rrf_path != self.last_rrf_path:
-                    self.status.setText(f"偵測到新 RRF：{os.path.basename(self.last_rrf_path)}")
+                    self.status.setText(
+                        tr(
+                            "rrf.status.new_file_detected",
+                            filename=os.path.basename(self.last_rrf_path),
+                        )
+                    )
 
                     self.hud.clear_hud()
                     self.tree_group.clear()
-                    self.chart_status_text = "圖表處理中…"
+                    self.chart_status_text = tr("rrf.status.chart_processing")
                     self.draw_empty_chart()
                     self.table_raw.setRowCount(0)
                     self.table_drop.setRowCount(0)
@@ -3769,7 +3870,7 @@ class MainUI(QWidget):
                     QApplication.processEvents()
 
             if not self.last_rrf_path:
-                self.status.setText("請先選擇 RRF 檔案（秒數 = 0）")
+                self.status.setText(tr("rrf.status.select_file_first"))
                 return
 
             self.start_worker(self.last_rrf_path)
@@ -4097,7 +4198,12 @@ class MainUI(QWidget):
                     avg = total_skill / cnt if cnt > 0 else 0
 
                     child = QTreeWidgetItem([
-                        f"{skill_name} (ID {skill_id}) - 次數 {cnt}",
+                        tr(
+                            "rrf.tree.skill_entry",
+                            name=skill_name,
+                            skill_id=skill_id,
+                            count=cnt,
+                        ),
                         f"{avg:,.0f}",
                         f"{total_skill:,.0f}",
                         "0"      # ★ 技能 DPS 也固定 0
@@ -4120,7 +4226,12 @@ class MainUI(QWidget):
                         rate_str = "0%"
 
                     item = QTreeWidgetItem([
-                        f"　變身次數 (ID {skin_id}) - 次數 {cnt}  ({rate_str})",
+                        tr(
+                            "rrf.tree.transform_entry",
+                            skin_id=skin_id,
+                            count=cnt,
+                            rate=rate_str,
+                        ),
                         "",
                         "",
                         ""
@@ -4226,7 +4337,13 @@ class MainUI(QWidget):
                 T_dmg = stat["T_damage"]
 
                 child = QTreeWidgetItem([
-                    f"{skill_name} (ID {skill_id}) - 次數 {cnt} (秒{T_cnt})",
+                    tr(
+                        "rrf.tree.skill_entry_with_seconds",
+                        name=skill_name,
+                        skill_id=skill_id,
+                        count=cnt,
+                        seconds=T_cnt,
+                    ),
                     f"{(total/cnt):,.0f}" if cnt > 0 else "0",
                     f"{total:,.0f}",
                     f"{T_dmg:,.0f}"         # ★ 這個技能在 T 秒的 DPS
@@ -4249,7 +4366,12 @@ class MainUI(QWidget):
                     rate_str = "0%"
 
                 item = QTreeWidgetItem([
-                    f"　變身次數 (ID {skin_id}) - 次數 {cnt}  ({rate_str})",
+                    tr(
+                        "rrf.tree.transform_entry",
+                        skin_id=skin_id,
+                        count=cnt,
+                        rate=rate_str,
+                    ),
                     "",
                     "",
                     ""
@@ -4283,7 +4405,11 @@ class MainUI(QWidget):
         ax.set_facecolor("none")
 
         # 標題
-        ax.set_title("總傷害", fontproperties=font, color="#FFFFFF")
+        ax.set_title(
+            tr("rrf.chart.total_damage"),
+            fontproperties=font,
+            color="#FFFFFF",
+        )
 
         # 中間顯示尚未載入
         ax.text(
@@ -4356,11 +4482,15 @@ class MainUI(QWidget):
         title_name = self.get_active_filter_title()
         #ax.set_title("總傷害", fontproperties=font, color="#FFFFFF")
         ax.set_title(
-            f"{title_name} 的個別總傷害",
+            tr("rrf.chart.individual_total_damage", name=title_name),
             fontproperties=font,
             color="#FFFFFF"
         )
-        ax.set_xlabel("總傷害", fontproperties=font, color="#DDDDDD")
+        ax.set_xlabel(
+            tr("rrf.chart.total_damage"),
+            fontproperties=font,
+            color="#DDDDDD",
+        )
 
         ax.tick_params(colors="#AAAAAA")
 
@@ -4475,11 +4605,15 @@ class MainUI(QWidget):
         title_name = self.get_active_filter_title()
 
         ax.set_title(
-            f"{title_name} 的每秒傷害趨勢",
+            tr("rrf.chart.damage_per_second", name=title_name),
             fontproperties=font,
             color="#FFFFFF"
         )
-        ax.set_xlabel("時間 (+HH:MM:SS)", fontproperties=font, color="#DDDDDD")
+        ax.set_xlabel(
+            tr("rrf.chart.time_axis"),
+            fontproperties=font,
+            color="#DDDDDD",
+        )
 
         ax.tick_params(colors="#AAAAAA")
 
@@ -4520,11 +4654,19 @@ class MainUI(QWidget):
             dmg_str = f"{dmg:,}"
 
             if t0 is None:
-                return f"時間：N/A    傷害：{dmg_str}"
+                return tr(
+                    "rrf.chart.coordinate",
+                    timestamp="N/A",
+                    damage=dmg_str,
+                )
 
             total = int(t0 + round(x))
             if total < 0:
-                return f"時間：N/A    傷害：{dmg_str}"
+                return tr(
+                    "rrf.chart.coordinate",
+                    timestamp="N/A",
+                    damage=dmg_str,
+                )
 
             h = total // 3600
             m = (total % 3600) // 60
@@ -4538,7 +4680,11 @@ class MainUI(QWidget):
             else:
                 ts_str = f"{h}:{m:02d}:{s:02d}"
 
-            return f"時間：{ts_str}    傷害：{dmg_str}"
+            return tr(
+                "rrf.chart.coordinate",
+                timestamp=ts_str,
+                damage=dmg_str,
+            )
 
 
         ax.format_coord = format_coord
@@ -4557,12 +4703,12 @@ class MainUI(QWidget):
             if fallback:
                 name = fallback
             elif did:
-                name = f"未知目標 ({did})"
+                name = tr("rrf.label.unknown_target_id", did=did)
             else:
-                name = "未知掉落來源"
+                name = tr("rrf.label.unknown_drop_source")
 
         name = str(name).strip()
-        return name if name else (fallback or "未知掉落來源")
+        return name if name else (fallback or tr("rrf.label.unknown_drop_source"))
 
 
     def pct_text(self, num, den):
@@ -4690,8 +4836,8 @@ class MainUI(QWidget):
         # 最上層：所有物品掉落量（預設摺疊）
         # =========================================================
         all_parent = QTreeWidgetItem([
-            "所有物品掉落量",
-            f"{total_drop_amount} 件",
+            tr("rrf.tree.all_item_drops"),
+            tr("rrf.unit.items", count=total_drop_amount),
             #"100.00%" if total_drop_amount > 0 else "0.00%",
             "",
         ])
@@ -4703,8 +4849,8 @@ class MainUI(QWidget):
 
         all_parent.setTextAlignment(1, Qt.AlignRight | Qt.AlignVCenter)
         all_parent.setTextAlignment(2, Qt.AlignRight | Qt.AlignVCenter)
-        all_parent.setToolTip(0, "所有怪物掉落物合併統計（已排除玩家丟棄/魔物視距外死亡）")
-        all_parent.setToolTip(2, "此區僅顯示全部物品總量")
+        all_parent.setToolTip(0, tr("rrf.tooltip.all_monster_drops"))
+        all_parent.setToolTip(2, tr("rrf.tooltip.total_items_only"))
 
         self.tree_monster_drop.addTopLevelItem(all_parent)
 
@@ -4718,13 +4864,13 @@ class MainUI(QWidget):
 
             item_node = QTreeWidgetItem([
                 f"└ {item_name}",
-                f"{cnt} 件",
+                tr("rrf.unit.items", count=cnt),
                 pct_all,
             ])
             for col in range(1, 3):
                 item_node.setTextAlignment(col, Qt.AlignRight | Qt.AlignVCenter)
 
-            item_node.setToolTip(2, "比例 = 各來源怪物掉率平均值（已排除玩家丟棄/魔物視距外死亡）")
+            item_node.setToolTip(2, tr("rrf.tooltip.average_drop_rate"))
             all_parent.addChild(item_node)
 
             # 來源怪物層：比例 = 此怪掉出此物品數量 / 此怪死亡次數
@@ -4737,13 +4883,13 @@ class MainUI(QWidget):
 
                 source_node = QTreeWidgetItem([
                     f"    └ {monster_name}",
-                    f"{monster_cnt} 件",
+                    tr("rrf.unit.items", count=monster_cnt),
                     pct_in_item,
                 ])
                 for col in range(1, 3):
                     source_node.setTextAlignment(col, Qt.AlignRight | Qt.AlignVCenter)
 
-                source_node.setToolTip(2, "比例 = 此怪物掉落此物品數量 / 此怪物死亡次數")
+                source_node.setToolTip(2, tr("rrf.tooltip.monster_item_rate"))
                 item_node.addChild(source_node)
 
             item_node.setExpanded(False)
@@ -4779,8 +4925,11 @@ class MainUI(QWidget):
             parent.setTextAlignment(1, Qt.AlignRight | Qt.AlignVCenter)
             parent.setTextAlignment(2, Qt.AlignRight | Qt.AlignVCenter)
 
-            parent.setToolTip(0, f"相同名稱怪物已合併，合併總數: {merge_count}")
-            parent.setToolTip(2, "物品機率 = 此物品數量 / 此怪物死亡次數")
+            parent.setToolTip(
+                0,
+                tr("rrf.tooltip.merged_monsters", count=merge_count),
+            )
+            parent.setToolTip(2, tr("rrf.tooltip.item_probability"))
 
             self.tree_monster_drop.addTopLevelItem(parent)
 
@@ -4792,7 +4941,7 @@ class MainUI(QWidget):
 
                 child = QTreeWidgetItem([
                     f"└ {item_name}",
-                    f"{cnt} 件",
+                    tr("rrf.unit.items", count=cnt),
                     pct_in_monster,
                 ])
                 for col in range(1, 3):
@@ -4876,11 +5025,15 @@ class MainUI(QWidget):
         sid_is_all = sid_text == FILTER_ALL
 
         if not sid_is_all and not did_is_all:
-            return f"攻方 {sid_text} → 受方 {did_text}"
+            return tr(
+                "rrf.filter.attacker_to_target",
+                attacker=sid_text,
+                target=did_text,
+            )
         if not sid_is_all:
-            return f"攻方 {sid_text}"
+            return tr("rrf.filter.attacker", attacker=sid_text)
         if not did_is_all:
-            return f"受方 {did_text}"
+            return tr("rrf.filter.target", target=did_text)
         return did_text
 
 
@@ -4972,7 +5125,11 @@ class MainUI(QWidget):
 
         # 設定 UI
         ax.legend()
-        ax.set_title("每秒傷害折線（依玩家分線）", fontproperties=font, color="#FFFFFF")
+        ax.set_title(
+            tr("rrf.chart.player_dps_lines"),
+            fontproperties=font,
+            color="#FFFFFF",
+        )
         ax.tick_params(colors="#AAAAAA")
         for spine in ax.spines.values():
             spine.set_visible(False)
@@ -5003,7 +5160,11 @@ class MainUI(QWidget):
     def upload_to_divine_pride(self):
 
         if not self.last_rrf_path:
-            QMessageBox.warning(self, "錯誤", "請先載入 RRF 檔案後再上傳。")
+            QMessageBox.warning(
+                self,
+                tr("message.title.error"),
+                tr("rrf.message.load_before_upload"),
+            )
             return
 
         rrf_file_path = self.last_rrf_path
@@ -5043,8 +5204,9 @@ class MainUI(QWidget):
                         driver.maximize_window()
 
                         QMessageBox.information(
-                            self, "尚未登入",
-                            "請先在 Chrome 視窗中登入 Divine Pride。\n登入後請重新點擊上傳。"
+                            self,
+                            tr("rrf.message.title.not_logged_in"),
+                            tr("rrf.message.login_to_divine_pride"),
                         )
                         return
                 except:
@@ -5104,7 +5266,11 @@ class MainUI(QWidget):
                 driver.quit()
 
             except Exception as e:
-                QMessageBox.critical(self, "上傳錯誤", str(e))
+                QMessageBox.critical(
+                    self,
+                    tr("rrf.message.title.upload_error"),
+                    str(e),
+                )
 
         threading.Thread(target=run_browser, daemon=True).start()
 

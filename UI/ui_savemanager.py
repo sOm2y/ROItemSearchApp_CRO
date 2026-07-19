@@ -23,6 +23,7 @@ class Ui_SaveManagerDialog(object):
         if not SaveManagerDialog.objectName():
             SaveManagerDialog.setObjectName(u"SaveManagerDialog")
         SaveManagerDialog.resize(200, 250)
+        SaveManagerDialog.setWindowTitle(u"window.save_manager")
         self.listWidget = QListWidget(SaveManagerDialog)
         self.listWidget.setObjectName(u"listWidget")
         self.listWidget.setGeometry(QRect(10, 10, 181, 201))
@@ -32,12 +33,15 @@ class Ui_SaveManagerDialog(object):
         self.splitter.setOrientation(Qt.Horizontal)
         self.loadButton = QPushButton(self.splitter)
         self.loadButton.setObjectName(u"loadButton")
+        self.loadButton.setText(u"button.load")
         self.splitter.addWidget(self.loadButton)
         self.deleteButton = QPushButton(self.splitter)
         self.deleteButton.setObjectName(u"deleteButton")
+        self.deleteButton.setText(u"button.delete")
         self.splitter.addWidget(self.deleteButton)
         self.cancelButton = QPushButton(self.splitter)
         self.cancelButton.setObjectName(u"cancelButton")
+        self.cancelButton.setText(u"button.cancel")
         self.splitter.addWidget(self.cancelButton)
 
         self.retranslateUi(SaveManagerDialog)
@@ -46,9 +50,6 @@ class Ui_SaveManagerDialog(object):
     # setupUi
 
     def retranslateUi(self, SaveManagerDialog):
-        SaveManagerDialog.setWindowTitle(QCoreApplication.translate("SaveManagerDialog", u"Dialog", None))
-        self.loadButton.setText(QCoreApplication.translate("SaveManagerDialog", u"\u8f09\u5165", None))
-        self.deleteButton.setText(QCoreApplication.translate("SaveManagerDialog", u"\u522a\u9664", None))
-        self.cancelButton.setText(QCoreApplication.translate("SaveManagerDialog", u"\u53d6\u6d88", None))
+        pass
     # retranslateUi
 

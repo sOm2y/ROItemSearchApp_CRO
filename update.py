@@ -14,6 +14,7 @@ from PySide6.QtCore import Qt, QThread, Signal
 from PySide6.QtWidgets import (
     QApplication, QWidget, QLabel, QProgressBar, QVBoxLayout, QMessageBox
 )
+from i18n import tr
 
 
 class UpdateWorker(QThread):
@@ -34,7 +35,7 @@ class UpdateWorker(QThread):
             self.wait_or_kill_process()
             self.extract_and_replace(data)
 
-            self.stage.emit("✅ 更新完成，啟動主程式...")
+            self.stage.emit(tr("updater.stage.complete"))
             self.detail.emit("")
             self.progress.emit(100)
 
@@ -47,7 +48,7 @@ class UpdateWorker(QThread):
             self.failed.emit(str(e))
 
     def download_with_progress(self) -> bytes:
-        self.stage.emit("📥 正在下載更新檔...")
+        self.stage.emit(tr("updater.stage.downloading"))
         self.detail.emit("")
         self.progress.emit(0)
 
@@ -68,23 +69,25 @@ class UpdateWorker(QThread):
             if total > 0:
                 percent = int(downloaded * 100 / total)
                 if percent != last_percent:
-                    self.stage.emit("📥 下載中...")
+                    self.stage.emit(tr("updater.stage.download_progress"))
                     self.detail.emit(f"{downloaded // 1024} KB / {total // 1024} KB")
                     self.progress.emit(max(0, min(100, percent)))
                     last_percent = percent
             else:
                 # 沒有 content-length 時，只能顯示已下載
-                self.stage.emit("📥 下載中...")
+                self.stage.emit(tr("updater.stage.download_progress"))
                 self.detail.emit(f"{downloaded // 1024} KB")
                 # 不亂跳：維持 0，等完成再設 100
 
-        self.stage.emit("✅ 下載完成")
+        self.stage.emit(tr("updater.stage.download_complete"))
         self.detail.emit("")
         self.progress.emit(100)
         return data.getvalue()
 
     def wait_or_kill_process(self):
-        self.stage.emit(f"⏳ 等待手動 {self.target_exe} 關閉中...")
+        self.stage.emit(
+            tr("updater.stage.waiting_for_close", executable=self.target_exe)
+        )
         self.detail.emit("")
         self.progress.emit(0)
 
@@ -98,7 +101,7 @@ class UpdateWorker(QThread):
                 return
             time.sleep(0.5)
 
-        self.stage.emit("💀 強制關閉主程式")
+        self.stage.emit(tr("updater.stage.force_closing"))
         self.detail.emit("")
         for proc in psutil.process_iter(["name"]):
             name = (proc.info.get("name") or "").lower()
@@ -114,7 +117,7 @@ class UpdateWorker(QThread):
         if os.path.exists(temp_dir):
             shutil.rmtree(temp_dir, ignore_errors=True)
 
-        self.stage.emit("📂 正在解壓縮更新...")
+        self.stage.emit(tr("updater.stage.extracting"))
         self.detail.emit("")
         self.progress.emit(0)
 
@@ -136,7 +139,9 @@ class UpdateWorker(QThread):
 
         base_dir = os.path.join(temp_dir, OUTER_DIR)
         if not os.path.isdir(base_dir):
-            raise RuntimeError(f"更新包缺少資料夾：{OUTER_DIR}")
+            raise RuntimeError(
+                tr("updater.error.package_folder_missing", folder=OUTER_DIR)
+            )
 
         for root, _, files in os.walk(base_dir):
             for fn in files:
@@ -146,7 +151,7 @@ class UpdateWorker(QThread):
 
         total_files = max(1, len(file_paths))
 
-        self.stage.emit("📂 正在覆蓋檔案...")
+        self.stage.emit(tr("updater.stage.copying_files"))
         copied = 0
 
         # ===== 開始覆蓋 =====
@@ -160,7 +165,7 @@ class UpdateWorker(QThread):
 
             copied += 1
             percent = int(copied * 100 / total_files)
-            self.stage.emit("📂 覆蓋檔案中")
+            self.stage.emit(tr("updater.stage.copy_progress"))
             self.detail.emit(f"{copied} / {total_files}")
             self.progress.emit(max(0, min(100, percent)))
 
@@ -175,10 +180,10 @@ class UpdaterWindow(QWidget):
         self.zip_url = zip_url
         self.target_exe = target_exe
 
-        self.setWindowTitle("自動更新中...")
+        self.setWindowTitle(tr("updater.window.title"))
         self.setFixedSize(420, 120)
 
-        self.label_stage = QLabel("準備中...")
+        self.label_stage = QLabel(tr("updater.stage.preparing"))
         self.label_stage.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
 
         self.progress = QProgressBar()
@@ -220,17 +225,21 @@ class UpdaterWindow(QWidget):
         self.close()
 
     def on_failed(self, msg: str):
-        self.label_stage.setText("❌ 更新錯誤")
+        self.label_stage.setText(tr("updater.stage.error"))
         self.label_detail.setText(msg)
         self.progress.setValue(0)
-        QMessageBox.critical(self, "更新失敗", msg)
+        QMessageBox.critical(self, tr("updater.error.title"), msg)
 
 
 def main():
     if len(sys.argv) < 3:
         # 你原本 Tkinter 這段其實少 import messagebox；這裡改用 Qt 的 MessageBox
         app = QApplication(sys.argv)
-        QMessageBox.critical(None, "錯誤", "請提供 zip 下載網址 與 EXE 名稱")
+        QMessageBox.critical(
+            None,
+            tr("common.error"),
+            tr("updater.error.arguments_required"),
+        )
         sys.exit(1)
 
     zip_url = sys.argv[1]

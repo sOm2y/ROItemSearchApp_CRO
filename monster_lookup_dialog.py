@@ -9,9 +9,16 @@ from PySide6.QtWidgets import (
     QLineEdit, QPushButton, QLabel, QMessageBox
 )
 from PySide6.QtWidgets import QComboBox 
+from i18n import LangManager, tr
+
 # ================= monster =================
 MONSTERS_FILE = Path("data","monsters.json")
 MONSTER_CACHE_DIR = Path("data", "monster")
+API_LANGUAGE_MAP = {
+    "zh_CN": "zh-CN",
+    "zh_TW": "zh-TW",
+    "en_US": "en-US",
+}
 def cache_path(monster_id: int) -> Path:
     # data/monster/1002.json
     return MONSTER_CACHE_DIR / f"{int(monster_id)}.json"
@@ -81,11 +88,14 @@ class MonsterFetchWorker(QObject):
     finished = Signal(dict)
     error = Signal(str)
 
-    def __init__(self, monster_id: int, api_key: str, language="zh-TW"):
+    def __init__(self, monster_id: int, api_key: str, language=None):
         super().__init__()
         self.monster_id = monster_id
         self.api_key = api_key
-        self.language = language
+        self.language = language or API_LANGUAGE_MAP.get(
+            LangManager.current_lang,
+            "zh-TW",
+        )
 
     def run(self):
         try:
@@ -103,7 +113,7 @@ class MonsterFetchWorker(QObject):
 
             # 2) 沒快取才打 API
             if not self.api_key:
-                raise Exception("沒有快取，且未設定 API Key")
+                raise Exception(tr("message.monster_cache_and_api_key_missing"))
 
             url = f"https://www.divine-pride.net/api/database/Monster/{self.monster_id}?apiKey={self.api_key}"
             headers = {"Accept-Language": self.language}
@@ -138,32 +148,32 @@ class MonsterLookupDialog(QDialog):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("怪物查詢")
+        self.setWindowTitle(tr("window.monster_lookup"))
         self.setModal(True)
 
         self._last_data = None
 
         # -------- UI --------
         self.id_input = QLineEdit()
-        self.id_input.setPlaceholderText("怪物ID")
+        self.id_input.setPlaceholderText(tr("placeholder.monster_id"))
 
         self.key_input = QLineEdit()
         self.key_input.setText(load_api_key_from_config())
         self.key_input.setPlaceholderText("API Key")
 
-        self.btn_query = QPushButton("查詢")
+        self.btn_query = QPushButton(tr("button.query"))
         self.btn_query.clicked.connect(self.on_query)
 
-        self.btn_apply = QPushButton("套用")
+        self.btn_apply = QPushButton(tr("button.apply"))
         self.btn_apply.setEnabled(False)
         self.btn_apply.clicked.connect(self.on_apply)
 
-        self.status = QLabel("請輸入怪物ID")
+        self.status = QLabel(tr("status.enter_monster_id"))
 
         self.name_preview = QLineEdit()
         self.name_preview.setReadOnly(True)
         self.preset_box = QComboBox()
-        self.preset_box.addItem("（選擇預設怪物）", None)
+        self.preset_box.addItem(tr("placeholder.select_preset_monster"), None)
 
         for m in load_presets():
             # 顯示名稱，data 存 id
@@ -171,10 +181,10 @@ class MonsterLookupDialog(QDialog):
 
         self.preset_box.currentIndexChanged.connect(self.on_preset_changed)
         form = QFormLayout()
-        form.addRow("預設怪物", self.preset_box)
-        form.addRow("怪物 ID", self.id_input)
+        form.addRow(tr("label.preset_monster"), self.preset_box)
+        form.addRow(tr("label.monster_id"), self.id_input)
         #form.addRow("API Key", self.key_input)
-        form.addRow("名稱預覽", self.name_preview)
+        form.addRow(tr("label.name_preview"), self.name_preview)
 
         btn_row = QHBoxLayout()
         btn_row.addWidget(self.btn_query)
@@ -197,12 +207,16 @@ class MonsterLookupDialog(QDialog):
         try:
             monster_id = int(self.id_input.text())
         except ValueError:
-            QMessageBox.warning(self, "錯誤", "怪物ID 必須是數字")
+            QMessageBox.warning(
+                self,
+                tr("message.title.error"),
+                tr("message.monster_id_must_be_numeric"),
+            )
             return
 
         api_key = self.key_input.text().strip()
 
-        self.status.setText("查詢中...")
+        self.status.setText(tr("status.querying"))
         self.btn_query.setEnabled(False)
         self.btn_apply.setEnabled(False)
 
@@ -231,8 +245,8 @@ class MonsterLookupDialog(QDialog):
         self.btn_apply.setEnabled(False)   # <<< 重要：錯誤就不允許套用
         self._last_data = None             # <<< 重要：清掉上一次成功資料，避免誤套用
         self.name_preview.clear()
-        self.status.setText("查詢失敗")
-        QMessageBox.critical(self, "API 錯誤", msg)
+        self.status.setText(tr("status.query_failed"))
+        QMessageBox.critical(self, tr("message.title.api_error"), msg)
 
 
 
@@ -243,8 +257,12 @@ class MonsterLookupDialog(QDialog):
         self._last_data = parsed
 
         self.name_preview.setText(parsed["name"])
-        src = "快取" if data.get("_from_cache") else "API"
-        self.status.setText(f"查詢完成（{src}）")
+        src = (
+            tr("source.cache")
+            if data.get("_from_cache")
+            else tr("source.api")
+        )
+        self.status.setText(tr("status.query_complete", source=src))
         self.btn_apply.setEnabled(True)
 
     def on_apply(self):

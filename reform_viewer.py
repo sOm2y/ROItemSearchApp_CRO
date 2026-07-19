@@ -3,10 +3,11 @@ import os
 import re
 from PySide6.QtWidgets import (
     QApplication, QWidget, QListWidget, QTableWidget, QVBoxLayout, QHBoxLayout,
-    QLabel, QTabWidget, QLineEdit, QTableWidgetItem, QHeaderView
+    QLabel, QTabWidget, QLineEdit, QTableWidgetItem, QHeaderView, QMessageBox
 )
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QFontMetrics
+from i18n import tr
 
 
 # ------------------------------------------------------------
@@ -33,7 +34,11 @@ def parse_lub_file(filename):#字典化物品列表
         with open(filename, "r", encoding="utf-8") as file:
             content = file.read()
     except FileNotFoundError:
-        QMessageBox.critical(None, "錯誤", f"找不到檔案：{filename}")
+        QMessageBox.critical(
+            None,
+            tr("common.error"),
+            tr("common.file_not_found", filename=filename),
+        )
         return {}
 
     item_entries = re.findall(
@@ -44,7 +49,13 @@ def parse_lub_file(filename):#字典化物品列表
 
     parsed_items = {}
     total = len(item_entries)
-    print(f"📦 開始讀取 {os.path.basename(filename)}，共 {total} 筆物品資料。")
+    print(
+        tr(
+            "reform.log.reading_items",
+            filename=os.path.basename(filename),
+            count=total,
+        )
+    )
     
     
     
@@ -53,7 +64,10 @@ def parse_lub_file(filename):#字典化物品列表
         
         try:
             
-            print(f"  → 正在讀取第 {index}/{total} 筆", end="\r")
+            print(
+                tr("reform.log.reading_item", current=index, total=total),
+                end="\r",
+            )
             item_id = int(item_id)
             identified_name = re.search(r'(?<!un)identifiedDisplayName\s*=\s*"([^"]+)"', body)
 
@@ -99,7 +113,7 @@ def parse_lub_file(filename):#字典化物品列表
 
         except Exception:
             continue
-    print(f"\n✅ 讀取完成，共成功解析 {len(parsed_items)} 筆。")
+    print(tr("reform.log.items_loaded", count=len(parsed_items)))
     return parsed_items
 
 
@@ -116,7 +130,7 @@ def parse_itemdb_name_tbl(filename):
         val = int(m.group(3))
         mapping[key] = val
 
-    print(f"✔ ItemDBNameTbl 解析成功：{len(mapping)} 筆")
+    print(tr("reform.log.itemdb_loaded", count=len(mapping)))
     return mapping
 
 
@@ -129,7 +143,7 @@ def parse_reform_info(filename):
     # 找到 ReformInfo 大區塊
     m = re.search(r"ReformInfo\s*=\s*{(.*)}\s*$", text, re.DOTALL)
     if not m:
-        print("❌ ReformInfo not found")
+        print(tr("reform.log.reform_info_missing"))
         return {}
     body = m.group(1)
 
@@ -191,7 +205,7 @@ def parse_reform_info(filename):
             "InformationString": info_list
         }
 
-    print(f"✔ ReformInfo 正確解析：{len(reform)} 筆")
+    print(tr("reform.log.reform_info_loaded", count=len(reform)))
     return reform
 
 # ------------------------------------------------------------
@@ -202,7 +216,7 @@ def parse_reform_item_list(filename):
 
     m = re.search(r"ReformItemList\s*=\s*{(.*?)}\s*$", text, re.DOTALL)
     if not m:
-        print("❌ ReformItemList not found")
+        print(tr("reform.log.reform_item_list_missing"))
         return {}
 
     body = m.group(1)
@@ -217,7 +231,7 @@ def parse_reform_item_list(filename):
         reform_ids = [int(x) for x in ids]
         result[key] = reform_ids
 
-    print(f"✔ ReformItemList 解析完成，共 {len(result)} 組")
+    print(tr("reform.log.reform_item_list_loaded", count=len(result)))
     return result
 
 import re
@@ -258,7 +272,7 @@ class ReformUI(QWidget):
         self.itemdb = itemdb           # ItemDBNameTbl：DBName -> itemid
         self.reform_item_list = reform_item_list
 
-        self.setWindowTitle("改造系統檢視器 Reform Viewer")
+        self.setWindowTitle(tr("reform.window.title"))
         layout = QHBoxLayout(self)
 
         # --------------------------------------------------------
@@ -268,7 +282,7 @@ class ReformUI(QWidget):
         layout.addLayout(left_box)
 
         self.search_box = QLineEdit()
-        self.search_box.setPlaceholderText("搜尋 要改造的裝備名稱...")
+        self.search_box.setPlaceholderText(tr("reform.search.placeholder"))
         left_box.addWidget(self.search_box)
 
         self.list_items = QListWidget()
@@ -322,11 +336,11 @@ class ReformUI(QWidget):
         """
         item_id = self.itemdb.get(dbname)
         if not item_id:
-            return f"[未知DBName]{dbname}"
+            return tr("reform.item.unknown_dbname", dbname=dbname)
 
         info = self.items.get(item_id)
         if not info:
-            return f"[未知ID]{item_id}"
+            return tr("reform.item.unknown_id", item_id=item_id)
 
         return info["name"]
 
@@ -382,7 +396,12 @@ class ReformUI(QWidget):
             v = QVBoxLayout(tab)
 
             # 標題：ResultItem
-            lbl = QLabel(f"改造成 ➜ {self.resolve_item_name(info['ResultItem'])}")
+            lbl = QLabel(
+                tr(
+                    "reform.result.title",
+                    item=self.resolve_item_name(info["ResultItem"]),
+                )
+            )
             lbl.setStyleSheet("font-size:16px; font-weight:bold;")
             v.addWidget(lbl)
 
@@ -390,7 +409,9 @@ class ReformUI(QWidget):
             table = QTableWidget()
             table.setColumnCount(2)
             table.setRowCount(2)
-            table.setHorizontalHeaderLabels(["條件", "內容"])
+            table.setHorizontalHeaderLabels(
+                [tr("reform.table.condition"), tr("reform.table.content")]
+            )
             table.verticalHeader().setVisible(False)
             table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
             table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
@@ -399,10 +420,14 @@ class ReformUI(QWidget):
 
             v.addWidget(table)
 
-            table.setItem(0, 0, QTableWidgetItem("精煉範圍"))
+            table.setItem(0, 0, QTableWidgetItem(tr("reform.condition.refine_range")))
             table.setItem(0, 1, QTableWidgetItem(f"{info['NeedRefineMin']} ~ {info['NeedRefineMax']}"))
 
-            table.setItem(1, 0, QTableWidgetItem("改變精煉值"))
+            table.setItem(
+                1,
+                0,
+                QTableWidgetItem(tr("reform.condition.refine_change")),
+            )
             table.setItem(1, 1, QTableWidgetItem(str(info["ChangeRefineValue"])))
 
             #table.setItem(2, 0, QTableWidgetItem("是否保留插卡孔"))
@@ -424,7 +449,9 @@ class ReformUI(QWidget):
             mat_table = QTableWidget()
             mat_table.setColumnCount(2)
             mat_table.setRowCount(len(mats))
-            mat_table.setHorizontalHeaderLabels(["材料名稱", "數量"])
+            mat_table.setHorizontalHeaderLabels(
+                [tr("reform.table.material_name"), tr("common.quantity")]
+            )
             mat_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
             mat_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
             mat_table.verticalHeader().setVisible(False)

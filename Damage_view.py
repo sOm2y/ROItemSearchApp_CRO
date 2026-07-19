@@ -13,6 +13,8 @@ from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import QStyledItemDelegate, QStyle, QComboBox
 from PySide6.QtCore import Qt, QSize
 from PySide6.QtGui import QPainter
+from i18n import tr
+
 initial_steps = [
     ("MATK%", 100),
     ("體型%", 100),
@@ -321,7 +323,7 @@ class LiveReorderListView(QListView):
 class DamageCalculator(QWidget):
     def __init__(self, matk=0, steps=None,atktype="physical"):
         super().__init__()
-        self.setWindowTitle("(偵錯)計算歷程顯示")
+        self.setWindowTitle(tr("window.damage_history_debug"))
         self.resize(450, 800)
         self._in_calculate = False
         root = QHBoxLayout(self)
@@ -335,11 +337,11 @@ class DamageCalculator(QWidget):
         top_layout = QHBoxLayout(top_bar)
         top_layout.setContentsMargins(10, 10, 10, 10)
         if atktype == "physical":
-            top_layout.addWidget(QLabel("起始 ATK："))
+            top_layout.addWidget(QLabel(tr("label.initial_atk")))
         elif atktype == "d_b":
-            top_layout.addWidget(QLabel("起始 ATK："))
+            top_layout.addWidget(QLabel(tr("label.initial_atk")))
         else:
-            top_layout.addWidget(QLabel("起始 MATK："))
+            top_layout.addWidget(QLabel(tr("label.initial_matk")))
 
         self.matk_input = QSpinBox()
         self.matk_input.setRange(-10_000_000, 10_000_000)
@@ -349,13 +351,13 @@ class DamageCalculator(QWidget):
         top_layout.addWidget(self.matk_input)
 
         top_layout.addStretch(1)
-        self.calc_btn = QPushButton("計算 / 重算")
+        self.calc_btn = QPushButton(tr("button.recalculate"))
         self.calc_btn.clicked.connect(self.calculate)
         top_layout.addWidget(self.calc_btn)
 
         left.addWidget(top_bar)
 
-        hint = QLabel("🖱️ 直接拖曳排序")
+        hint = QLabel(tr("hint.drag_to_reorder"))
         hint.setStyleSheet("opacity: 0.75;")
         left.addWidget(hint)
 
