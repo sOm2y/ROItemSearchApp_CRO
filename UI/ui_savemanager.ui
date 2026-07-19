@@ -11,7 +11,7 @@
    </rect>
   </property>
   <property name="windowTitle">
-   <string>Dialog</string>
+   <string notr="true">window.save_manager</string>
   </property>
   <widget class="QListWidget" name="listWidget">
    <property name="geometry">
@@ -37,17 +37,17 @@
    </property>
    <widget class="QPushButton" name="loadButton">
     <property name="text">
-     <string>載入</string>
+     <string notr="true">button.load</string>
     </property>
    </widget>
    <widget class="QPushButton" name="deleteButton">
     <property name="text">
-     <string>刪除</string>
+     <string notr="true">button.delete</string>
     </property>
    </widget>
    <widget class="QPushButton" name="cancelButton">
     <property name="text">
-     <string>取消</string>
+     <string notr="true">button.cancel</string>
     </property>
    </widget>
   </widget>

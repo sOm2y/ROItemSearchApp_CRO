@@ -4,6 +4,12 @@ Version = "v0.3.18-260710"
 import sys, builtins, time
 import os
 import json
+
+# Frozen builds must resolve data/lang/APP paths beside the executable even
+# when launched from a shortcut or another working directory.
+if getattr(sys, "frozen", False):
+    os.chdir(os.path.dirname(sys.executable))
+
 from PySide6.QtCore import QThread, Signal, Qt, QMetaObject, QTimer
 from PySide6.QtWidgets import QApplication, QDialog, QVBoxLayout, QPlainTextEdit, QLabel
 import enchant #載入附魔工具
@@ -18,6 +24,14 @@ from dotenv import load_dotenv
 from datetime import datetime, timezone
 
 import requests
+from i18n import (
+    DEFAULT_LANGUAGE,
+    SUPPORTED_LANGUAGES,
+    LangManager,
+    normalize_language,
+    tr,
+    translate_equipment_part,
+)
 
 #介面縮放倍率設定 0.5~3倍
 DEFAULT_UI_SCALE_FACTOR = 1.0
@@ -83,56 +97,6 @@ def get_startup_ui_scale_factor(argv=None) -> float:
 def format_ui_scale_factor(scale: float) -> str:
     """輸出適合 QT_SCALE_FACTOR 與 JSON 使用的精簡數字字串。"""
     return f"{normalize_ui_scale_factor(scale):g}"
-
-
-class LangManager:
-    """Simple JSON language-pack loader for user-facing UI text."""
-    current_lang = "zh_TW"
-    fallback_lang = "zh_TW"
-    translations = {}
-    fallback_translations = {}
-
-    @classmethod
-    def _base_dir(cls):
-        if getattr(sys, "frozen", False):
-            return os.path.dirname(sys.executable)
-        return os.path.dirname(os.path.abspath(__file__))
-
-    @classmethod
-    def _read_lang_file(cls, lang_code):
-        path = os.path.join(cls._base_dir(), "lang", f"{lang_code}.json")
-        if not os.path.exists(path):
-            return {}
-        try:
-            with open(path, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except Exception as e:
-            print(f"語言包載入失敗：{path}，{e}")
-            return {}
-
-    @classmethod
-    def load(cls, lang_code="zh_TW"):
-        cls.current_lang = lang_code or cls.fallback_lang
-        cls.fallback_translations = cls._read_lang_file(cls.fallback_lang)
-        cls.translations = cls._read_lang_file(cls.current_lang)
-
-    @classmethod
-    def tr(cls, key, default=None, **kwargs):
-        text = cls.translations.get(
-            key,
-            cls.fallback_translations.get(key, default if default is not None else key)
-        )
-        try:
-            return text.format(**kwargs)
-        except Exception:
-            return text
-
-
-def tr(key, default=None, **kwargs):
-    return LangManager.tr(key, default, **kwargs)
-
-
-LangManager.load("zh_TW")
 
 
 class InitWorker(QThread):
@@ -263,6 +227,9 @@ def compile_ui_files(ui_dir="UI"):
     """
     將 ui_dir 資料夾下的所有 .ui 檔案轉換成 .py
     """
+    if getattr(sys, "frozen", False):
+        return
+
     for file in os.listdir(ui_dir):
         if file.endswith(".ui"):
             ui_path = os.path.join(ui_dir, file)
@@ -272,7 +239,7 @@ def compile_ui_files(ui_dir="UI"):
             cmd = ["pyside6-uic", ui_path, "-o", py_path]
             print(f"[UI] 轉換 {ui_path} → {py_path}")
             try:
-                subprocess.run(cmd, check=True, shell=True)
+                subprocess.run(cmd, check=True)
             except Exception as e:
                 print(f"[UI] 轉換失敗: {e}")
 
@@ -1017,6 +984,22 @@ refine_parts = {
     "技能":   {"slot": 102, "type": "技能"},
 }
 
+def display_equipment_part(part_name):
+    """Translate an equipment part for display without changing stable save keys."""
+    return translate_equipment_part(part_name)
+
+
+def display_equipment_field(field_name):
+    """Translate a part field label while preserving its internal identifier."""
+    if field_name == "裝備":
+        return tr("equipment_field.equipment")
+    if field_name == "note":
+        return tr("equipment_field.options")
+    card_match = re.fullmatch(r"卡片(\d+)", str(field_name))
+    if card_match:
+        return tr("equipment_field.card", number=card_match.group(1))
+    return str(field_name)
+
 
 equip_sitetype = {
     10 : "頭上",11: "頭中",12: "頭下",2: "鎧甲",4: "右手(武器)",3: "左手(盾牌)",5: "披肩",6: "鞋子",7: "飾品右",8: "飾品左",
@@ -1565,7 +1548,15 @@ class SaveManagerDialog(QDialog, Ui_SaveManagerDialog):#儲存裝被選則
         super().__init__(parent)
         self.setupUi(self)   # 這裡載入 Designer 畫的 UI
 
-        self.setWindowTitle(tr("window.save_manager", part_name=part_name))
+        self.setWindowTitle(
+            tr(
+                "window.save_manager",
+                part_name=display_equipment_part(part_name),
+            )
+        )
+        self.loadButton.setText(tr("button.load"))
+        self.deleteButton.setText(tr("button.delete"))
+        self.cancelButton.setText(tr("button.cancel"))
         self.part_name = part_name
         self.save_list = save_list
         self.selected_save = None
@@ -2227,10 +2218,10 @@ class CSVEditor(QMainWindow):
             # 建立編輯欄位（例：QLineEdit 或 QComboBox）
             if header.lower() == "attack_type":
                 edit_field = QComboBox()                
-                edit_field.addItem("物理", "physical")
-                edit_field.addItem("魔法", "magic")
-                edit_field.addItem("龍息", "d_b")
-                edit_field.addItem("護盾", "shield")
+                edit_field.addItem(tr("attack_type.physical"), "physical")
+                edit_field.addItem(tr("attack_type.magic"), "magic")
+                edit_field.addItem(tr("attack_type.dragon_breath"), "d_b")
+                edit_field.addItem(tr("attack_type.shield"), "shield")
 
             elif header.lower() in ("element","combo_element"):
                 edit_field = QComboBox()
@@ -4773,11 +4764,12 @@ class PreferencesDialog(QDialog):
         current_mode: str,
         current_api_key: str = "",
         current_ui_scale: float = DEFAULT_UI_SCALE_FACTOR,
+        current_language: str = DEFAULT_LANGUAGE,
         parent=None,
     ):
         super().__init__(parent)
         self.setWindowTitle(tr("window.preferences"))
-        self.resize(340, 250)
+        self.resize(380, 300)
 
         layout = QVBoxLayout(self)
 
@@ -4786,8 +4778,8 @@ class PreferencesDialog(QDialog):
         hl.addWidget(QLabel(tr("label.update_mode")))
         self.mode_combo = QComboBox()
         options = [
-            ("線上來源", "online_only"),
-            ("本機來源", "local_only"),
+            (tr("update_mode.online"), "online_only"),
+            (tr("update_mode.local"), "local_only"),
         ]
         for text, val in options:
             self.mode_combo.addItem(text, userData=val)
@@ -4797,6 +4789,20 @@ class PreferencesDialog(QDialog):
 
         hl.addWidget(self.mode_combo)
         layout.addLayout(hl)
+
+        language_row = QHBoxLayout()
+        language_row.addWidget(QLabel(tr("label.language")))
+        self.language_combo = QComboBox()
+        for language_code, display_name in SUPPORTED_LANGUAGES.items():
+            self.language_combo.addItem(display_name, userData=language_code)
+        language_index = self.language_combo.findData(
+            normalize_language(current_language)
+        )
+        self.language_combo.setCurrentIndex(
+            language_index if language_index >= 0 else 0
+        )
+        language_row.addWidget(self.language_combo)
+        layout.addLayout(language_row)
 
         # 介面縮放倍率（Qt 需在 QApplication 建立前套用，因此下次啟動生效）
         scale_row = QHBoxLayout()
@@ -4875,6 +4881,9 @@ class PreferencesDialog(QDialog):
 
     def selected_ui_scale(self) -> float:
         return normalize_ui_scale_factor(self.ui_scale_combo.currentData())
+
+    def selected_language(self) -> str:
+        return normalize_language(self.language_combo.currentData())
 
 
 
@@ -5233,7 +5242,7 @@ class ItemSearchApp(QWidget):
                 if refine_parts[part_name]["type"] not in visible_types:
                     continue
 
-                btn = QPushButton(part_name)
+                btn = QPushButton(display_equipment_part(part_name))
                 btn.setCursor(Qt.PointingHandCursor)
                 btn.clicked.connect(lambda _, p=part_name: self.scroll_to_equip_part(p))
                 btn.installEventFilter(self)
@@ -5493,7 +5502,11 @@ class ItemSearchApp(QWidget):
         self.clear_current_edit()
         self.current_edit_part = f"{part_name} - 裝備"
         self.current_edit_label.setText(
-            tr("label.current_part_detail", part=part_name, label="裝備")
+            tr(
+                "label.current_part_detail",
+                part=display_equipment_part(part_name),
+                label=tr("equipment_field.equipment"),
+            )
         )
         self.unsync_button.setVisible(True)
         self.unsync_button2.setVisible(True)
@@ -5580,39 +5593,55 @@ class ItemSearchApp(QWidget):
 
         current_edit = getattr(self, "current_edit_part", None)
         if not current_edit:
-            report("請先在主畫面點選要套用的裝備名稱欄，使其顯示紅底。")
+            report(tr("enchant.apply.select_target_first"))
             return
 
         try:
             part_name, field_type = current_edit.rsplit(" - ", 1)
         except ValueError:
-            report(f"無法解析目前編輯欄位：{current_edit}")
+            report(
+                tr(
+                    "enchant.apply.current_field_invalid",
+                    field=current_edit,
+                )
+            )
             return
 
         if field_type != "裝備":
-            report("目前紅底欄位不是裝備名稱欄；請改點該部位的裝備欄。")
+            report(tr("enchant.apply.target_is_not_equipment"))
             return
 
         ui = self.refine_inputs_ui.get(part_name)
         if not ui:
-            report(f"找不到主畫面部位：{part_name}")
+            report(
+                tr(
+                    "enchant.apply.part_missing",
+                    part=display_equipment_part(part_name),
+                )
+            )
             return
 
         try:
             slot_id = int(slot_id)
         except (TypeError, ValueError):
-            report(f"無法辨識附魔洞位：{slot_id}")
+            report(tr("enchant.apply.slot_invalid", slot=slot_id))
             return
 
         cards = ui.get("cards", [])
         if not 0 <= slot_id < len(cards):
-            report(f"{part_name} 沒有可寫入的第{slot_id + 1}洞。")
+            report(
+                tr(
+                    "enchant.apply.slot_unavailable",
+                    part=display_equipment_part(part_name),
+                    slot=slot_id + 1,
+                )
+            )
             return
 
         equipment_name = str(equipment_name or "").strip()
         enchant_name = str(enchant_name or "").strip()
         if not equipment_name or not enchant_name:
-            report("裝備名稱或附魔名稱為空，無法套用。")
+            report(tr("enchant.apply.name_empty"))
             return
 
         self.clear_global_state()
@@ -5625,13 +5654,25 @@ class ItemSearchApp(QWidget):
         # 保留紅底目標，讓使用者可連續設定其他洞位。
         ui["equip"].setStyleSheet("background-color: #ff0000;")
         self.current_edit_label.setText(
-            tr("label.current_part_detail", part=part_name, label="裝備")
+            tr(
+                "label.current_part_detail",
+                part=display_equipment_part(part_name),
+                label=tr("equipment_field.equipment"),
+            )
         )
 
         self.replace_custom_calc_content()
         self.trigger_total_effect_update()
         self._set_enchant_tool_target(part_name, "裝備", equipment_name)
-        report(f"已加入「{part_name}」第{slot_id + 1}洞：{enchant_name}", True)
+        report(
+            tr(
+                "enchant.apply.success",
+                part=display_equipment_part(part_name),
+                slot=slot_id + 1,
+                enchant=enchant_name,
+            ),
+            True,
+        )
 
     def open_enchant_tool(self, checked=False, target_part=None, initial_equipment=None, initial_slot_id=None):#附魔工具
         # QAction.triggered 會傳入 checked；只有明確字串才視為指定部位。
@@ -7307,7 +7348,9 @@ class ItemSearchApp(QWidget):
             self.skill_formula_result_input.setText(f"{results[0]['skill_result']} %")
         else:
             self.skill_formula_result_input.setText("0%")
-            self.custom_calc_box.setPlainText("錯誤：無選擇職業、無技能公式、公式錯誤計算結果為0！")
+            self.custom_calc_box.setPlainText(
+                tr("message.skill_calculation_invalid")
+            )
 
 
 
@@ -7718,6 +7761,7 @@ class ItemSearchApp(QWidget):
         self.update_mode = "online_only"
         self.api_key = ""
         self.ui_scale_factor = DEFAULT_UI_SCALE_FACTOR
+        self.language = DEFAULT_LANGUAGE
 
         cfg = load_config_data()
         self.update_mode = cfg.get("update_mode", self.update_mode)
@@ -7725,6 +7769,8 @@ class ItemSearchApp(QWidget):
         self.ui_scale_factor = normalize_ui_scale_factor(
             cfg.get("ui_scale_factor", self.ui_scale_factor)
         )
+        self.language = normalize_language(cfg.get("language", self.language))
+        LangManager.load(self.language)
 
     def save_config(self):
         cfg = {
@@ -7732,6 +7778,9 @@ class ItemSearchApp(QWidget):
             "api_key": getattr(self, "api_key", ""),
             "ui_scale_factor": normalize_ui_scale_factor(
                 getattr(self, "ui_scale_factor", DEFAULT_UI_SCALE_FACTOR)
+            ),
+            "language": normalize_language(
+                getattr(self, "language", DEFAULT_LANGUAGE)
             ),
         }
         try:
@@ -7756,25 +7805,35 @@ class ItemSearchApp(QWidget):
         previous_ui_scale = normalize_ui_scale_factor(
             getattr(self, "ui_scale_factor", DEFAULT_UI_SCALE_FACTOR)
         )
+        previous_language = normalize_language(
+            getattr(self, "language", DEFAULT_LANGUAGE)
+        )
         dlg = PreferencesDialog(
             current_mode=self.update_mode,
             current_api_key=getattr(self, "api_key", ""),
             current_ui_scale=previous_ui_scale,
+            current_language=previous_language,
             parent=self
         )
         if dlg.exec() == QDialog.Accepted:
             self.update_mode = dlg.selected_mode()
             self.api_key = dlg.api_key()
             self.ui_scale_factor = dlg.selected_ui_scale()
+            self.language = dlg.selected_language()
             self.save_config()
 
+            changed_settings = []
+            if self.language != previous_language:
+                changed_settings.append(tr("label.language"))
             if self.ui_scale_factor != previous_ui_scale:
+                changed_settings.append(tr("label.ui_scale"))
+            if changed_settings:
                 QMessageBox.information(
                     self,
                     tr("window.preferences"),
                     tr(
-                        "message.ui_scale_restart_required",
-                        "介面縮放已儲存，請重新啟動程式以套用新倍率。",
+                        "message.settings_restart_required",
+                        settings=", ".join(changed_settings),
                     ),
                 )
 
@@ -8405,19 +8464,38 @@ class ItemSearchApp(QWidget):
         target = 265
         #gap = max(0, target - result)
         gap = target - result
-        status = "✅" if gap <= 0 else "⚠️ 未達標"
+        status = (
+            tr("status.target_met")
+            if gap <= 0
+            else tr("status.target_not_met")
+        )
 
         if gap <= 0:
             need_dex = gap
             need_int = gap * 2
-            diff_text = f"　（超過：DEX {need_dex} 或 INT {need_int}）"
+            diff_text = tr(
+                "label.instant_cast_exceeded",
+                dex=need_dex,
+                int=need_int,
+            )
         else:
             need_dex = gap
             need_int = gap * 2
-            diff_text = f"　（還差：DEX +{need_dex} 或 INT +{need_int}）"
+            diff_text = tr(
+                "label.instant_cast_remaining",
+                dex=need_dex,
+                int=need_int,
+            )
 
         self.DEX_INT_265_label.setText(
-            f"※素質無詠 {dex_part} + {int_part} = {result} {status}\n{diff_text}"
+            tr(
+                "label.instant_cast_result",
+                dex_part=dex_part,
+                int_part=int_part,
+                result=result,
+                status=status,
+                difference=diff_text,
+            )
         )
 
 
@@ -8831,7 +8909,7 @@ class ItemSearchApp(QWidget):
                                 combo.addItem(v, k)
 
                         except Exception:
-                            combo.addItem("（錯誤：找不到 map）", -1)
+                            combo.addItem(tr("message.map_not_found"), -1)
                         
                         self.param_widgets.append(combo)
                         row_layout.addWidget(combo)
@@ -9529,7 +9607,7 @@ class ItemSearchApp(QWidget):
         combined = []
         show_source = self.show_combo_source_checkbox.isChecked()
         
-        sort_mode = self.sort_mode_combo.currentText()
+        sort_mode = self.sort_mode_combo.currentData()
 
         if sort_mode == "來源順序":
             sorted_effect_items = effect_dict.items()
@@ -9727,8 +9805,8 @@ class ItemSearchApp(QWidget):
 
         reply = QMessageBox.question(
             self,
-            "確認關閉",
-            "確定要關閉應用程式嗎？未儲存的變更將會遺失。",
+            tr("message.title.confirm_close"),
+            tr("message.confirm_close_unsaved"),
             QMessageBox.Yes | QMessageBox.No,
             QMessageBox.No
         )
@@ -9848,8 +9926,12 @@ class ItemSearchApp(QWidget):
         # 確認是否覆蓋
         if info["equip"].text() or any(c.text() for c in info["cards"]) or info["note"].toPlainText():
             reply = QMessageBox.question(
-                self, "覆蓋確認",
-                f"目前 {part} 已有資料，確定要覆蓋？",
+                self,
+                tr("message.title.confirm_overwrite"),
+                tr(
+                    "message.confirm_overwrite_part",
+                    part=display_equipment_part(part),
+                ),
                 QMessageBox.Yes | QMessageBox.No
             )
             if reply != QMessageBox.Yes:
@@ -10796,8 +10878,11 @@ class ItemSearchApp(QWidget):
         if program_update_info.get("error"):
             QMessageBox.warning(
                 self,
-                "主程式更新檢查失敗",
-                f"無法檢查主程式版本，將只檢查資料更新：\n{program_update_info['error']}"
+                tr("message.title.program_update_check_failed"),
+                tr(
+                    "message.program_update_check_failed",
+                    error=program_update_info["error"],
+                ),
             )
 
         self.recompile(program_update_info=program_update_info)
@@ -11227,7 +11312,13 @@ class ItemSearchApp(QWidget):
                 self.clear_current_edit()
 
                 self.current_edit_part = f"{part_label} - {label_name}"
-                self.current_edit_label.setText(tr("label.current_part_detail", part=part_label, label=label_name))
+                self.current_edit_label.setText(
+                    tr(
+                        "label.current_part_detail",
+                        part=display_equipment_part(part_label),
+                        label=display_equipment_field(label_name),
+                    )
+                )
                 self.unsync_button.setVisible(True)
                 self.unsync_button2.setVisible(True)
                 self.apply_to_note_button.setVisible(True)
@@ -11327,7 +11418,7 @@ class ItemSearchApp(QWidget):
             part_ui["container"] = part_container
 
             # 部位標題
-            part_label = QLabel(part_name)
+            part_label = QLabel(display_equipment_part(part_name))
             part_layout.addWidget(part_label)
             part_ui["label"] = part_label
 
@@ -11666,7 +11757,7 @@ class ItemSearchApp(QWidget):
         left_layout.addWidget(self.tab_widget, stretch=1)
 
         # 下：狀態區
-        self.status_box = QGroupBox("攻速/詠唱顯示 [括弧內為技能需求秒數]")
+        self.status_box = QGroupBox(tr("group.attack_speed_cast_status"))
         self.status_box.setMinimumHeight(100)  
         status_layout = QVBoxLayout(self.status_box)
 
@@ -11771,8 +11862,16 @@ class ItemSearchApp(QWidget):
             layout.addLayout(row)
 
         # 使用函式新增橫向排列項目
-        add_labeled_row(middle_layout, "查詢關鍵字", self.search_input)
-        add_labeled_row(middle_layout, "符合項目", self.result_box)
+        add_labeled_row(
+            middle_layout,
+            tr("label.search_keywords"),
+            self.search_input,
+        )
+        add_labeled_row(
+            middle_layout,
+            tr("label.matching_items"),
+            self.result_box,
+        )
         #add_labeled_row(middle_layout, "中文名稱", self.name_field)
         #add_labeled_row(middle_layout, "韓文名稱", self.kr_name_field)
         #add_labeled_row(middle_layout, "鑲嵌孔數", self.slot_field)
@@ -11923,13 +12022,24 @@ class ItemSearchApp(QWidget):
         
         # 排序方式下拉選單
         self.sort_mode_combo = QComboBox()
-        self.sort_mode_combo.addItems([
-            "來源順序",          
+        self.sort_mode_combo.addItem(
+            tr("sort.source_order"),
+            "來源順序",
+        )
+        self.sort_mode_combo.addItem(
+            tr("sort.by_name"),
             "依名稱",
+        )
+        self.sort_mode_combo.addItem(
+            tr("sort.damage_effects"),
             "增傷詞條",
-            "ROCalculator輸入"
-        ])
-        self.sort_mode_combo.setCurrentText("增傷詞條")  # ✅ 預設選這個
+        )
+        self.sort_mode_combo.addItem(
+            tr("sort.rocalculator_input"),
+            "ROCalculator輸入",
+        )
+        default_sort_index = self.sort_mode_combo.findData("增傷詞條")
+        self.sort_mode_combo.setCurrentIndex(default_sort_index)
         self.sort_mode_combo.currentIndexChanged.connect(self.trigger_total_effect_update)
         total_filter_input_sort_mode_combo.addWidget(self.sort_mode_combo)
         total_tab_layout.addLayout(total_filter_input_sort_mode_combo)
@@ -12322,13 +12432,17 @@ class ItemSearchApp(QWidget):
             return sub_layout, box
 
         # 體型
-        size_layout, self.size_box = make_combobox("體型", size_map)
+        size_layout, self.size_box = make_combobox(tr("label.size"), size_map)
         target_layout.addLayout(size_layout)
 
         # 屬性
         # 只顯示 element_map 前 10 個 key（0~9）
         visible_element_keys = [k for k in element_map if k <= 9]
-        element_layout, self.element_box = make_combobox("屬性", element_map, visible_element_keys)
+        element_layout, self.element_box = make_combobox(
+            tr("label.element"),
+            element_map,
+            visible_element_keys,
+        )
         target_layout.addLayout(element_layout)
         
         element_lv_input_layout = QVBoxLayout()
@@ -12344,13 +12458,21 @@ class ItemSearchApp(QWidget):
 
         # 同樣方式套用在 race_map（假設你也要限制）
         visible_race_keys = [k for k in race_map if k <= 9]
-        race_layout, self.race_box = make_combobox("種族", race_map, visible_race_keys)
+        race_layout, self.race_box = make_combobox(
+            tr("label.race"),
+            race_map,
+            visible_race_keys,
+        )
         target_layout.addLayout(race_layout)
 
 
         # 階級
         visible_class_keys = [k for k in class_map if k <= 1]  # 依你需求調整
-        class_layout, self.class_box = make_combobox("階級", class_map, visible_class_keys)
+        class_layout, self.class_box = make_combobox(
+            tr("label.class"),
+            class_map,
+            visible_class_keys,
+        )
         target_layout.addLayout(class_layout)
 
         # MDEF / MRES 輸入欄
@@ -12515,10 +12637,17 @@ class ItemSearchApp(QWidget):
 
         body_target_layout = QHBoxLayout()
 
-        body_size_layout, self.body_size_box = make_combobox("體型", size_map)
+        body_size_layout, self.body_size_box = make_combobox(
+            tr("label.size"),
+            size_map,
+        )
         body_target_layout.addLayout(body_size_layout)
 
-        body_element_layout, self.body_element_box = make_combobox("屬性", element_map, visible_element_keys)
+        body_element_layout, self.body_element_box = make_combobox(
+            tr("label.element"),
+            element_map,
+            visible_element_keys,
+        )
         body_target_layout.addLayout(body_element_layout)
 
         body_element_lv_input_layout = QVBoxLayout()
@@ -12531,13 +12660,25 @@ class ItemSearchApp(QWidget):
         body_element_lv_input_layout.addWidget(self.body_element_lv_input)
         #body_target_layout.addLayout(body_element_lv_input_layout)
 
-        body_race_layout, self.body_race_box = make_combobox("種族", race_map, visible_race_keys)
+        body_race_layout, self.body_race_box = make_combobox(
+            tr("label.race"),
+            race_map,
+            visible_race_keys,
+        )
         body_target_layout.addLayout(body_race_layout)
 
-        body_class_layout, self.body_class_box = make_combobox("階級", class_map, visible_class_keys)
+        body_class_layout, self.body_class_box = make_combobox(
+            tr("label.class"),
+            class_map,
+            visible_class_keys,
+        )
         body_target_layout.addLayout(body_class_layout)
 
-        monster_body_element_layout, self.monster_body_element_box = make_combobox("受攻擊屬性", element_map, visible_element_keys)
+        monster_body_element_layout, self.monster_body_element_box = make_combobox(
+            tr("label.received_element"),
+            element_map,
+            visible_element_keys,
+        )
         body_target_layout.addLayout(monster_body_element_layout)
 
         body_layout.addLayout(body_target_layout)
@@ -13236,7 +13377,9 @@ class ItemSearchApp(QWidget):
             full_text = f"[{item_id}] = {{\n{block_text}\n}}"
             self.equip_text.setPlainText(full_text)
         else:
-            self.equip_text.setPlainText("（此物品無對應裝備屬性資料）")
+            self.equip_text.setPlainText(
+                tr("message.item_has_no_equipment_properties")
+            )
         # 模擬效果解析
         if item_id in self.equipment_data:
             # 偵測是否需要精煉欄位
@@ -13361,7 +13504,7 @@ class ItemSearchApp(QWidget):
             
             
         else:
-            self.sim_effect_text.setPlainText("（無可解析效果）")
+            self.sim_effect_text.setPlainText(tr("message.no_parsable_effects"))
             
 
 if __name__ == "__main__":

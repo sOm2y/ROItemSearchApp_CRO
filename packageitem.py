@@ -8,6 +8,7 @@ from PySide6.QtWidgets import QLineEdit
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QAbstractScrollArea
 from PySide6.QtWidgets import QCheckBox
+from i18n import tr
 
 
 # ================================================================
@@ -213,11 +214,11 @@ class PackageViewer(QWidget):
 
         # 搜尋框
         self.search_box = QLineEdit()
-        self.search_box.setPlaceholderText("搜尋物品名稱...")
+        self.search_box.setPlaceholderText(tr("package.search.placeholder"))
         self.search_box.textChanged.connect(self.filter_list)
 
         # 勾選框
-        self.checkbox_replaced = QCheckBox("只顯示TWRO")
+        self.checkbox_replaced = QCheckBox(tr("package.filter.twro_only"))
         self.checkbox_replaced.stateChanged.connect(self.filter_list)
 
         # 搜尋列（水平）
@@ -238,7 +239,9 @@ class PackageViewer(QWidget):
         # 右側表格
         self.table = QTableWidget()
         self.table.setColumnCount(2)
-        self.table.setHorizontalHeaderLabels(["物品名稱", "機率 %"])
+        self.table.setHorizontalHeaderLabels(
+            [tr("package.table.item_name"), tr("package.table.probability")]
+        )
 
         header = self.table.horizontalHeader()
         header.setSectionResizeMode(0, QHeaderView.Stretch)
@@ -270,7 +273,7 @@ class PackageViewer(QWidget):
         # 點擊事件
         self.list_packages.currentItemChanged.connect(self.on_pkg_selected)
 
-        self.setWindowTitle("箱子物品查詢器")
+        self.setWindowTitle(tr("package.window.title"))
         self.resize(900, 600)
         self.adjust_left_list_width()
 
@@ -292,7 +295,11 @@ class PackageViewer(QWidget):
 
         for row, it in enumerate(items):
             self.table.setItem(row, 0, QTableWidgetItem(it["display_name"]))
-            chance_text = "必定獲得" if it["chance"] == 100 else f"{it['chance']:.3f}%"
+            chance_text = (
+                tr("package.chance.guaranteed")
+                if it["chance"] == 100
+                else f"{it['chance']:.3f}%"
+            )
             self.table.setItem(row, 1, QTableWidgetItem(chance_text))
 
         # 計算所有 group 的總 prob
@@ -364,7 +371,11 @@ def parse_lub_file(filename):
         with open(filename, "r", encoding="utf-8") as file:
             content = file.read()
     except FileNotFoundError:
-        QMessageBox.critical(None, "錯誤", f"找不到檔案：{filename}")
+        QMessageBox.critical(
+            None,
+            tr("common.error"),
+            tr("common.file_not_found", filename=filename),
+        )
         return {}
 
     item_entries = re.findall(

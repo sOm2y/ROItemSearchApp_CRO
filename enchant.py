@@ -15,6 +15,7 @@ from PySide6.QtWidgets import QToolTip
 from PySide6.QtGui import QCursor
 from PySide6.QtGui import QFontMetrics
 from PySide6.QtCore import QPoint
+from i18n import tr, translate_equipment_part
 # ---------------------------------------------------------------
 # 讀檔：自動嘗試多種編碼
 # ---------------------------------------------------------------
@@ -504,7 +505,7 @@ def _item_description_to_html(description):
         lines = []
 
     if not lines:
-        return "<i>（無物品說明）</i>"
+        return f"<i>{html.escape(tr('enchant.message.no_item_description'))}</i>"
 
     html_lines = []
     color_pattern = re.compile(r"\^([0-9a-fA-F]{6})")
@@ -596,7 +597,7 @@ class EnchantUI(QWidget):
         self.random_attempt_count = 0
         self._pending_random_attempt = None
 
-        self.setWindowTitle("Enchant Viewer")
+        self.setWindowTitle(tr("enchant.window.main"))
         layout = QHBoxLayout(self)
 
         # ==============================
@@ -607,7 +608,9 @@ class EnchantUI(QWidget):
 
         # ▶ 搜尋欄
         self.search_box = QLineEdit()
-        self.search_box.setPlaceholderText("搜尋裝備名稱...")
+        self.search_box.setPlaceholderText(
+            tr("enchant.placeholder.search_equipment")
+        )
         left_box.addWidget(self.search_box)
 
         # ▶ 裝備列表
@@ -626,9 +629,11 @@ class EnchantUI(QWidget):
         right_box.addWidget(self.apply_hint_label)
 
         random_row = QHBoxLayout()
-        self.random_enchant_button = QPushButton("隨機/機率升階 附魔")
+        self.random_enchant_button = QPushButton(
+            tr("enchant.button.random_enchant")
+        )
         self.random_enchant_button.setToolTip(
-            "依照目前洞位的附魔機率抽選；若目前附魔可機率升階，會自動只配對相同來源的升階結果。"
+            tr("enchant.tooltip.random_enchant")
         )
         self.random_enchant_button.clicked.connect(self.roll_random_enchant)
         random_row.addWidget(self.random_enchant_button)
@@ -646,7 +651,7 @@ class EnchantUI(QWidget):
         # 最右側：隨機附魔 LOG
         # 開啟附魔工具時立即顯示。
         # ==============================
-        self.random_log_panel = QGroupBox("隨機附魔 LOG")
+        self.random_log_panel = QGroupBox(tr("enchant.group.random_log"))
         self.random_log_panel.setMinimumWidth(400)
         self.random_log_panel.setMaximumWidth(400)
         log_layout = QVBoxLayout(self.random_log_panel)
@@ -658,15 +663,21 @@ class EnchantUI(QWidget):
         log_header_row.addWidget(self.random_log_summary)
         log_header_row.addStretch(1)
 
-        self.clear_random_log_button = QPushButton("清空 LOG")
-        self.clear_random_log_button.setToolTip("清除隨機附魔紀錄與使用次數")
+        self.clear_random_log_button = QPushButton(
+            tr("enchant.button.clear_log")
+        )
+        self.clear_random_log_button.setToolTip(
+            tr("enchant.tooltip.clear_log")
+        )
         self.clear_random_log_button.clicked.connect(self.clear_random_log)
         log_header_row.addWidget(self.clear_random_log_button)
         log_layout.addLayout(log_header_row)
 
         self.random_log_view = QPlainTextEdit()
         self.random_log_view.setReadOnly(True)
-        self.random_log_view.setPlaceholderText("隨機附魔紀錄會顯示在這裡。")
+        self.random_log_view.setPlaceholderText(
+            tr("enchant.placeholder.random_log")
+        )
         log_layout.addWidget(self.random_log_view, 1)
 
         layout.addWidget(self.random_log_panel)
@@ -738,14 +749,24 @@ class EnchantUI(QWidget):
             self.target_slot_enchants = ["", "", "", ""]
 
         if self.target_part_name:
-            equip_text = f"；目前裝備：{self.initial_equipment_name}" if self.initial_equipment_name else ""
+            equip_text = (
+                tr(
+                    "enchant.label.current_equipment_suffix",
+                    equipment=self.initial_equipment_name,
+                )
+                if self.initial_equipment_name
+                else ""
+            )
             self.apply_hint_label.setText(
-                f"套用目標：主畫面「{self.target_part_name}」裝備欄（紅底）{equip_text}。"
-                "點選附魔列可查看材料；按該列的「套用」後，才會寫入對應洞位。"
+                tr(
+                    "enchant.hint.apply_target",
+                    part=translate_equipment_part(self.target_part_name),
+                    equipment_suffix=equip_text,
+                )
             )
         else:
             self.apply_hint_label.setText(
-                "主畫面尚未選擇紅底裝備欄。請先點主畫面的裝備名稱欄，再按附魔列的「套用」。"
+                tr("enchant.hint.no_apply_target")
             )
 
         self._update_random_enchant_button_state()
@@ -755,7 +776,12 @@ class EnchantUI(QWidget):
         label = getattr(self, "random_log_summary", None)
         if label is None:
             return
-        label.setText(f"使用次數：{self.random_attempt_count}")
+        label.setText(
+            tr(
+                "enchant.label.attempt_count",
+                count=self.random_attempt_count,
+            )
+        )
 
     def clear_random_log(self, checked=False):
         """清除隨機附魔紀錄與使用次數"""
@@ -797,11 +823,17 @@ class EnchantUI(QWidget):
             return
         self._pending_random_attempt = None
 
-        equipment_name = attempt.get("equipment_name") or "未知裝備"
-        slot_text = f"第{int(attempt.get('slot_id', 0)) + 1}洞"
+        equipment_name = (
+            attempt.get("equipment_name")
+            or tr("enchant.label.unknown_equipment")
+        )
+        slot_text = tr(
+            "enchant.label.slot_number",
+            slot=int(attempt.get("slot_id", 0)) + 1,
+        )
         result_text = attempt.get("result_text") or str(detail or "").strip()
         if not result_text:
-            result_text = "未取得結果"
+            result_text = tr("enchant.message.no_result")
 
         log_line = (
             f"#{attempt.get('attempt_no')}｜{equipment_name}｜\n"
@@ -831,7 +863,12 @@ class EnchantUI(QWidget):
             matches = self.list_items.findItems(equipment_name, Qt.MatchExactly)
 
         if not matches:
-            self.set_apply_status(f"附魔清單找不到裝備：{equipment_name}")
+            self.set_apply_status(
+                tr(
+                    "enchant.message.equipment_not_in_list",
+                    equipment=equipment_name,
+                )
+            )
             return False
 
         self.list_items.setCurrentItem(matches[0])
@@ -1046,31 +1083,42 @@ class EnchantUI(QWidget):
         button.setEnabled(enabled)
 
         if not self.target_part_name:
-            button.setToolTip("請先從主畫面的附魔按鈕開啟工具，指定要寫入的裝備欄。")
+            button.setToolTip(tr("enchant.tooltip.select_target_first"))
         elif not context:
-            button.setToolTip("目前沒有可抽選的附魔洞位。")
+            button.setToolTip(tr("enchant.tooltip.no_random_slot"))
         elif context["mode"] == "random_upgrade":
             button.setToolTip(
-                f"目前附魔「{context['current_enchant']}」已配對到 "
-                f"{len(candidates)} 個機率升階結果，按下後依機率抽選。"
+                tr(
+                    "enchant.tooltip.random_upgrade_candidates",
+                    enchant=context["current_enchant"],
+                    count=len(candidates),
+                )
             )
         elif candidates:
-            button.setToolTip("依照目前洞位的一般附魔機率隨機抽選並套用。")
+            button.setToolTip(tr("enchant.tooltip.random_candidates"))
         else:
-            current = context.get("current_enchant") or "空白"
+            current = (
+                context.get("current_enchant")
+                or tr("enchant.label.blank")
+            )
             button.setToolTip(
-                f"目前洞位內容為「{current}」，沒有相符的機率升階或一般機率附魔。"
+                tr(
+                    "enchant.tooltip.no_matching_candidates",
+                    enchant=current,
+                )
             )
 
     def roll_random_enchant(self, checked=False):
         """依目前洞位資料抽選附魔；機率升階會先按目前附魔自動配對來源。"""
         if not self.target_part_name:
-            self.set_apply_status("請先從主畫面的附魔按鈕開啟工具，指定套用部位。")
+            self.set_apply_status(
+                tr("enchant.message.select_target_first")
+            )
             return
 
         context, candidates = self._random_candidates_for_current_slot()
         if not context or not candidates:
-            self.set_apply_status("目前洞位沒有可供隨機抽選的附魔資料。")
+            self.set_apply_status(tr("enchant.message.no_random_data"))
             self._update_random_enchant_button_state()
             return
 
@@ -1079,19 +1127,25 @@ class EnchantUI(QWidget):
         selected = self._pick_weighted_candidate(candidates)
         slot_id = int(context["slot_id"])
         if selected is None:
-            failure_text = "未抽中任何結果"
+            failure_text = tr("enchant.message.random_no_result")
             attempt["result_text"] = failure_text
             self.apply_status_label.setText(
-                f"⚠️ 第{slot_id + 1}洞本次隨機附魔失敗，{failure_text}。"
+                tr(
+                    "enchant.status.random_failed",
+                    slot=slot_id + 1,
+                    reason=failure_text,
+                )
             )
             self._finish_random_attempt(False, failure_text)
             return
 
         output_name = str(selected.get("output_name") or "").strip()
         if not output_name:
-            failure_text = "隨機結果缺少附魔名稱，無法套用"
+            failure_text = tr("enchant.message.random_name_missing")
             attempt["result_text"] = failure_text
-            self.apply_status_label.setText("⚠️ " + failure_text + "。")
+            self.apply_status_label.setText(
+                tr("enchant.status.warning", message=failure_text)
+            )
             self._finish_random_attempt(False, failure_text)
             return
 
@@ -1106,7 +1160,11 @@ class EnchantUI(QWidget):
 
         attempt["result_text"] = result_text
         self.apply_status_label.setText(
-            f"🎲 隨機結果：第{slot_id + 1}洞／{result_text}，正在套用……"
+            tr(
+                "enchant.status.applying_random_result",
+                slot=slot_id + 1,
+                result=result_text,
+            )
         )
         self.enchantApplyRequested.emit(
             context["equipment_name"],
@@ -1139,18 +1197,25 @@ class EnchantUI(QWidget):
         equipment_name = current_item.text() if current_item else ""
 
         if not equipment_name or not enchant_name:
-            self.set_apply_status("無法取得裝備或附魔名稱。")
+            self.set_apply_status(
+                tr("enchant.message.equipment_or_enchant_missing")
+            )
             return
 
         self.apply_status_label.setText(
-            f"正在套用：{equipment_name}／第{int(sid) + 1}洞／{enchant_name}"
+            tr(
+                "enchant.status.applying",
+                equipment=equipment_name,
+                slot=int(sid) + 1,
+                enchant=enchant_name,
+            )
         )
         self.enchantApplyRequested.emit(equipment_name, int(sid), enchant_name)
 
     def add_apply_button(self, table, sid, row):
         """在指定列建立套用按鈕，並固定綁定該列與洞位。"""
-        button = QPushButton("套用")
-        button.setToolTip("將此附魔套用到主畫面目前選取的裝備欄")
+        button = QPushButton(tr("button.apply"))
+        button.setToolTip(tr("enchant.tooltip.apply_to_main"))
         button.clicked.connect(
             lambda checked=False, table=table, sid=sid, row=row:
                 self.apply_enchant(table, sid, row)
@@ -1198,17 +1263,30 @@ class EnchantUI(QWidget):
         )
         item_id = self._resolve_item_id(raw_name)
         if item_id is None:
-            self.set_apply_status(f"找不到物品內容：{self.resolve_item_name(raw_name)}")
+            self.set_apply_status(
+                tr(
+                    "enchant.message.item_content_not_found",
+                    item=self.resolve_item_name(raw_name),
+                )
+            )
             return
 
 
         item_info = self.items.get(item_id)
         if not isinstance(item_info, dict):
-            self.set_apply_status(f"物品資料不存在：{self.resolve_item_name(raw_name)}")
+            self.set_apply_status(
+                tr(
+                    "enchant.message.item_data_missing",
+                    item=self.resolve_item_name(raw_name),
+                )
+            )
             return
 
         display_name = str(item_info.get("name") or self.resolve_item_name(raw_name))
-        resource_name = str(item_info.get("kr_name") or "（無資料）")
+        resource_name = str(
+            item_info.get("kr_name")
+            or tr("enchant.label.no_data")
+        )
         slot_count = item_info.get("slot", 0)
         description_html = _item_description_to_html(item_info.get("description", []))
 
@@ -1224,7 +1302,9 @@ class EnchantUI(QWidget):
             '</table>'
         )
 
-        self.apply_status_label.setText(f"正在顯示物品內容：{display_name}")
+        self.apply_status_label.setText(
+            tr("enchant.status.showing_item", item=display_name)
+        )
         pos = QCursor.pos() + QPoint(10, -10)
         cell_rect = table.visualRect(index)
         QToolTip.hideText()
@@ -1261,13 +1341,13 @@ class EnchantUI(QWidget):
         # 附魔類型
         # ---------------------------------------------------------
         type_map = {
-            "enchant": "機率附魔",
-            "perfect": "指定附魔",
-            "upgrade": "指定升階",
-            "perfect_upgrade": "指定升階",
-            "random_upgrade": "機率升階",
+            "enchant": tr("enchant.type.random"),
+            "perfect": tr("enchant.type.guaranteed"),
+            "upgrade": tr("enchant.type.guaranteed_upgrade"),
+            "perfect_upgrade": tr("enchant.type.guaranteed_upgrade"),
+            "random_upgrade": tr("enchant.type.random_upgrade"),
         }
-        type_text = type_map.get(data["type"], "附魔")
+        type_text = type_map.get(data["type"], tr("button.enchant"))
 
         # ---------------------------------------------------------
         # 附魔名稱
@@ -1320,13 +1400,18 @@ class EnchantUI(QWidget):
         # ---------------------------------------------------------
         # 組 Tooltip 文字（符合你要的格式）
         # ---------------------------------------------------------
-        msg = f"裝備名稱：{equip_name}\n"
-        msg += f"【{type_text}】 {enchant_name} （機率 {rate_str}）\n\n"
+        msg = tr(
+            "enchant.materials.summary",
+            equipment=equip_name,
+            type=type_text,
+            enchant=enchant_name,
+            rate=rate_str,
+        )
 
         if not mlist:
-            msg += "此裝備無需任何材料。"
+            msg += tr("enchant.materials.none")
         else:
-            msg += "附魔材料：\n"
+            msg += tr("enchant.materials.heading")
             for name, cnt in mlist:
                 if name == "Zeny":
                     msg += f"● {name}: {cnt:,}\n"
@@ -1419,10 +1504,10 @@ class EnchantUI(QWidget):
             return
 
         slot_name_map = {
-            0: "第一洞",
-            1: "第二洞",
-            2: "第三洞",
-            3: "第四洞",
+            0: tr("enchant.slot.first"),
+            1: tr("enchant.slot.second"),
+            2: tr("enchant.slot.third"),
+            3: tr("enchant.slot.fourth"),
         }
 
         for sid in reversed(info["slot_order"]):
@@ -1453,7 +1538,12 @@ class EnchantUI(QWidget):
 
             table = EnchantTableWidget()
             table.setColumnCount(4)
-            table.setHorizontalHeaderLabels(["Grade", "Enchant", "機率 (%)", "操作"])
+            table.setHorizontalHeaderLabels([
+                tr("enchant.column.type"),
+                tr("enchant.column.enchant"),
+                tr("enchant.column.probability"),
+                tr("enchant.column.action"),
+            ])
             table.verticalHeader().setVisible(False)
             table.cellClicked.connect(
                 lambda row, col, table=table, sid=sid: self.handle_enchant_click(
@@ -1476,7 +1566,10 @@ class EnchantUI(QWidget):
             table.setRowCount(total_rows)
             v.addWidget(table)
 
-            title = slot_name_map.get(sid, f"第{sid}洞")
+            title = slot_name_map.get(
+                sid,
+                tr("enchant.label.slot_number", slot=sid),
+            )
             tab.setProperty("enchant_slot_id", int(sid))
             self.tabs.addTab(tab, title)
 
@@ -1493,7 +1586,11 @@ class EnchantUI(QWidget):
 
             # # 寫入表格
             # for (name, rate) in merged.keys():
-                table.setItem(row, 0, QTableWidgetItem("機率附魔"))  # 統一名稱
+                table.setItem(
+                    row,
+                    0,
+                    QTableWidgetItem(tr("enchant.type.random")),
+                )
                 item = QTableWidgetItem(self.resolve_item_name(name))
                 item.setData(Qt.UserRole, {
                     "type": "enchant",
@@ -1511,7 +1608,11 @@ class EnchantUI(QWidget):
 
             # 完美附魔
             for p in perfects:
-                table.setItem(row, 0, QTableWidgetItem("指定附魔"))
+                table.setItem(
+                    row,
+                    0,
+                    QTableWidgetItem(tr("enchant.type.guaranteed")),
+                )
                 item = QTableWidgetItem(self.resolve_item_name(p["name"]))
                 item.setData(Qt.UserRole, {
                     "type": "perfect",
@@ -1529,7 +1630,11 @@ class EnchantUI(QWidget):
             for up in upgrades:
                 src = self.resolve_item_name(up["from"])
                 dst = self.resolve_item_name(up["to"])
-                table.setItem(row, 0, QTableWidgetItem("指定升階"))
+                table.setItem(
+                    row,
+                    0,
+                    QTableWidgetItem(tr("enchant.type.guaranteed_upgrade")),
+                )
                 item = QTableWidgetItem(f"{src} → {dst}")
                 item.setData(Qt.UserRole, {
                     "type": "upgrade",
@@ -1549,7 +1654,11 @@ class EnchantUI(QWidget):
             for up in perfect_upgrades:
                 src = self.resolve_item_name(up["from"])
                 dst = self.resolve_item_name(up["to"])
-                table.setItem(row, 0, QTableWidgetItem("指定升階"))
+                table.setItem(
+                    row,
+                    0,
+                    QTableWidgetItem(tr("enchant.type.guaranteed_upgrade")),
+                )
                 item = QTableWidgetItem(f"{src} → {dst}")
                 item.setData(Qt.UserRole, {
                     "type": "perfect_upgrade",
@@ -1567,7 +1676,11 @@ class EnchantUI(QWidget):
             for up in random_upgrades:
                 src = self.resolve_item_name(up["from"])
                 dst = self.resolve_item_name(up["to"])
-                table.setItem(row, 0, QTableWidgetItem("機率升階"))
+                table.setItem(
+                    row,
+                    0,
+                    QTableWidgetItem(tr("enchant.type.random_upgrade")),
+                )
                 item = QTableWidgetItem(f"{src} → {dst}")
                 item.setData(Qt.UserRole, {
                     "type": "random_upgrade",

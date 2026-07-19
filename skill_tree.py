@@ -13,6 +13,7 @@ from PySide6.QtWidgets import QToolTip
 from PySide6.QtCore import QPoint
 from PySide6.QtWidgets import QSpacerItem, QSizePolicy
 from PySide6.QtCore import QEvent
+from i18n import tr
 
 # =========================================================
 # 設定路徑
@@ -54,7 +55,7 @@ def load_skill_treeview(filepath: str = TREEVIEW_LUB_PATH):
         pos_map = {code: int(idx) for idx, code in pairs}
         treeview_positions[job_key] = pos_map
 
-    print(f"skilltreeview.lub 解析完成，職業數：{len(treeview_positions)}")
+    print(tr("skill_tree.log.treeview_loaded", count=len(treeview_positions)))
 
 
 def get_combined_pos_map(job_key: str) -> dict:
@@ -147,7 +148,7 @@ def load_skill_tree(filepath=SKILL_TREE_YML_PATH):
             "inherit": inherit,
             "tree": tree,
         }
-    print("讀入 skill_tree.yml，職業數：", len(job_skill_tree_raw))
+    print(tr("skill_tree.log.yml_loaded", count=len(job_skill_tree_raw)))
 
 def get_job_chain(job_key: str) -> list[str]:
     """
@@ -553,7 +554,7 @@ class SkillTreeWindow(QMainWindow):
     def __init__(self):
         super().__init__()
 
-        self.setWindowTitle("RO 技能表")
+        self.setWindowTitle(tr("skill_tree.window.title"))
         self.resize(900, 600)
         # ★★ 新增：關閉視窗後回傳資料的 callback ★★
         self.on_close_callback = None
@@ -574,10 +575,10 @@ class SkillTreeWindow(QMainWindow):
         # 職業選單
         top_row = QHBoxLayout()
         main_layout.addLayout(top_row)
-        top_row.addWidget(QLabel("職業："))
+        top_row.addWidget(QLabel(tr("skill_tree.label.job")))
 
         self.job_combo = QComboBox()
-        self.job_combo.addItem("-- 請選擇 --", userData=None)
+        self.job_combo.addItem(tr("common.please_select"), userData=None)
         for jid, job in job_dict.items():
             key = job["id_jobneme"]
             if key not in job_skill_tree_raw:
@@ -663,7 +664,13 @@ class SkillTreeWindow(QMainWindow):
 
     def update_points_label(self):
         # region_points_max, region_points_used 已初始化
-        names = ["1轉", "2轉", "3轉", "4轉"] + [f"{i+1}區" for i in range(4, len(self.region_points_max))]
+        names = [
+            tr("skill_tree.region.job_change", number=i)
+            for i in range(1, 5)
+        ] + [
+            tr("skill_tree.region.section", number=i + 1)
+            for i in range(4, len(self.region_points_max))
+        ]
 
         lefts = []
         total_left = 0
@@ -679,10 +686,30 @@ class SkillTreeWindow(QMainWindow):
         txts = []
         for i, left in enumerate(lefts):
             if i < len(names):
-                txts.append(f"{names[i]}剩餘: <b>{left}</b> / {self.region_points_max[i]}")
+                txts.append(
+                    tr(
+                        "skill_tree.points.remaining",
+                        name=names[i],
+                        remaining=left,
+                        maximum=self.region_points_max[i],
+                    )
+                )
             else:
-                txts.append(f"{i+1}區剩餘: <b>{left}</b> / {self.region_points_max[i]}")
-        txts.append(f"總剩餘: <b>{total_left}</b> / {total_max}")
+                txts.append(
+                    tr(
+                        "skill_tree.points.remaining",
+                        name=tr("skill_tree.region.section", number=i + 1),
+                        remaining=left,
+                        maximum=self.region_points_max[i],
+                    )
+                )
+        txts.append(
+            tr(
+                "skill_tree.points.total_remaining",
+                remaining=total_left,
+                maximum=total_max,
+            )
+        )
 
         self.lbl_points.setText("　｜　".join(txts))
 
