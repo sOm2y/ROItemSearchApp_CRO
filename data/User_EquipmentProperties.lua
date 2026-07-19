@@ -38,6 +38,16 @@ Item = {
   [18009] = {
     Type = "Cannonball",
     Stat = {5, 120}
+  },
+  [410211] = {
+    Type = "armor",
+    Stat = { 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0 },
+    OnStartEquip = function()
+      temp = get(11)
+      AddExtParam(0, 41, temp)
+      AddExtParam(0, 200, temp)
+    end,
+    Combiitem = {2000004910, 2000004913}
   }
 }
 Combiitem = {
