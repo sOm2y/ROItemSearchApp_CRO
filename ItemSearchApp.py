@@ -7643,7 +7643,9 @@ class ItemSearchApp(QWidget):
                 self.steps.append(["總傷害", r["times"]*100])
 
         result.extend(bottom_result)#顯示前面儲存的公式
-        self.custom_calc_box.setHtml(self.generate_highlighted_html(result))
+        self.custom_calc_box.setHtml(
+            self.generate_highlighted_html(localize_effect_lines(result))
+        )
         if self.auto_compare_checkbox.isChecked():
             self.compare_with_base()
         #self.custom_calc_box.setPlainText("\n".join(result))
@@ -7742,7 +7744,9 @@ class ItemSearchApp(QWidget):
 
 
         if hasattr(self, "body_custom_calc_box"):
-            self.body_custom_calc_box.setHtml(self.generate_highlighted_html(body_results))
+            self.body_custom_calc_box.setHtml(
+                self.generate_highlighted_html(localize_effect_lines(body_results))
+            )
 
 
     def _set_combo_data_blocked(self, combo, data):
@@ -8688,10 +8692,19 @@ class ItemSearchApp(QWidget):
         return filtered
     
     def filter_skill_list(self):
-        keyword = self.skill_search_bar.text().strip().lower()
+        keyword = self.skill_search_bar.text().strip().casefold()
 
         for name, checkbox in self.skill_checkboxes.items():
-            if keyword in name.lower() or keyword in all_skill_entries[name]["type"].lower():
+            entry = all_skill_entries[name]
+            search_text = " ".join(
+                (
+                    str(entry.get("type", "")),
+                    name,
+                    localize_effect_text(entry.get("type", "")),
+                    localize_effect_text(name),
+                )
+            ).casefold()
+            if keyword in search_text:
                 checkbox.show()
             else:
                 checkbox.hide()
@@ -10341,7 +10354,9 @@ class ItemSearchApp(QWidget):
             else:
                 new_output.append(line)
 
-        self.custom_calc_box.setHtml(self.generate_highlighted_html(new_output))
+        self.custom_calc_box.setHtml(
+            self.generate_highlighted_html(localize_effect_lines(new_output))
+        )
 
         #self.custom_calc_box.setPlainText("\n".join(new_output))
 
@@ -10843,7 +10858,9 @@ class ItemSearchApp(QWidget):
 
         for name, data in all_skill_entries.items():
 
-            checkbox = QCheckBox(f"{data['type']} {name}")
+            checkbox = QCheckBox(
+                localize_effect_text(f"{data['type']} {name}")
+            )
             self.skill_checkboxes[name] = checkbox
             self.skill_checkbox_layout.addWidget(checkbox)
 
@@ -10907,7 +10924,7 @@ class ItemSearchApp(QWidget):
         # 搜尋字（只過濾，不排序）
         query = ""
         if hasattr(self, "skill_search_input"):
-            query = self.skill_search_input.text().strip().lower()
+            query = self.skill_search_input.text().strip().casefold()
 
         # 目前職業 skill id
         job_id = self.input_fields["JOB"].currentData()
@@ -10920,7 +10937,14 @@ class ItemSearchApp(QWidget):
         for name, data in all_skill_entries.items():
             # 搜尋過濾（不改順序）
             if query:
-                hay = f"{data.get('type','')} {name}".lower()
+                hay = " ".join(
+                    (
+                        str(data.get("type", "")),
+                        name,
+                        localize_effect_text(data.get("type", "")),
+                        localize_effect_text(name),
+                    )
+                ).casefold()
                 if query not in hay:
                     continue
 
@@ -11831,7 +11855,9 @@ class ItemSearchApp(QWidget):
         self.exclusive_groups = {}   # { group_name: [checkbox1, checkbox2] }
 
         for name, data in all_skill_entries.items():
-            checkbox = QCheckBox(f"{data['type']} {name}")
+            checkbox = QCheckBox(
+                localize_effect_text(f"{data['type']} {name}")
+            )
             self.skill_checkboxes[name] = checkbox
 
             #checkbox.stateChanged.connect(self.clear_global_state)
