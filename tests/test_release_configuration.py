@@ -4,7 +4,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-RELEASE_VERSION = "v0.3.19-260722"
+RELEASE_VERSION = "v0.3.20-260722"
 
 
 class ReleaseConfigurationTests(unittest.TestCase):
