@@ -24,6 +24,12 @@ SUPPORTED_LANGUAGES = {
 
 def get_app_base_dir() -> str:
     """Return the source directory or the directory containing the frozen app."""
+    # The main application launches a temporary copy of update.exe so the
+    # installed updater can also be replaced. Keep translations/config rooted
+    # in the actual installation directory while that temporary copy runs.
+    override = os.environ.get("ROITEMSEARCHAPP_BASE_DIR", "").strip()
+    if override:
+        return os.path.abspath(override)
     if getattr(sys, "frozen", False):
         return os.path.dirname(sys.executable)
     return os.path.dirname(os.path.abspath(__file__))

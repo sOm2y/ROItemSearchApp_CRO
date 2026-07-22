@@ -55,22 +55,26 @@ class RecompileWorker(QObject):
                 load_dotenv(p, override=False)
                 break
 
-    def _get_github_pat(self) -> str:
+    def _get_github_pat(self) -> str | None:
         self._load_env_if_possible()
-        token = os.environ.get("GITHUB_PAT")
-        if not token:
-            raise RuntimeError("找不到 GITHUB_PAT：請設定環境變數或 .env（GITHUB_PAT=...）。")
-        return token
+        # The cRO repository is public. A token raises the API rate limit for
+        # developers, but end users must be able to check updates without one.
+        return os.environ.get("GITHUB_PAT") or None
 
     def _get_session(self) -> requests.Session:
         if not hasattr(self._thread_local, "session"):
             self._thread_local.session = requests.Session()
         return self._thread_local.session
 
-    def _github_file_last_commit_dt(self, session: requests.Session, path: str, token: str, timeout=(3.05, 5)):
+    def _github_file_last_commit_dt(self, session: requests.Session, path: str, token: str | None, timeout=(3.05, 8)):
         url = f"https://api.github.com/repos/{self.owner}/{self.repo}/commits"
         params = {"path": path, "sha": self.branch, "per_page": 1}
-        headers = {"Accept": "application/vnd.github+json", "Authorization": f"Bearer {token}"}
+        headers = {
+            "Accept": "application/vnd.github+json",
+            "User-Agent": "ROItemSearchApp-CRO",
+        }
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
 
         r = session.get(url, params=params, headers=headers, timeout=timeout)
         if r.status_code != 200:

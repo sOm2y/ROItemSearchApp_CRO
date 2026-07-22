@@ -1,9 +1,11 @@
 #部分資料取自ROCalculator,搜尋 ROCalculator 可以知道哪些有使用
-Version = "v0.3.20-260722"
+Version = "v0.3.21-260722"
 
 import sys, builtins, time
 import os
 import json
+import shutil
+import tempfile
 
 # Frozen builds must resolve data/lang/APP paths beside the executable even
 # when launched from a shortcut or another working directory.
@@ -46,6 +48,7 @@ from skill_localization import (
     get_localized_skill_name,
     resolve_skill_id,
 )
+from updater_core import RELEASE_ASSET_NAME, select_release_asset
 
 #介面縮放倍率設定 0.5~3倍
 DEFAULT_UI_SCALE_FACTOR = 1.0
@@ -1912,6 +1915,7 @@ class MultiComboField(QWidget):
 import requests
 
 UPDATER_EXE = "update.exe"
+PENDING_UPDATER_EXE = "update.next.exe"
 TARGET_EXE = "ItemSearchApp.exe"
 GITHUB_OWNER = "sOm2y"
 GITHUB_REPO = "ROItemSearchApp_CRO"
@@ -1930,16 +1934,38 @@ def read_local_version(app_dir: str) -> str:
     with open(path, "r", encoding="utf-8") as f:
         return f.read().strip()
 
-def read_remote_version_github(timeout: int = 8) -> str:
+def read_remote_release_github(timeout: int = 8) -> tuple[str, str]:
     headers = {
         "Accept": "application/vnd.github+json",
-        "User-Agent": "ROItemSearchApp-Updater",
+        "User-Agent": "ROItemSearchApp-CRO-Updater",
     }
     r = requests.get(GITHUB_LATEST_RELEASE_API, headers=headers, timeout=timeout)
     r.raise_for_status()
-    data = r.json()
-    # tag_name 例如 "v1.2.3"
-    return (data.get("tag_name") or "").strip()
+    return select_release_asset(r.json(), RELEASE_ASSET_NAME)
+
+
+def read_remote_version_github(timeout: int = 8) -> str:
+    """Backward-compatible version-only release lookup."""
+    version, _ = read_remote_release_github(timeout=timeout)
+    return version
+
+
+def finalize_pending_updater(attempts_remaining: int = 5) -> None:
+    """Install an updater staged by a directly launched older updater."""
+    app_dir = get_app_base_dir()
+    pending_path = os.path.join(app_dir, PENDING_UPDATER_EXE)
+    updater_path = os.path.join(app_dir, UPDATER_EXE)
+    if not os.path.isfile(pending_path):
+        return
+
+    try:
+        os.replace(pending_path, updater_path)
+    except OSError:
+        if attempts_remaining > 1 and QApplication.instance() is not None:
+            QTimer.singleShot(
+                1000,
+                lambda: finalize_pending_updater(attempts_remaining - 1),
+            )
 
 
 def normalize_version(v: str) -> tuple[tuple[int, ...], int]:
@@ -9052,7 +9078,7 @@ class ItemSearchApp(QWidget):
     def get_program_update_info(self, show_error=False):
         try:
             local_ver = Version
-            remote_ver = read_remote_version_github()
+            remote_ver, download_url = read_remote_release_github()
             if not remote_ver:
                 raise RuntimeError("GitHub 回傳的 tag_name 為空（可能沒有 release）。")
 
@@ -9063,6 +9089,7 @@ class ItemSearchApp(QWidget):
                 "local_ver": str(local_ver),
                 "remote_ver": str(remote_ver),
                 "cmp_result": cmp_result,
+                "download_url": download_url,
                 "release_url": f"https://github.com/{GITHUB_OWNER}/{GITHUB_REPO}/releases/tag/{remote_ver}",
             }
         except Exception as e:
@@ -9076,7 +9103,7 @@ class ItemSearchApp(QWidget):
 
 
     def recompile(self, program_update_info=None):
-        data_folder = os.path.join(os.getcwd(), "data")
+        data_folder = os.path.join(get_app_base_dir(), "data")
         program_update_info = program_update_info or {}
 
         items = [
@@ -9168,7 +9195,10 @@ class ItemSearchApp(QWidget):
                 if want_program_update:
                     if selected_files:
                         QMessageBox.information(self, tr("message.title.done"), tr("message.data_deleted_prepare_program_update"))
-                    self.do_update(program_update_info.get("remote_ver"))
+                    self.do_update(
+                        program_update_info.get("remote_ver"),
+                        program_update_info.get("download_url"),
+                    )
                     return
 
                 if selected_files:
@@ -10991,22 +11021,35 @@ class ItemSearchApp(QWidget):
 
 
 
-    def do_update(self, version=None):
+    def do_update(self, version=None, download_url=None):
         ver = (version or self._remote_version or "").strip()
         if not ver:
             QMessageBox.warning(self, tr("message.title.notice"), tr("message.no_program_update"))
             return
-        zip_url = ZIP_URL_TEMPLATE.format(ver=ver)
+        zip_url = (download_url or ZIP_URL_TEMPLATE.format(ver=ver)).strip()
 
-        updater_path = os.path.join(os.getcwd(), UPDATER_EXE)
+        app_dir = get_app_base_dir()
+        updater_path = os.path.join(app_dir, UPDATER_EXE)
+        target_path = os.path.join(app_dir, TARGET_EXE)
         if not os.path.exists(updater_path):
             QMessageBox.critical(self, tr("message.title.update_failed"), tr("message.updater_not_found", updater=UPDATER_EXE))
             return
 
-        # 你要呼叫的格式：
-        # update.exe  <zip_url>  ItemSearchApp.exe
         try:
-            subprocess.Popen([updater_path, zip_url, TARGET_EXE], cwd=os.getcwd())
+            # Launch a temporary copy so the installed update.exe can be
+            # replaced by the new release as well.
+            launcher_dir = os.path.join(tempfile.gettempdir(), "ROItemSearchApp_CRO")
+            os.makedirs(launcher_dir, exist_ok=True)
+            launcher_path = os.path.join(launcher_dir, "update-launcher.exe")
+            shutil.copy2(updater_path, launcher_path)
+
+            child_env = os.environ.copy()
+            child_env["ROITEMSEARCHAPP_BASE_DIR"] = app_dir
+            subprocess.Popen(
+                [launcher_path, zip_url, target_path, app_dir],
+                cwd=app_dir,
+                env=child_env,
+            )
         except Exception as e:
             QMessageBox.critical(self, tr("message.title.update_failed"), tr("message.updater_start_failed", error=e))
             return
@@ -11014,6 +11057,9 @@ class ItemSearchApp(QWidget):
         # 更新器啟動後，主程式自己關掉比較乾淨（讓 updater 覆蓋檔案）
         self._skip_close_confirm = True
         self.close()
+        app = QApplication.instance()
+        if app is not None:
+            QTimer.singleShot(0, app.quit)
 
     def check_update(self):
         program_update_info = self.get_program_update_info(show_error=False)
@@ -13685,6 +13731,7 @@ if __name__ == "__main__":
     os.environ["QT_SCALE_FACTOR"] = format_ui_scale_factor(startup_ui_scale)
 
     app = QApplication(sys.argv)
+    QTimer.singleShot(1500, finalize_pending_updater)
 
 
     if len(sys.argv) > 1 and sys.argv[1] == "rrf":
