@@ -1,0 +1,28 @@
+{
+  "_meta": {
+    "language": "en_US",
+    "source": "data/job_dict.py id_jobneme"
+  },
+  "jobs": {
+    "4252": {"name": "Dragon Knight"},
+    "4253": {"name": "Meister"},
+    "4254": {"name": "Shadow Cross"},
+    "4255": {"name": "Arch Mage"},
+    "4256": {"name": "Cardinal"},
+    "4257": {"name": "Windhawk"},
+    "4258": {"name": "Imperial Guard"},
+    "4259": {"name": "Biolo"},
+    "4260": {"name": "Abyss Chaser"},
+    "4261": {"name": "Elemental Master"},
+    "4262": {"name": "Inquisitor"},
+    "4263": {"name": "Troubadour"},
+    "4264": {"name": "Trouvere"},
+    "4302": {"name": "Sky Emperor"},
+    "4303": {"name": "Soul Ascetic"},
+    "4304": {"name": "Shinkiro"},
+    "4305": {"name": "Shiranui"},
+    "4306": {"name": "Night Watch"},
+    "4307": {"name": "Hyper Novice"},
+    "4308": {"name": "Spirit Handler"}
+  }
+}

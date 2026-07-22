@@ -8,6 +8,9 @@ import os
 import json
 import importlib.util
 from i18n import tr
+from item_localization import apply_item_localization
+from job_localization import get_localized_job_name
+from skill_localization import build_localized_skill_map
 # ======【設定區】======
 SHOW_OFFSET = False# 顯示 slot 在 group 內的 offset 位置 False True
 SHOW_RAW = False# 顯示 slot 的原始 bytes（每8顆一行）
@@ -326,7 +329,7 @@ def parse_lub_file(filename):
         except:
             pass
 
-    return parsed_items
+    return apply_item_localization(parsed_items)
 
 def parse_equipment_blocks(content):
     import re
@@ -403,11 +406,15 @@ def load_skill_map(filepath=None):
     # === ItemSearchApp 用 ===
     skill_map = dict(zip(skill_df["ID"], skill_df["Name"]))
     skill_map_all = skill_df.set_index("ID").to_dict(orient="index")
+    skill_display_map = build_localized_skill_map(skill_map, skill_map_all)
 
     # === skill_tree 用 ===
-    skill_tree.skill_id_to_name = dict(zip(skill_df["ID"], skill_df["Name"]))
+    skill_tree.skill_id_to_name = dict(skill_display_map)
     skill_tree.skill_code_to_id = dict(zip(skill_df["Code"], skill_df["ID"]))
-    skill_tree.skill_code_to_name = dict(zip(skill_df["Code"], skill_df["Name"]))
+    skill_tree.skill_code_to_name = {
+        row["Code"]: skill_display_map.get(int(skill_id), row["Name"])
+        for skill_id, row in skill_map_all.items()
+    }
 
 
     print(tr("rrf_converter.log.skill_list_loaded"))
@@ -1315,7 +1322,12 @@ def run_rrf_main():
     json_data["JobLv"] = str(session_data.get("JobLevel", ""))
     job_id = session_data.get("Job")
     main_job_id, job_info = get_job_info(job_dict, job_id)    
-    json_data["JOB"] = str(job_info["name"]) if main_job_id else ""
+    json_data["JOB"] = (
+        get_localized_job_name(main_job_id, job_info)
+        if main_job_id is not None
+        else ""
+    )
+    json_data["JOB_ID"] = main_job_id
 
     for k in ["Str","Agi","Vit","Int","Dex","Luk","POW","STA","WIS","SPL","CON","CRT"]:
         if k in session_data:
@@ -1334,9 +1346,9 @@ def run_rrf_main():
         main_job_id, job_info = get_job_info(job_dict, job_id)   
 
         if main_job_id:
-            job_name = job_info.get(
-                "name",
-                tr("rrf_converter.output.unknown_job", job_id=job_id),
+            job_name = get_localized_job_name(main_job_id, job_info) or tr(
+                "rrf_converter.output.unknown_job",
+                job_id=job_id,
             )
             print(tr("rrf_converter.output.job", job=job_name))
         else:
@@ -1418,10 +1430,16 @@ def run_rrf_main():
         return name.translate(table)
 
 
+    output_job_name = get_localized_job_name(main_job_id, job_info)
     rrfname = (
-        session_data['Charactername'] + "_" + job_info["name"]
+        session_data["Charactername"] + "_" + output_job_name
         if main_job_id == job_id
-        else session_data['Charactername'] + "_" + job_info["name"] + "(非4轉)"
+        else (
+            session_data["Charactername"]
+            + "_"
+            + output_job_name
+            + tr("rrf_converter.filename.non_fourth_suffix")
+        )
     )
 
     rrf_filename = os.path.basename(rrfname)

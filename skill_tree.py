@@ -14,6 +14,8 @@ from PySide6.QtCore import QPoint
 from PySide6.QtWidgets import QSpacerItem, QSizePolicy
 from PySide6.QtCore import QEvent
 from i18n import tr
+from job_localization import get_localized_job_name
+from skill_localization import build_localized_skill_map
 
 # =========================================================
 # 設定路徑
@@ -118,9 +120,17 @@ def load_skill_map(filepath=SKILL_CSV_PATH):
     code_col = "Code"
     name_col = "Name"
 
-    skill_id_to_name   = dict(zip(df[id_col], df[name_col]))
+    raw_skill_names = dict(zip(df[id_col], df[name_col]))
+    skill_details = df.set_index(id_col).to_dict(orient="index")
+    skill_id_to_name = build_localized_skill_map(
+        raw_skill_names,
+        skill_details,
+    )
     skill_code_to_id   = dict(zip(df[code_col], df[id_col]))
-    skill_code_to_name = dict(zip(df[code_col], df[name_col]))
+    skill_code_to_name = {
+        row[code_col]: skill_id_to_name.get(int(skill_id), row[name_col])
+        for skill_id, row in skill_details.items()
+    }
 
     #print("讀入 skillneme.csv，欄位：", list(df.columns))
 
@@ -583,7 +593,7 @@ class SkillTreeWindow(QMainWindow):
             key = job["id_jobneme"]
             if key not in job_skill_tree_raw:
                 continue
-            text = f'{job["name"]}' #({key})'
+            text = get_localized_job_name(jid, job)
             self.job_combo.addItem(text, userData=key)
         self.job_combo.currentIndexChanged.connect(self.on_job_changed)
         top_row.addWidget(self.job_combo, 1)

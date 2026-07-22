@@ -33,6 +33,10 @@ jobs:
         shell: pwsh
         run: |
           python tools/check_i18n.py
+          python tools/check_item_localization.py
+          python tools/check_skill_localization.py
+          python tools/check_monster_localization.py
+          python -m unittest discover -s tests -v
           python -c "from pathlib import Path; files=[p for p in Path('.').rglob('*.py') if '.venv' not in p.parts and '__pycache__' not in p.parts]; [compile(p.read_bytes(), str(p), 'exec') for p in files]; print(f'Syntax OK: {len(files)} Python files')"
 
       - name: Generate Qt UI module

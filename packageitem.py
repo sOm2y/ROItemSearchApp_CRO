@@ -9,6 +9,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QAbstractScrollArea
 from PySide6.QtWidgets import QCheckBox
 from i18n import tr
+from item_localization import apply_item_localization
 
 
 # ================================================================
@@ -419,7 +420,7 @@ def parse_lub_file(filename):
         except:
             pass
 
-    return parsed_items
+    return apply_item_localization(parsed_items)
 
 
 # ================================================================

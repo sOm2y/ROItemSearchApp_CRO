@@ -50,6 +50,56 @@ RAW = {
 }
 ROUNDING_OPTIONS = ["INT", "ROUND", "CEIL", "FLOOR", "NONE"]
 
+DAMAGE_STEP_TRANSLATION_KEYS = {
+    "MATK%": "damage_step.matk_percent",
+    "ATK%": "damage_step.atk_percent",
+    "體型%": "damage_step.size_percent",
+    "屬性敵人%": "damage_step.element_target_percent",
+    "屬性耐受性%": "damage_step.element_resistance_percent",
+    "屬性魔法%": "damage_step.element_magic_percent",
+    "種族%": "damage_step.race_percent",
+    "階級%": "damage_step.class_percent",
+    "特定魔物增傷%": "damage_step.specific_monster_percent",
+    "SMATK": "damage_step.smatk",
+    "PATK": "damage_step.patk",
+    "技能倍率%": "damage_step.skill_multiplier_percent",
+    "屬性倍率%": "damage_step.element_multiplier_percent",
+    "MRES減傷%": "damage_step.mres_reduction_percent",
+    "RES減傷%": "damage_step.res_reduction_percent",
+    "MDEF減傷%": "damage_step.mdef_reduction_percent",
+    "DEF減傷%": "damage_step.def_reduction_percent",
+    "MDEF減算": "damage_step.mdef_subtraction",
+    "DEF減算": "damage_step.def_subtraction",
+    "技能增傷%(裝備段)": "damage_step.skill_damage_equipment_percent",
+    "技能增傷%(技能段)": "damage_step.skill_damage_skill_percent",
+    "致命塗毒%": "damage_step.enchant_deadly_poison_percent",
+    "前ATK": "damage_step.status_atk",
+    "神威ATK": "damage_step.kamui_atk",
+    "砲彈ATK": "damage_step.cannonball_atk",
+    "武器修煉ATK": "damage_step.weapon_mastery_atk",
+    "命中增傷%": "damage_step.hit_damage_percent",
+    "爆擊傷害%": "damage_step.critical_damage_percent",
+    "近/遠傷%": "damage_step.melee_ranged_damage_percent",
+    "後計算遠傷%": "damage_step.delayed_ranged_damage_percent",
+    "C.RATE": "damage_step.c_rate",
+    "高階拳刃修煉": "damage_step.advanced_katar_mastery",
+    "潛擊": "damage_step.sneak_attack",
+    "紋章": "damage_step.elemental_insignia",
+    "天怒": "damage_step.lex_aeterna",
+    "混傷BUFF": "damage_step.mixed_damage_buff",
+    "魔力中毒": "damage_step.magic_poison",
+    "綠光減傷%": "damage_step.green_aura_reduction_percent",
+    "星座塔減傷%": "damage_step.constellation_tower_reduction_percent",
+    "打擊虛數": "damage_step.virtual_hit",
+    "總傷害": "damage_step.total_damage",
+}
+
+
+def localize_damage_step_name(name: object) -> str:
+    stable_name = str(name)
+    key = DAMAGE_STEP_TRANSLATION_KEYS.get(stable_name)
+    return tr(key, stable_name) if key else stable_name
+
 
 def apply_round(value: float, factor: float, mode: str, name: str) -> float:
     # 直接加減（特殊）
@@ -214,7 +264,11 @@ class StepDelegate(QStyledItemDelegate):
         pen = option.palette.highlightedText().color() if (option.state & QStyle.State_Selected) else option.palette.text().color()
         painter.setPen(pen)
 
-        painter.drawText(name_rect, Qt.AlignVCenter | Qt.AlignLeft, str(name))
+        painter.drawText(
+            name_rect,
+            Qt.AlignVCenter | Qt.AlignLeft,
+            localize_damage_step_name(name),
+        )
         if name in ("MDEF減算","DEF減算"):
             ftxt = f"- {factor}" 
         elif name in ("ATK%","前ATK","神威ATK","武器修煉ATK","砲彈ATK"):
@@ -326,6 +380,7 @@ class DamageCalculator(QWidget):
         self.setWindowTitle(tr("window.damage_history_debug"))
         self.resize(450, 800)
         self._in_calculate = False
+        self.atktype = atktype
         root = QHBoxLayout(self)
 
         # 左邊
@@ -336,12 +391,9 @@ class DamageCalculator(QWidget):
         top_bar.setFrameShape(QFrame.StyledPanel)
         top_layout = QHBoxLayout(top_bar)
         top_layout.setContentsMargins(10, 10, 10, 10)
-        if atktype == "physical":
-            top_layout.addWidget(QLabel(tr("label.initial_atk")))
-        elif atktype == "d_b":
-            top_layout.addWidget(QLabel(tr("label.initial_atk")))
-        else:
-            top_layout.addWidget(QLabel(tr("label.initial_matk")))
+        self.initial_value_label = QLabel()
+        top_layout.addWidget(self.initial_value_label)
+        self._update_attack_type_label()
 
         self.matk_input = QSpinBox()
         self.matk_input.setRange(-10_000_000, 10_000_000)
@@ -410,8 +462,19 @@ class DamageCalculator(QWidget):
 
         self.calculate()
 
-    def set_data(self, matk: int, steps):
+    def _update_attack_type_label(self):
+        key = (
+            "label.initial_atk"
+            if self.atktype in ("physical", "d_b")
+            else "label.initial_matk"
+        )
+        self.initial_value_label.setText(tr(key))
+
+    def set_data(self, matk: int, steps, atktype=None):
         """外部更新資料用（matk + steps）"""
+        if atktype is not None:
+            self.atktype = atktype
+            self._update_attack_type_label()
         self.matk_input.setValue(int(matk))
 
         # steps 用 tuple list：[(name, factor), ...]
@@ -428,7 +491,12 @@ class DamageCalculator(QWidget):
         self._in_calculate = True
         try:
             val = float(self.matk_input.value())
-            lines = [f"起始 MATK: {fmt(val)}"]
+            initial_key = (
+                "damage_history.log.initial_atk"
+                if self.atktype in ("physical", "d_b")
+                else "damage_history.log.initial_matk"
+            )
+            lines = [tr(initial_key, value=fmt(val))]
 
             results = []
             for s in self.model.steps:
@@ -437,18 +505,22 @@ class DamageCalculator(QWidget):
 
                 if s.name in ("MDEF減算","DEF減算"):
                     lines.append(
-                        f"{s.name} -{s.factor} [{s.mode}] → {fmt(new_val)}"
+                        f"{localize_damage_step_name(s.name)} "
+                        f"-{s.factor} [{s.mode}] → {fmt(new_val)}"
                     )
                 else:
                     lines.append(
-                        f"{s.name} ×{s.factor} [{s.mode}] → {fmt(new_val)}"
+                        f"{localize_damage_step_name(s.name)} "
+                        f"×{s.factor} [{s.mode}] → {fmt(new_val)}"
                     )
                 val = new_val
 
             # ✅ 更新列表結果（這會 emit dataChanged，但不會再遞迴了）
             self.model.set_results(results)
 
-            lines.append(f"\n🎯 最終傷害：{fmt(val)}")
+            lines.append(
+                f"\n{tr('damage_history.log.final_damage', value=fmt(val))}"
+            )
             self.output.setPlainText("\n".join(lines))
         finally:
             self._in_calculate = False

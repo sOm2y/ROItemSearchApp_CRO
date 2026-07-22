@@ -11,3 +11,4 @@ mplcursors==0.7.1
 psutil==7.2.2
 python-dotenv==1.2.2
 requests==2.34.2
+opencc-python-reimplemented==0.1.7

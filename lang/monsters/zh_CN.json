@@ -1,0 +1,65 @@
+{
+  "_meta": {
+    "language": "zh_CN",
+    "sources": [
+      "data/monsters.json",
+      "data/monster/*.json"
+    ],
+    "generator": "scripts/generate_monster_zh_cn.py",
+    "conversion": "OpenCC t2s; requires CRO terminology review",
+    "translated_monster_count": 17
+  },
+  "monsters": {
+    "2413": {
+      "name": "Lv 10 (火属性)"
+    },
+    "20994": {
+      "name": "参宿四"
+    },
+    "21064": {
+      "name": "测试用魔物(小型)"
+    },
+    "21065": {
+      "name": "测试用魔物(中型)"
+    },
+    "21066": {
+      "name": "测试用魔物(大型)"
+    },
+    "21531": {
+      "name": "阿奎亚"
+    },
+    "21533": {
+      "name": "仿真蓉可儿"
+    },
+    "21950": {
+      "name": "盖亚蜥蜴"
+    },
+    "21955": {
+      "name": "雷涅尔"
+    },
+    "21980": {
+      "name": "圣地清洁队长"
+    },
+    "21981": {
+      "name": "终极拉斯甘德"
+    },
+    "22174": {
+      "name": "参宿七"
+    },
+    "22177": {
+      "name": "春天神兽"
+    },
+    "22178": {
+      "name": "夏天神兽"
+    },
+    "22179": {
+      "name": "秋天神兽"
+    },
+    "22180": {
+      "name": "冬天神兽"
+    },
+    "22260": {
+      "name": "심연의 살라만다"
+    }
+  }
+}

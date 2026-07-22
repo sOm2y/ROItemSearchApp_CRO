@@ -10,6 +10,11 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtWidgets import QComboBox 
 from i18n import LangManager, tr
+from monster_localization import (
+    get_localized_monster_name,
+    load_monster_catalog,
+    resolve_monster_id,
+)
 
 # ================= monster =================
 MONSTERS_FILE = Path("data","monsters.json")
@@ -36,6 +41,7 @@ def load_presets() -> list[dict]:
         if not isinstance(data, list):
             return []
         out = []
+        catalog = load_monster_catalog()
         for row in data:
             if not isinstance(row, dict):
                 continue
@@ -46,7 +52,16 @@ def load_presets() -> list[dict]:
             except Exception:
                 continue
             if name and mid > 0:
-                out.append({"name": name, "id": mid})
+                out.append(
+                    {
+                        "name": get_localized_monster_name(
+                            mid,
+                            catalog.get(mid, {"name": name}),
+                            default=name,
+                        ),
+                        "id": mid,
+                    }
+                )
         return out
     except Exception:
         return []
@@ -108,6 +123,7 @@ class MonsterFetchWorker(QObject):
                     data = json.load(f)
                 if isinstance(data, dict):
                     data["_from_cache"] = True
+                    data["_monster_id"] = self.monster_id
                 self.finished.emit(data)
                 return
 
@@ -129,6 +145,8 @@ class MonsterFetchWorker(QObject):
                 # 快取寫入失敗不阻擋主要流程
                 pass
 
+            if isinstance(data, dict):
+                data["_monster_id"] = self.monster_id
             self.finished.emit(data)
 
         except Exception as e:
@@ -155,7 +173,7 @@ class MonsterLookupDialog(QDialog):
 
         # -------- UI --------
         self.id_input = QLineEdit()
-        self.id_input.setPlaceholderText(tr("placeholder.monster_id"))
+        self.id_input.setPlaceholderText(tr("placeholder.monster_id_or_name"))
 
         self.key_input = QLineEdit()
         self.key_input.setText(load_api_key_from_config())
@@ -203,14 +221,18 @@ class MonsterLookupDialog(QDialog):
 
     # -------- logic --------
     def on_query(self):
-
-        try:
-            monster_id = int(self.id_input.text())
-        except ValueError:
+        query = self.id_input.text().strip()
+        monster_id = resolve_monster_id(query)
+        if monster_id is None:
+            try:
+                monster_id = int(query)
+            except ValueError:
+                monster_id = None
+        if monster_id is None or monster_id <= 0:
             QMessageBox.warning(
                 self,
                 tr("message.title.error"),
-                tr("message.monster_id_must_be_numeric"),
+                tr("message.monster_id_or_name_invalid"),
             )
             return
 
@@ -275,7 +297,22 @@ class MonsterLookupDialog(QDialog):
         stats = data.get("stats", {})
         attack_data = stats.get("attack") or {}
         mattack_data = stats.get("magicAttack") or {}
-        name = data.get("name") or data.get("dbname", "")
+        raw_name = data.get("name") or data.get("dbname", "")
+        raw_monster_id = data.get("id") or data.get("_monster_id")
+        try:
+            monster_id = int(raw_monster_id)
+        except (TypeError, ValueError):
+            monster_id = 0
+        catalog = load_monster_catalog()
+        if LangManager.current_lang == "en_US":
+            monster_info = {"name": raw_name}
+        else:
+            monster_info = catalog.get(monster_id, {"name": raw_name})
+        name = get_localized_monster_name(
+            monster_id,
+            monster_info,
+            default=raw_name,
+        )
         level = int(stats.get("level", 0))
         s_tr = int(stats.get("str") or 0)
         vit = int(stats.get("vit") or 0)
@@ -296,6 +333,7 @@ class MonsterLookupDialog(QDialog):
         #print(f"==================前atk{f_atk}後atk{c_atk}前MATK{f_matk}後MATK{c_matk}")
 
         return {
+            "id": monster_id,
             "name": name,
             "element_id": element_id,
             "element_lv": element_lv,

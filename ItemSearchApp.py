@@ -1,5 +1,5 @@
 #部分資料取自ROCalculator,搜尋 ROCalculator 可以知道哪些有使用
-Version = "v0.3.18-260710"
+Version = "v0.3.19-260722"
 
 import sys, builtins, time
 import os
@@ -31,6 +31,20 @@ from i18n import (
     normalize_language,
     tr,
     translate_equipment_part,
+)
+from item_localization import (
+    apply_item_localization,
+    build_item_name_index,
+    build_item_search_text,
+    resolve_item_id,
+)
+from effect_localization import localize_effect_lines, localize_effect_text
+from job_localization import get_localized_job_name, resolve_job_id
+from skill_localization import (
+    build_localized_skill_map,
+    build_skill_search_text,
+    get_localized_skill_name,
+    resolve_skill_id,
 )
 
 #介面縮放倍率設定 0.5~3倍
@@ -1621,9 +1635,11 @@ skill_df = pd.DataFrame(columns=[#檔案不在使用硬編碼以防跳錯
 # 初始化技能映射變數
 skill_map = {}
 skill_map_all = {}
+skill_display_map = {}
+skill_search_map = {}
 
 def load_skill_map(filepath=None):
-    global skill_map, skill_map_all, skill_df
+    global skill_map, skill_map_all, skill_display_map, skill_search_map, skill_df
     import skill_tree
     import pandas as pd
     import os
@@ -1642,11 +1658,19 @@ def load_skill_map(filepath=None):
     # === ItemSearchApp 用 ===
     skill_map = dict(zip(skill_df["ID"], skill_df["Name"]))
     skill_map_all = skill_df.set_index("ID").to_dict(orient="index")
+    skill_display_map = build_localized_skill_map(skill_map, skill_map_all)
+    skill_search_map = {
+        int(skill_id): build_skill_search_text(int(skill_id), skill_info)
+        for skill_id, skill_info in skill_map_all.items()
+    }
 
     # === skill_tree 用 ===
-    skill_tree.skill_id_to_name = dict(zip(skill_df["ID"], skill_df["Name"]))
+    skill_tree.skill_id_to_name = dict(skill_display_map)
     skill_tree.skill_code_to_id = dict(zip(skill_df["Code"], skill_df["ID"]))
-    skill_tree.skill_code_to_name = dict(zip(skill_df["Code"], skill_df["Name"]))
+    skill_tree.skill_code_to_name = {
+        row["Code"]: skill_display_map.get(int(skill_id), row["Name"])
+        for skill_id, row in skill_map_all.items()
+    }
 
 
     print("技能列表載入成功")
@@ -1889,15 +1913,16 @@ import requests
 
 UPDATER_EXE = "update.exe"
 TARGET_EXE = "ItemSearchApp.exe"
-GITHUB_OWNER = "z2911902"
-GITHUB_REPO = "ROItemSearchApp"
+GITHUB_OWNER = "sOm2y"
+GITHUB_REPO = "ROItemSearchApp_CRO"
 
 GITHUB_LATEST_RELEASE_API = (
     f"https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}/releases/latest"
 )
 
 ZIP_URL_TEMPLATE = (
-    "https://github.com/z2911902/ROItemSearchApp/releases/download/{ver}/ROItemSearchApp.zip"
+    f"https://github.com/{GITHUB_OWNER}/{GITHUB_REPO}/releases/download/"
+    "{ver}/ROItemSearchApp.zip"
 )
 
 def read_local_version(app_dir: str) -> str:
@@ -2544,7 +2569,8 @@ def open_skill_editor(app_instance=None):
     # === 設定編輯器的 name_combo 下拉式 ===
     if app_instance and hasattr(app_instance, "skill_box"):
         try:
-            skill_name = app_instance.skill_box.currentText().strip()
+            skill_id = app_instance.skill_box.currentData()
+            skill_name = str(skill_map.get(skill_id, "")).strip()
             if skill_name:
                 idx = skill_editor.name_combo.findText(skill_name)
                 if idx != -1:
@@ -5452,6 +5478,12 @@ class ItemSearchApp(QWidget):
         equipment_name = str(equipment_name or "").strip()
         if not equipment_name:
             return set()
+        item_id = self._resolve_item_id_from_name(
+            equipment_name,
+            require_equipment=True,
+        )
+        if item_id is not None:
+            equipment_name = self.parsed_items[item_id]["name"]
 
         try:
             enchant_data, _, target_map = self._load_enchant_tool_data()
@@ -5567,6 +5599,12 @@ class ItemSearchApp(QWidget):
 
         try:
             if field_type == "裝備" and part_name:
+                item_id = self._resolve_item_id_from_name(
+                    equipment_name,
+                    require_equipment=True,
+                )
+                if item_id is not None:
+                    equipment_name = self.parsed_items[item_id]["name"]
                 window.set_target_context(
                     part_name,
                     equipment_name,
@@ -5692,6 +5730,13 @@ class ItemSearchApp(QWidget):
                 except ValueError:
                     pass
 
+        item_id = self._resolve_item_id_from_name(
+            initial_equipment,
+            require_equipment=True,
+        )
+        if item_id is not None:
+            initial_equipment = self.parsed_items[item_id]["name"]
+
         # 已開啟時直接切換套用目標，不重複建立視窗。
         window = getattr(self, "enchant_window", None)
         if window is not None:
@@ -5751,6 +5796,8 @@ class ItemSearchApp(QWidget):
             combo.setCurrentIndex(idx)
 
     def apply_monster_to_main_ui(self, m: dict):
+        self.current_monster_id = m.get("id")
+        self.current_monster_name = m.get("name", "")
         self._set_combo_by_key(self.size_box, m["size_id"])
         self._set_combo_by_key(self.element_box, m["element_id"])
         self.element_lv_input.setText(str(m["element_lv"]))
@@ -5802,7 +5849,7 @@ class ItemSearchApp(QWidget):
             self._damage_win.setAttribute(Qt.WA_DeleteOnClose, True)
             self._damage_win.destroyed.connect(lambda: setattr(self, "_damage_win", None))
         else:
-            self._damage_win.set_data(atk, steps)
+            self._damage_win.set_data(atk, steps, atktype=atktype)
 
         # ✅ 以主視窗左上角(全域座標)為基準偏移
         offset = QPoint(430, 45)  # 偏移量
@@ -6278,8 +6325,13 @@ class ItemSearchApp(QWidget):
         User_attack_element #施展屬性
         """
         #=============參考動態變數自動抓技能%=(裝備段)==============
-        # 從 skill_box 取得目前選中的技能名稱（顯示文字）
-        selected_skill_name = self.skill_box.currentText()
+        # 顯示名稱可本地化；計算鍵仍使用 Skill ID 對應的原始名稱。
+        selected_skill_id = self.skill_box.currentData()
+        selected_skill_display_name = self.skill_box.currentText()
+        selected_skill_name = skill_map.get(
+            selected_skill_id,
+            selected_skill_display_name,
+        )
         globals()["Use_Skills"] = sum(val for val, _ in effect_dict.get((f"技能【{selected_skill_name}】傷害(裝備段)", "%"), []))
         #=============參考動態變數自動抓技能%=(技能段)==============      
         passive_skill_buff = sum(val for val, _ in effect_dict.get((f"技能【{selected_skill_name}】傷害(技能段)", "%"), []))
@@ -6425,7 +6477,7 @@ class ItemSearchApp(QWidget):
             return min(resistance, 1.0)  # ⬅️ 保證不超過 1.0
             
         # === [1] 取得技能 row
-        skill_row = skill_df[skill_df["Name"] == selected_skill_name]
+        skill_row = skill_df[skill_df["ID"] == selected_skill_id]
         if skill_row.empty:
             # 給一個「空內容但欄位齊全」的 Series
             skill_row = pd.Series({col: None for col in skill_df.columns})
@@ -7358,7 +7410,7 @@ class ItemSearchApp(QWidget):
         #=========================魔法各增傷計算顯示區=======================
         #print(f"前MATK: {MATKF} 後MATK:{MATKC} 武器MATK:{MATK_Mweapon} S.MATK:{total_SMATK}")  
         #print(f"打擊次數：{len(results)}")        
-        result.append(f"{pad_label('使用技能:')}{selected_skill_name}")
+        result.append(f"{pad_label('使用技能:')}{selected_skill_display_name}")
         if not results:
             result.append("❌ 無法計算技能傷害，請檢查公式與變數")
             return
@@ -8276,9 +8328,9 @@ class ItemSearchApp(QWidget):
                 effect_map=effect_map,
                 hide_unrecognized=False
             )
-            output = "\n".join(results)
+            output = "\n".join(localize_effect_lines(results))
         except Exception as e:
-            output = f"⚠️ 錯誤：{e}"
+            output = localize_effect_text(f"⚠️ 錯誤：{e}")
 
         # 尋找對應的 詞條 欄位，名稱是 part_name-詞條
         target_name = f"{part_name}-詞條"
@@ -8324,7 +8376,7 @@ class ItemSearchApp(QWidget):
         self.result_output.set_map_registry({
             "equip_sitetype": equip_sitetype,
             "stat_fields": stat_fields,
-            "skill_map": skill_map,
+            "skill_map": skill_display_map,
             "skill_map_all": skill_map_all,
             "effect_map": effect_map,
             "element_map": element_map,
@@ -8382,9 +8434,9 @@ class ItemSearchApp(QWidget):
                     effect_map=effect_map,
                     hide_unrecognized=False
                 )
-                output = "\n".join(results)
+                output = "\n".join(localize_effect_lines(results))
             except Exception as e:
-                output = f"⚠️ 錯誤：{e}"
+                output = localize_effect_text(f"⚠️ 錯誤：{e}")
 
             self.update_note_widget_with_delay(note_widget, output)
 
@@ -8780,9 +8832,9 @@ class ItemSearchApp(QWidget):
                 current_location_slot=current_location_slot  # ✅ 傳入現在位置 slot
             )
             results = self.filter_effects(results)
-            explanation = "\n".join(results)
+            explanation = "\n".join(localize_effect_lines(results))
         except Exception as e:
-            explanation = f"⚠️ 錯誤：{e}"
+            explanation = localize_effect_text(f"⚠️ 錯誤：{e}")
 
         self.syntax_result_box.setPlainText(explanation)
 
@@ -8793,7 +8845,7 @@ class ItemSearchApp(QWidget):
         map_registry = {#函數對應
             "equip_sitetype": equip_sitetype,
             "stat_fields": stat_fields,
-            "skill_map": skill_map,
+            "skill_map": skill_display_map,
             "effect_map": effect_map,
         }
         self.skill_search_input.setVisible(False)
@@ -8868,10 +8920,7 @@ class ItemSearchApp(QWidget):
                         combo.setFixedWidth(150)
                         combo.setEditable(False)
 
-                        try:
-                            value_map = eval(arg["map"])
-                        except Exception:
-                            value_map = {}
+                        value_map = skill_display_map
                             
 
                         all_items = list(value_map.items())
@@ -8882,7 +8931,11 @@ class ItemSearchApp(QWidget):
                             keyword = self.skill_search_input.text().lower().strip()
                             combo.clear()
                             for k, v in all_items:
-                                if keyword in v.lower() or keyword in str(k):
+                                search_text = skill_search_map.get(
+                                    int(k),
+                                    f"{k} {v}".casefold(),
+                                )
+                                if keyword in search_text:
                                     combo.addItem(v, k)
                         try:
                             self.skill_search_input.textChanged.disconnect()
@@ -8997,7 +9050,7 @@ class ItemSearchApp(QWidget):
                 "local_ver": str(local_ver),
                 "remote_ver": str(remote_ver),
                 "cmp_result": cmp_result,
-                "release_url": f"https://github.com/z2911902/ROItemSearchApp/releases/tag/{remote_ver}",
+                "release_url": f"https://github.com/{GITHUB_OWNER}/{GITHUB_REPO}/releases/tag/{remote_ver}",
             }
         except Exception as e:
             if show_error:
@@ -9129,8 +9182,8 @@ class ItemSearchApp(QWidget):
         svc.start(
             data_folder=data_folder,
             items=items,
-            owner="z2911902",
-            repo="ROItemSearchApp",
+            owner=GITHUB_OWNER,
+            repo=GITHUB_REPO,
             branch="main",
         )
 
@@ -9138,10 +9191,18 @@ class ItemSearchApp(QWidget):
 
     def update_total_effect_display(self):
         keyword = self.total_filter_input.text().strip()
+        display_pairs = [
+            (line, localize_effect_text(line))
+            for line in self.total_combined_raw
+        ]
         if not keyword:
-            lines = self.total_combined_raw
+            lines = [localized for _, localized in display_pairs]
         else:
-            lines = [line for line in self.total_combined_raw if keyword in line]
+            lines = [
+                localized
+                for raw, localized in display_pairs
+                if keyword in raw or keyword in localized
+            ]
 
         self.safe_update_textbox(self.total_effect_text, "\n".join(lines))
         
@@ -9288,70 +9349,73 @@ class ItemSearchApp(QWidget):
             if equip_name:
                 source_label = f"{part_name}：{equip_name}"  # or 卡片名稱 or 套裝來源
                 source_label_base = f"{part_name}：{equip_name}（基礎）"
-                for item_id, item in self.parsed_items.items():
-                    if item["name"] == equip_name and item_id in self.equipment_data:
-                        block_text = self.equipment_data[item_id]
-                        grade = self.input_fields[f"{part_name}_階級"].currentIndex()
-                        slot_id = refine_parts[part_name]["slot"]
-                        slot_item_id_map[slot_id] = item_id  # 存入全域對應表
+                item_id = self._resolve_item_id_from_name(
+                    equip_name,
+                    require_equipment=True,
+                )
+                if item_id is not None:
+                    block_text = self.equipment_data[item_id]
+                    grade = self.input_fields[f"{part_name}_階級"].currentIndex()
+                    slot_id = refine_parts[part_name]["slot"]
+                    slot_item_id_map[slot_id] = item_id  # 存入全域對應表
 
-                        effects = parse_lua_effects_with_variables(
-                            block_text,
-                            refine_inputs,
-                            get_values,
-                            grade,
-                            unit_map,
-                            size_map,
-                            effect_map,
-                            hide_unrecognized=self.hide_unrecognized_checkbox.isChecked(),
-                            hide_physical=self.hide_physical_checkbox.isChecked(),
-                            hide_magical=self.hide_magical_checkbox.isChecked(),
-                            current_location_slot=slot_id
-                        )
+                    effects = parse_lua_effects_with_variables(
+                        block_text,
+                        refine_inputs,
+                        get_values,
+                        grade,
+                        unit_map,
+                        size_map,
+                        effect_map,
+                        hide_unrecognized=self.hide_unrecognized_checkbox.isChecked(),
+                        hide_physical=self.hide_physical_checkbox.isChecked(),
+                        hide_magical=self.hide_magical_checkbox.isChecked(),
+                        current_location_slot=slot_id
+                    )
 
-                        filtered = self.filter_effects(effects)
-                        for line in filtered:
-                            if not line.strip():
-                                continue
-                            parsed = self.try_extract_effect(line)
-                            if parsed:
-                                key, value, unit = parsed
-                                key = self.normalize_effect_key(key)
-                                # 建立效果來源清單
-                                effect_dict.setdefault((key, unit), []).append((value, source_label))
-                            else:
-                                text = line.strip()
-                                if text:
-                                    key = self.normalize_effect_key(text)
+                    filtered = self.filter_effects(effects)
+                    for line in filtered:
+                        if not line.strip():
+                            continue
+                        parsed = self.try_extract_effect(line)
+                        if parsed:
+                            key, value, unit = parsed
+                            key = self.normalize_effect_key(key)
+                            # 建立效果來源清單
+                            effect_dict.setdefault((key, unit), []).append((value, source_label))
+                        else:
+                            text = line.strip()
+                            if text:
+                                key = self.normalize_effect_key(text)
 
-                                    # ✅ 純文字效果也寫入 effect_dict
-                                    # value = 0, unit = ""
-                                    effect_dict.setdefault((key, ""), []).append((0, source_label))
+                                # ✅ 純文字效果也寫入 effect_dict
+                                # value = 0, unit = ""
+                                effect_dict.setdefault((key, ""), []).append((0, source_label))
 
-                        # --- 第二次：基礎能力（grade=0 + refine_inputs 全 0） ---
-                        base_effects = parse_lua_effects_with_variables(
-                            block_text,
-                            refine_inputs_base,  # <- 全 0
-                            get_values,
-                            0,                   # <- grade 強制 0
-                            unit_map,
-                            size_map,
-                            effect_map,
-                            hide_unrecognized=self.hide_unrecognized_checkbox.isChecked(),
-                            hide_physical=self.hide_physical_checkbox.isChecked(),
-                            hide_magical=self.hide_magical_checkbox.isChecked(),
-                            current_location_slot=slot_id
-                        )
+                    # --- 第二次：基礎能力（grade=0 + refine_inputs 全 0） ---
+                    base_effects = parse_lua_effects_with_variables(
+                        block_text,
+                        refine_inputs_base,  # <- 全 0
+                        get_values,
+                        0,                   # <- grade 強制 0
+                        unit_map,
+                        size_map,
+                        effect_map,
+                        hide_unrecognized=self.hide_unrecognized_checkbox.isChecked(),
+                        hide_physical=self.hide_physical_checkbox.isChecked(),
+                        hide_magical=self.hide_magical_checkbox.isChecked(),
+                        current_location_slot=slot_id
+                    )
 
-                        base_filtered = self.filter_effects(base_effects)
-                        for line in base_filtered:
-                            if not line.strip():
-                                continue
-                            parsed = self.try_extract_effect(line)
-                            if parsed:
-                                key, value, unit = parsed
-                                key = self.normalize_effect_key(key)
-                                base_effect_dict.setdefault((key, unit), []).append((value, source_label_base))
+                    base_filtered = self.filter_effects(base_effects)
+                    for line in base_filtered:
+                        if not line.strip():
+                            continue
+                        parsed = self.try_extract_effect(line)
+                        if parsed:
+                            key, value, unit = parsed
+                            key = self.normalize_effect_key(key)
+                            base_effect_dict.setdefault((key, unit), []).append((value, source_label_base))
 
             # ▶️ 卡片欄處理（最多4張）
             for i, card_input in enumerate(ui["cards"]):
@@ -9360,43 +9424,46 @@ class ItemSearchApp(QWidget):
                 if not card_name:
                     continue
                 source_label = f"{part_name}：{card_name}"  # or 卡片名稱 or 套裝來源
-                for item_id, item in self.parsed_items.items():
-                    if item["name"] == card_name and item_id in self.equipment_data:
-                        block_text = self.equipment_data[item_id]
-                        grade = self.input_fields[f"{part_name}_階級"].currentIndex()
-                        slot_id = refine_parts[part_name]["slot"]
-                        effects = parse_lua_effects_with_variables(
-                            block_text,
-                            refine_inputs,
-                            get_values,
-                            grade,
-                            unit_map=unit_map,
-                            size_map=size_map,
-                            effect_map=effect_map,
-                            hide_unrecognized=self.hide_unrecognized_checkbox.isChecked(),
-                            hide_physical=self.hide_physical_checkbox.isChecked(),
-                            hide_magical=self.hide_magical_checkbox.isChecked(),
-                            current_location_slot=slot_id    
-                        )
+                item_id = self._resolve_item_id_from_name(
+                    card_name,
+                    require_equipment=True,
+                )
+                if item_id is not None:
+                    block_text = self.equipment_data[item_id]
+                    grade = self.input_fields[f"{part_name}_階級"].currentIndex()
+                    slot_id = refine_parts[part_name]["slot"]
+                    effects = parse_lua_effects_with_variables(
+                        block_text,
+                        refine_inputs,
+                        get_values,
+                        grade,
+                        unit_map=unit_map,
+                        size_map=size_map,
+                        effect_map=effect_map,
+                        hide_unrecognized=self.hide_unrecognized_checkbox.isChecked(),
+                        hide_physical=self.hide_physical_checkbox.isChecked(),
+                        hide_magical=self.hide_magical_checkbox.isChecked(),
+                        current_location_slot=slot_id
+                    )
 
-                        filtered = self.filter_effects(effects)
-                        for line in filtered:
-                            if not line.strip():
-                                continue
-                            parsed = self.try_extract_effect(line)
-                            if parsed:
-                                key, value, unit = parsed
-                                key = self.normalize_effect_key(key)
-                                # 建立效果來源清單
-                                effect_dict.setdefault((key, unit), []).append((value, source_label))
-                            else:
-                                text = line.strip()
-                                if text:
-                                    key = self.normalize_effect_key(text)
+                    filtered = self.filter_effects(effects)
+                    for line in filtered:
+                        if not line.strip():
+                            continue
+                        parsed = self.try_extract_effect(line)
+                        if parsed:
+                            key, value, unit = parsed
+                            key = self.normalize_effect_key(key)
+                            # 建立效果來源清單
+                            effect_dict.setdefault((key, unit), []).append((value, source_label))
+                        else:
+                            text = line.strip()
+                            if text:
+                                key = self.normalize_effect_key(text)
 
-                                    # ✅ 純文字效果也寫入 effect_dict
-                                    # value = 0, unit = ""
-                                    effect_dict.setdefault((key, ""), []).append((0, source_label))
+                                # ✅ 純文字效果也寫入 effect_dict
+                                # value = 0, unit = ""
+                                effect_dict.setdefault((key, ""), []).append((0, source_label))
                                 
             # ▶️ 詞條處理（如果有手動輸入）
             if "note" in ui:
@@ -9483,15 +9550,21 @@ class ItemSearchApp(QWidget):
         for part_name, ui in self.refine_inputs_ui.items():
             equip_name = ui["equip"].text().strip()
             if equip_name:
-                for item_id, item in self.parsed_items.items():
-                    if item["name"] == equip_name:
-                        equipped_ids.add(item_id)
+                item_id = self._resolve_item_id_from_name(
+                    equip_name,
+                    require_equipment=True,
+                )
+                if item_id is not None:
+                    equipped_ids.add(item_id)
             for card_input in ui["cards"]:
                 card_name = card_input.text().strip()
                 if card_name:
-                    for item_id, item in self.parsed_items.items():
-                        if item["name"] == card_name:
-                            equipped_ids.add(item_id)
+                    item_id = self._resolve_item_id_from_name(
+                        card_name,
+                        require_equipment=True,
+                    )
+                    if item_id is not None:
+                        equipped_ids.add(item_id)
 
 
         # 掃描每個裝備，看是否有 Combiitem 欄位
@@ -9658,8 +9731,14 @@ class ItemSearchApp(QWidget):
         #self.total_effect_text.setPlainText("\n".join(combined))
         #self.combo_effect_text.setPlainText("\n".join(combo_effects_all))
         self.total_combined_raw = combined  # 儲存未過濾的總表行
-        self.safe_update_textbox(self.total_effect_text, "\n".join(combined))
-        self.safe_update_textbox(self.combo_effect_text, "\n".join(combo_effects_all))
+        self.safe_update_textbox(
+            self.total_effect_text,
+            "\n".join(localize_effect_lines(combined)),
+        )
+        self.safe_update_textbox(
+            self.combo_effect_text,
+            "\n".join(localize_effect_lines(combo_effects_all)),
+        )
         # 不論有沒有套裝效果、裝備或技能，一律記錄 effect_dict
         self.effect_dict_raw = effect_dict
         self.base_effect_dict_raw = base_effect_dict#只紀錄裝備基礎能力不含精煉套裝
@@ -9826,12 +9905,25 @@ class ItemSearchApp(QWidget):
         with open(filename, "r", encoding="utf-8") as f:
             saved_data = json.load(f)
 
+        saved_job_id = resolve_job_id(
+            saved_data.get("JOB_ID", saved_data.get("JOB")),
+            job_dict,
+        )
+        saved_job_field = self.input_fields.get("JOB")
+        if isinstance(saved_job_field, QComboBox) and saved_job_id is not None:
+            saved_job_index = saved_job_field.findData(saved_job_id)
+            if saved_job_index >= 0:
+                saved_job_field.setCurrentIndex(saved_job_index)
+
         # input_fields 的 QComboBox 或 QLineEdit
         for key, val in saved_data.items():
             if key in self.input_fields:
                 field = self.input_fields[key]
                 if isinstance(field, QComboBox):
-                    index = field.findText(val)
+                    if key == "JOB" and saved_job_id is not None:
+                        index = field.findData(saved_job_id)
+                    else:
+                        index = field.findText(str(val))
                     if index != -1:
                         field.setCurrentIndex(index)
                 else:
@@ -9877,8 +9969,16 @@ class ItemSearchApp(QWidget):
         self.skill_filter_input.setText(" ")
         self.skill_filter_input.clear()
         # 技能欄位
-        if "skill_name" in saved_data:
-            index = self.skill_box.findText(saved_data["skill_name"])
+        saved_skill_id = resolve_skill_id(
+            saved_data.get("skill_id", saved_data.get("skill_name")),
+            skill_map_all,
+        )
+        if saved_skill_id is not None:
+            index = self.skill_box.findData(saved_skill_id)
+            if index != -1:
+                self.skill_box.setCurrentIndex(index)
+        elif "skill_name" in saved_data:
+            index = self.skill_box.findText(str(saved_data["skill_name"]))
             if index != -1:
                 self.skill_box.setCurrentIndex(index)
         # note 欄位最後處理
@@ -10260,22 +10360,26 @@ class ItemSearchApp(QWidget):
         self.current_file = None
 
         # === 線上來源（已整理好的 Lua） ===
-        ONLINE_ITEMINFO_URL = "https://z2911902.github.io/ROItemSearchApp/data/iteminfo_new.lua"
-        ONLINE_USER_ITEMINFO_URL = "https://z2911902.github.io/ROItemSearchApp/data/User_iteminfo_new.lua"
-        ONLINE_EQUIP_URL    = "https://z2911902.github.io/ROItemSearchApp/data/EquipmentProperties.lua"
-        ONLINE_User_EQUIP_URL    = "https://z2911902.github.io/ROItemSearchApp/data/User_EquipmentProperties.lua"
-        ONLINE_EnchantList_URL = "https://z2911902.github.io/ROItemSearchApp/data/EnchantList.lua"
-        ONLINE_ItemDBNameTbl_URL = "https://z2911902.github.io/ROItemSearchApp/data/ItemDBNameTbl.lua"
-        ONLINE_ItemReformSystem_URL = "https://z2911902.github.io/ROItemSearchApp/data/ItemReformSystem.lua"
-        ONLINE_skill_tree_URL = "https://z2911902.github.io/ROItemSearchApp/data/skill_tree.yml"
-        ONLINE_skilltreeview_URL = "https://z2911902.github.io/ROItemSearchApp/data/skilltreeview.lub"
-        ONLINE_skillneme_URL = "https://z2911902.github.io/ROItemSearchApp/data/skillneme.csv"
-        ONLINE_skillbuff_URL = "https://z2911902.github.io/ROItemSearchApp/data/skillbuff.lua"
-        ONLINE_skill_entries_URL = "https://z2911902.github.io/ROItemSearchApp/data/all_skill_entries.py"
-        ONLINE_job_dict_URL = "https://z2911902.github.io/ROItemSearchApp/data/job_dict.py"
-        ONLINE_EnchantName_URL = "https://z2911902.github.io/ROItemSearchApp/data/EnchantName.lua"
-        ONLINE_stateiconinfo_URL = "https://z2911902.github.io/ROItemSearchApp/data/stateiconinfo.lua"
-        ONLINE_EFSTIDs_URL = "https://z2911902.github.io/ROItemSearchApp/data/EFSTIDs.lua"
+        ONLINE_DATA_BASE_URL = (
+            "https://raw.githubusercontent.com/"
+            f"{GITHUB_OWNER}/{GITHUB_REPO}/main/data"
+        )
+        ONLINE_ITEMINFO_URL = f"{ONLINE_DATA_BASE_URL}/iteminfo_new.lua"
+        ONLINE_USER_ITEMINFO_URL = f"{ONLINE_DATA_BASE_URL}/User_iteminfo_new.lua"
+        ONLINE_EQUIP_URL = f"{ONLINE_DATA_BASE_URL}/EquipmentProperties.lua"
+        ONLINE_User_EQUIP_URL = f"{ONLINE_DATA_BASE_URL}/User_EquipmentProperties.lua"
+        ONLINE_EnchantList_URL = f"{ONLINE_DATA_BASE_URL}/EnchantList.lua"
+        ONLINE_ItemDBNameTbl_URL = f"{ONLINE_DATA_BASE_URL}/ItemDBNameTbl.lua"
+        ONLINE_ItemReformSystem_URL = f"{ONLINE_DATA_BASE_URL}/ItemReformSystem.lua"
+        ONLINE_skill_tree_URL = f"{ONLINE_DATA_BASE_URL}/skill_tree.yml"
+        ONLINE_skilltreeview_URL = f"{ONLINE_DATA_BASE_URL}/skilltreeview.lub"
+        ONLINE_skillneme_URL = f"{ONLINE_DATA_BASE_URL}/skillneme.csv"
+        ONLINE_skillbuff_URL = f"{ONLINE_DATA_BASE_URL}/skillbuff.lua"
+        ONLINE_skill_entries_URL = f"{ONLINE_DATA_BASE_URL}/all_skill_entries.py"
+        ONLINE_job_dict_URL = f"{ONLINE_DATA_BASE_URL}/job_dict.py"
+        ONLINE_EnchantName_URL = f"{ONLINE_DATA_BASE_URL}/EnchantName.lua"
+        ONLINE_stateiconinfo_URL = f"{ONLINE_DATA_BASE_URL}/stateiconinfo.lua"
+        ONLINE_EFSTIDs_URL = f"{ONLINE_DATA_BASE_URL}/EFSTIDs.lua"
 
         # === 路徑設定 ===
         if getattr(sys, 'frozen', False):
@@ -10695,6 +10799,12 @@ class ItemSearchApp(QWidget):
         print("📖 載入 自訂物品列表 ...")
         self.parsed_items = parse_lub_file(user_iteminfo_path, existing_items=self.parsed_items,duplicate_mode="skip")
         #self.parsed_items = parse_lub_file(kro_iteminfo_path, existing_items=self.parsed_items,duplicate_mode="skip")
+        print("🌐 套用物品語言覆蓋 ...")
+        self.parsed_items = apply_item_localization(
+            self.parsed_items,
+            language=self.language,
+            base_dir=BASE_DIR,
+        )
         print("📖 載入 物品效果...")
         with open(equipment_lua_path, "r", encoding="utf-8") as f:
             content = f.read()
@@ -10707,6 +10817,7 @@ class ItemSearchApp(QWidget):
         self.update_function_autocomplete_maps()
         self.lua_text = load_skill_delay_lua("data/skilldelaylist.lua")#讀取技能延遲
         self.parsed_items = resolve_name_conflicts(self.parsed_items ,self.equipment_data)#重複物品名稱加上id
+        self._item_name_index = build_item_name_index(self.parsed_items)
 
         return self.parsed_items
 
@@ -10770,13 +10881,21 @@ class ItemSearchApp(QWidget):
 
         combo: QComboBox = self.input_fields["JOB"]
         combo.blockSignals(True)  # 避免觸發 change 事件
+        selected_job_id = combo.currentData()
 
         combo.clear()
 
         jobs = DataRegistry.loaded_data.get("jobs", {})
 
         for job_id, job_info in sorted(jobs.items()):
-            combo.addItem(job_info["name"], job_id)
+            combo.addItem(
+                get_localized_job_name(job_id, job_info),
+                job_id,
+            )
+
+        selected_index = combo.findData(selected_job_id)
+        if selected_index >= 0:
+            combo.setCurrentIndex(selected_index)
 
         combo.blockSignals(False)
         print("✓ JOB 下拉選單已重新載入")
@@ -10917,6 +11036,7 @@ class ItemSearchApp(QWidget):
 
 
         self.parsed_items = {}#預先初始化
+        self._item_name_index = {}
         self.current_file = None # 尚未開啟任何檔案
         
         self.search_input = QLineEdit()
@@ -11216,7 +11336,10 @@ class ItemSearchApp(QWidget):
             if label == "JOB":
                 combo = QComboBox()
                 for job_id, job_info in sorted(job_dict.items()):
-                    combo.addItem(job_info["name"], job_id)
+                    combo.addItem(
+                        get_localized_job_name(job_id, job_info),
+                        job_id,
+                    )
                 combo.currentIndexChanged.connect(self.trigger_total_effect_update)         
                 #combo.currentIndexChanged.connect(filter_skills) #移動到filter_skills後面註冊
                 combo.setMaximumWidth(210)#調整寬度
@@ -11342,14 +11465,16 @@ class ItemSearchApp(QWidget):
 
                 text = input_field.text().strip()
                 if text:
-                    # 搜尋對應的物品 ID
-                    for idx in range(self.result_box.count()):
-                        item_id = self.result_box.itemData(idx)
-                        item = self.filtered_items.get(item_id)
-                        if item and item["name"] == text and item_id in self.equipment_data:
-
-                            self.result_box.setCurrentIndex(idx)
-                            break
+                    # 简体名、繁体旧存档名都解析成稳定 Item ID。
+                    target_item_id = self._resolve_item_id_from_name(
+                        text,
+                        require_equipment=True,
+                    )
+                    if target_item_id is not None:
+                        for idx in range(self.result_box.count()):
+                            if self.result_box.itemData(idx) == target_item_id:
+                                self.result_box.setCurrentIndex(idx)
+                                break
 
 
                 QLineEdit.mousePressEvent(input_field, event)
@@ -12130,6 +12255,7 @@ class ItemSearchApp(QWidget):
 
             for key, display_name in skill_map.items():
                 skill_data = skill_map_all.get(key)
+                localized_name = skill_display_map.get(key, display_name)
                 slv = skill_data.get("Slv") if skill_data else None
                 code = skill_data.get("Code") if skill_data else None
                 job_id = self.input_fields["JOB"].currentData()#取得職業ID
@@ -12156,11 +12282,14 @@ class ItemSearchApp(QWidget):
                         if code and '_' in code:
                             code_prefix = code.split('_')[0]
                             if code_prefix in job_prefixes:
-                                self.skill_box.addItem(skill_map[key], key)
+                                self.skill_box.addItem(localized_name, key)
                 else:
                     # 有搜尋時顯示所有技能（包含沒有 Slv）
-                    if text in display_name.lower():
-                        self.skill_box.addItem(display_name, key)
+                    if text in skill_search_map.get(
+                        int(key),
+                        f"{key} {display_name} {localized_name}".casefold(),
+                    ):
+                        self.skill_box.addItem(localized_name, key)
 
             self.skill_box.blockSignals(False)
             self.filter_skills = filter_skills
@@ -12277,7 +12406,10 @@ class ItemSearchApp(QWidget):
                 if code and '_' in code:
                     code_prefix = code.split('_')[0]
                     if code_prefix in job_prefixes:
-                        self.skill_box.addItem(skill_map[key], key)
+                        self.skill_box.addItem(
+                            skill_display_map.get(key, skill_map[key]),
+                            key,
+                        )
 
         # 綁定更新函式
         self.skill_box.currentIndexChanged.connect(update_skill_formula_display)
@@ -13076,6 +13208,9 @@ class ItemSearchApp(QWidget):
                 data[key] = field.currentText()
             else:
                 data[key] = field.text()
+        job_field = self.input_fields.get("JOB")
+        if isinstance(job_field, QComboBox):
+            data["JOB_ID"] = job_field.currentData()
 
         # 儲存裝備與卡片欄位
         for part, info in self.refine_inputs_ui.items():
@@ -13087,6 +13222,7 @@ class ItemSearchApp(QWidget):
 
         # 技能與怪物資訊整合
         data["skill_name"] = self.skill_box.currentText()
+        data["skill_id"] = self.skill_box.currentData()
         data["size"] = self.size_box.currentIndex()
         data["element"] = self.element_box.currentIndex()
         data["race"] = self.race_box.currentIndex()
@@ -13255,7 +13391,7 @@ class ItemSearchApp(QWidget):
         self.result_box.clear()
 
         # 以空白分割關鍵字（自動忽略多餘空白）
-        keywords = keyword_text.split()
+        keywords = [keyword.casefold() for keyword in keyword_text.split()]
 
         self.filtered_items = {}
 
@@ -13265,11 +13401,7 @@ class ItemSearchApp(QWidget):
                 continue
 
             # 將可搜尋內容合併成一個字串
-            searchable_text = " ".join([
-                str(k),
-                v['name'],
-                " ".join(v['description'])
-            ])
+            searchable_text = build_item_search_text(k, v).casefold()
 
             # 所有關鍵字都必須命中
             if all(keyword in searchable_text for keyword in keywords):
@@ -13283,7 +13415,17 @@ class ItemSearchApp(QWidget):
             self.result_box.setCurrentIndex(0)
             self.display_item_info()
 
-            
+    def _resolve_item_id_from_name(self, name_or_id, require_equipment=False):
+        """以简体名、繁体原名、资源名或显式 ID 找到稳定 Item ID。"""
+        if not self._item_name_index and self.parsed_items:
+            self._item_name_index = build_item_name_index(self.parsed_items)
+        preferred_ids = self.equipment_data.keys() if require_equipment else None
+        return resolve_item_id(
+            name_or_id,
+            self.parsed_items,
+            name_index=self._item_name_index,
+            preferred_ids=preferred_ids,
+        )
 
 
    
@@ -13496,9 +13638,13 @@ class ItemSearchApp(QWidget):
 
 
 
-            self.sim_effect_text.setPlainText("\n".join(combined))
+            self.sim_effect_text.setPlainText(
+                "\n".join(localize_effect_lines(combined))
+            )
             # 顯示結果
-            self.sim_effect_text.setPlainText("\n".join(filtered_effects))
+            self.sim_effect_text.setPlainText(
+                "\n".join(localize_effect_lines(filtered_effects))
+            )
             
             self.display_all_effects()#這邊只顯示目前裝備效果 需要單獨處理 不然會影響最終顯示
             

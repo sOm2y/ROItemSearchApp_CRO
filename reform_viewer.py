@@ -8,6 +8,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QFontMetrics
 from i18n import tr
+from item_localization import apply_item_localization
 
 
 # ------------------------------------------------------------
@@ -114,7 +115,7 @@ def parse_lub_file(filename):#字典化物品列表
         except Exception:
             continue
     print(tr("reform.log.items_loaded", count=len(parsed_items)))
-    return parsed_items
+    return apply_item_localization(parsed_items)
 
 
 # ------------------------------------------------------------

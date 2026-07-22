@@ -34,6 +34,8 @@ from PySide6.QtWidgets import QDialog, QVBoxLayout, QTextEdit, QPushButton
 from PySide6.QtGui import QKeySequence, QAction
 from PySide6.QtWidgets import QMenu
 from i18n import tr
+from monster_localization import localize_monster_name
+from skill_localization import get_localized_skill_name
 
 import traceback
 
@@ -138,13 +140,20 @@ TRANSFORM_DURATION_MAP = {
 sid_groundskill_cache = {}   # key = sid, value = groundskill data
 
 try:
-    with open("data\\skillneme.csv", "r", encoding="utf-8") as f:
+    with open(
+        os.path.join("data", "skillneme.csv"),
+        "r",
+        encoding="utf-8-sig",
+    ) as f:
         reader = csv.reader(f)
         for row in reader:
             if len(row) >= 3:
                 try:
                     skill_id = int(row[0])
-                    skill_name = row[2]   # 第3欄是中文名稱
+                    skill_name = get_localized_skill_name(
+                        skill_id,
+                        {"Name": row[2]},
+                    )
                     skill_name_map[skill_id] = skill_name
                 except:
                     pass
@@ -4708,6 +4717,7 @@ class MainUI(QWidget):
                 name = tr("rrf.label.unknown_drop_source")
 
         name = str(name).strip()
+        name = localize_monster_name(name)
         return name if name else (fallback or tr("rrf.label.unknown_drop_source"))
 
 

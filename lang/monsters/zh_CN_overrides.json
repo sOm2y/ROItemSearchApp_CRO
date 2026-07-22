@@ -1,0 +1,14 @@
+{
+  "_meta": {
+    "language": "zh_CN",
+    "purpose": "Manual CRO monster-name corrections that survive regeneration."
+  },
+  "monsters": {
+    "22260": {
+      "name": "深渊火蜥蜴",
+      "aliases": ["深淵火蜥蜴"],
+      "source": "https://ragnaplace.com/zh-t/twro/mob/22260",
+      "verified_at": "2026-07-20"
+    }
+  }
+}
